@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Sparkles,
   Users,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,6 +31,13 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 import { Separator } from '@/shared/components/ui/separator';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
@@ -41,9 +49,12 @@ import { ScheduleMeetingModal } from '@/features/integrations/components/Schedul
 
 import { enrichLeadAction } from '../actions/enrich-lead';
 import { archiveLead, updateLead } from '../actions/update-lead';
-import type { LeadRow } from '../types';
+import type { LeadRow, LeadStatus } from '../types';
 import { formatCnpj } from '../utils/cnpj';
 import { EnrichmentStatusBadge, LeadStatusBadge } from './LeadStatusBadge';
+import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
+import { LeadNotes } from './LeadNotes';
+import { SendEmailDialog } from './SendEmailDialog';
 
 interface LeadProfileProps {
   lead: LeadRow;
@@ -57,12 +68,26 @@ export function LeadProfile({ lead, timeline = [] }: LeadProfileProps) {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [showMeetingModal, setShowMeetingModal] = useState(false);
+  const [showSendEmail, setShowSendEmail] = useState(false);
+  const [showEnrollCadence, setShowEnrollCadence] = useState(false);
   const [editData, setEditData] = useState({
     razao_social: lead.razao_social ?? '',
     nome_fantasia: lead.nome_fantasia ?? '',
     email: lead.email ?? '',
     telefone: lead.telefone ?? '',
   });
+
+  const handleStatusChange = useCallback((newStatus: LeadStatus) => {
+    startTransition(async () => {
+      const result = await updateLead(lead.id, { status: newStatus });
+      if (result.success) {
+        toast.success('Status atualizado');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [lead.id, router]);
 
   const handleEnrich = useCallback(() => {
     startTransition(async () => {
@@ -128,12 +153,39 @@ export function LeadProfile({ lead, timeline = [] }: LeadProfileProps) {
             <p className="text-[var(--muted-foreground)]">{lead.razao_social}</p>
           )}
           <div className="mt-2 flex items-center gap-2">
-            <LeadStatusBadge status={lead.status} />
+            <Select value={lead.status} onValueChange={(v) => handleStatusChange(v as LeadStatus)}>
+              <SelectTrigger className="h-7 w-auto gap-1 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="new">Novo</SelectItem>
+                <SelectItem value="contacted">Contactado</SelectItem>
+                <SelectItem value="qualified">Qualificado</SelectItem>
+                <SelectItem value="unqualified">Não Qualificado</SelectItem>
+                <SelectItem value="archived">Arquivado</SelectItem>
+              </SelectContent>
+            </Select>
             <EnrichmentStatusBadge status={lead.enrichment_status} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
+            size="sm"
+            onClick={() => setShowSendEmail(true)}
+          >
+            <Mail className="mr-1 h-4 w-4" />
+            Enviar Email
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowEnrollCadence(true)}
+          >
+            <Zap className="mr-1 h-4 w-4" />
+            Inscrever em Cadência
+          </Button>
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setShowAIGenerator(true)}
           >
@@ -224,7 +276,7 @@ export function LeadProfile({ lead, timeline = [] }: LeadProfileProps) {
             {lead.email && (
               <div className="flex items-center gap-2 text-sm">
                 <Mail className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline dark:text-blue-400">
+                <a href={`mailto:${lead.email}`} className="text-[var(--primary)] hover:underline">
                   {lead.email}
                 </a>
               </div>
@@ -307,6 +359,9 @@ export function LeadProfile({ lead, timeline = [] }: LeadProfileProps) {
         <LeadTimeline entries={timeline} />
       </div>
 
+      {/* Notes */}
+      <LeadNotes leadId={lead.id} notes={lead.notes} />
+
       {/* Archive confirmation dialog */}
       <Dialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
         <DialogContent>
@@ -353,6 +408,21 @@ export function LeadProfile({ lead, timeline = [] }: LeadProfileProps) {
         leadId={lead.id}
         leadEmail={lead.email}
         leadName={lead.nome_fantasia ?? lead.razao_social}
+      />
+
+      {/* Send Email Dialog */}
+      <SendEmailDialog
+        open={showSendEmail}
+        onOpenChange={setShowSendEmail}
+        leadId={lead.id}
+        leadEmail={lead.email}
+      />
+
+      {/* Enroll in Cadence Dialog */}
+      <EnrollInCadenceDialog
+        open={showEnrollCadence}
+        onOpenChange={setShowEnrollCadence}
+        leadId={lead.id}
       />
 
       {/* Edit dialog */}

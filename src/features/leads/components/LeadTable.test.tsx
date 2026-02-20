@@ -36,6 +36,7 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
     telefone: null,
     socios: null,
     faturamento_estimado: null,
+    notes: null,
     enriched_at: null,
     created_by: null,
     import_id: null,

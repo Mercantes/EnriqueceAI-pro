@@ -125,19 +125,19 @@ export function calculateOverallMetrics(
       label: 'Total de Leads',
       count: totalLeads,
       percentage: 100,
-      color: 'bg-blue-500',
+      color: 'bg-red-400',
     },
     {
       label: 'Contactados',
       count: contacted,
       percentage: safeRate(contacted, totalLeads),
-      color: 'bg-indigo-500',
+      color: 'bg-red-500',
     },
     {
       label: 'Responderam',
       count: replied,
       percentage: safeRate(replied, totalLeads),
-      color: 'bg-purple-500',
+      color: 'bg-red-600',
     },
     {
       label: 'Reuniões',

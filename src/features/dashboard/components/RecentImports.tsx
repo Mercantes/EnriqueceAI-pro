@@ -22,7 +22,7 @@ export function RecentImports({ imports }: RecentImportsProps) {
         <CardContent>
           <p className="text-sm text-[var(--muted-foreground)]">
             Nenhuma importação realizada ainda.{' '}
-            <Link href="/leads/import" className="text-blue-600 hover:underline dark:text-blue-400">
+            <Link href="/leads/import" className="text-[var(--primary)] hover:underline">
               Importar CSV
             </Link>
           </p>

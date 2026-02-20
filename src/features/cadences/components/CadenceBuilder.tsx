@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowLeft, Mail, MessageSquare, Plus, Save, Sparkles, Trash2, Zap } from 'lucide-react';
+import { ArrowLeft, Mail, MessageSquare, Plus, Save, Sparkles, Trash2, UserPlus, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -25,29 +25,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { Textarea } from '@/shared/components/ui/textarea';
 
-import type { CadenceDetail, CadenceMetrics } from '../cadences.contract';
+import type { CadenceDetail, CadenceMetrics, EnrollmentWithLead } from '../cadences.contract';
 import type { ChannelType, MessageTemplateRow } from '../types';
 import { activateCadence, addCadenceStep, removeCadenceStep, updateCadence } from '../actions/manage-cadences';
 import { createCadence } from '../actions/manage-cadences';
+import { EnrollLeadsDialog } from './EnrollLeadsDialog';
+import { EnrollmentsList } from './EnrollmentsList';
 
 interface CadenceBuilderProps {
   cadence?: CadenceDetail;
   templates: MessageTemplateRow[];
   metrics?: CadenceMetrics;
+  enrollments?: EnrollmentWithLead[];
 }
 
-const channelIcon = { email: Mail, whatsapp: MessageSquare };
-const channelLabel = { email: 'Email', whatsapp: 'WhatsApp' };
+const channelIcon: Record<ChannelType, typeof Mail> = { email: Mail, whatsapp: MessageSquare };
+const channelLabel: Record<ChannelType, string> = { email: 'Email', whatsapp: 'WhatsApp' };
 
-export function CadenceBuilder({ cadence, templates, metrics }: CadenceBuilderProps) {
+export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }: CadenceBuilderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(cadence?.name ?? '');
   const [description, setDescription] = useState(cadence?.description ?? '');
   const [showAddStep, setShowAddStep] = useState(false);
   const [removeStepId, setRemoveStepId] = useState<string | null>(null);
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
 
   // New step form
   const [newChannel, setNewChannel] = useState<ChannelType>('email');
@@ -152,6 +157,12 @@ export function CadenceBuilder({ cadence, templates, metrics }: CadenceBuilderPr
             {cadence.status === 'draft' ? 'Rascunho' : cadence.status === 'active' ? 'Ativa' : cadence.status === 'paused' ? 'Pausada' : 'Arquivada'}
           </Badge>
         )}
+        {cadence && cadence.status === 'active' && (
+          <Button size="sm" onClick={() => setShowEnrollDialog(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Inscrever Leads
+          </Button>
+        )}
       </div>
 
       {/* Cadence info */}
@@ -198,114 +209,41 @@ export function CadenceBuilder({ cadence, templates, metrics }: CadenceBuilderPr
         </CardContent>
       </Card>
 
-      {/* Steps */}
-      {isEditing && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
-                Passos ({steps.length})
-              </CardTitle>
-              {isEditable && (
-                <Button size="sm" variant="outline" onClick={() => setShowAddStep(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Adicionar Passo
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {steps.length === 0 ? (
-              <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">
-                Nenhum passo adicionado. Adicione pelo menos 2 passos para ativar a cadência.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {steps.map((step, index) => {
-                  const Icon = channelIcon[step.channel];
-                  return (
-                    <div
-                      key={step.id}
-                      className="flex items-center gap-4 rounded-md border p-3"
-                    >
-                      {/* Step number */}
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] text-sm font-medium">
-                        {index + 1}
-                      </div>
-
-                      {/* Step info */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
-                          <span className="text-sm font-medium">
-                            {channelLabel[step.channel]}
-                          </span>
-                          {step.template && (
-                            <span className="text-sm text-[var(--muted-foreground)]">
-                              — {step.template.name}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-[var(--muted-foreground)]">
-                          {step.delay_days > 0 || step.delay_hours > 0
-                            ? `Esperar ${step.delay_days > 0 ? `${step.delay_days}d` : ''}${step.delay_hours > 0 ? ` ${step.delay_hours}h` : ''}`
-                            : 'Enviar imediatamente'}
-                          {step.ai_personalization && (
-                            <Badge variant="secondary" className="ml-1 inline-flex items-center gap-0.5 px-1 py-0 text-[10px]">
-                              <Sparkles className="h-2.5 w-2.5" />
-                              IA
-                            </Badge>
-                          )}
-                        </p>
-                      </div>
-
-                      {/* Actions */}
-                      {isEditable && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                          onClick={() => setRemoveStepId(step.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Timeline preview */}
-            {steps.length > 0 && (
-              <div className="mt-4 border-t pt-4">
-                <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">Timeline</p>
-                <div className="flex items-center gap-1">
-                  {steps.map((step, index) => {
-                    const Icon = channelIcon[step.channel];
-                    return (
-                      <div key={step.id} className="flex items-center gap-1">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--muted)]">
-                          <Icon className="h-3 w-3" />
-                        </div>
-                        {index < steps.length - 1 && (
-                          <div className="flex items-center">
-                            <div className="h-px w-8 bg-[var(--border)]" />
-                            <span className="text-[10px] text-[var(--muted-foreground)]">
-                              {step.delay_days > 0 ? `${step.delay_days}d` : step.delay_hours > 0 ? `${step.delay_hours}h` : '0'}
-                            </span>
-                            <div className="h-px w-8 bg-[var(--border)]" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Steps & Enrollments */}
+      {isEditing && cadence.status === 'active' ? (
+        <Tabs defaultValue="steps">
+          <TabsList>
+            <TabsTrigger value="steps">Passos ({steps.length})</TabsTrigger>
+            <TabsTrigger value="enrollments">Inscritos ({enrollments.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="steps">
+            <StepsCard
+              steps={steps}
+              isEditable={isEditable}
+              channelIcon={channelIcon}
+              channelLabel={channelLabel}
+              onAddStep={() => setShowAddStep(true)}
+              onRemoveStep={setRemoveStepId}
+            />
+          </TabsContent>
+          <TabsContent value="enrollments">
+            <Card>
+              <CardContent className="pt-6">
+                <EnrollmentsList enrollments={enrollments} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      ) : isEditing ? (
+        <StepsCard
+          steps={steps}
+          isEditable={isEditable}
+          channelIcon={channelIcon}
+          channelLabel={channelLabel}
+          onAddStep={() => setShowAddStep(true)}
+          onRemoveStep={setRemoveStepId}
+        />
+      ) : null}
 
       {/* Metrics */}
       {metrics && metrics.total_enrolled > 0 && (
@@ -403,13 +341,13 @@ export function CadenceBuilder({ cadence, templates, metrics }: CadenceBuilderPr
                 role="switch"
                 aria-checked={newAIPersonalization}
                 onClick={() => setNewAIPersonalization(!newAIPersonalization)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${newAIPersonalization ? 'bg-purple-600' : 'bg-[var(--muted)]'}`}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${newAIPersonalization ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'}`}
               >
                 <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${newAIPersonalization ? 'translate-x-4' : 'translate-x-0.5'}`} />
               </button>
               <div>
                 <Label className="cursor-pointer" onClick={() => setNewAIPersonalization(!newAIPersonalization)}>
-                  <Sparkles className="mr-1 inline h-3.5 w-3.5 text-purple-500" />
+                  <Sparkles className="mr-1 inline h-3.5 w-3.5 text-[var(--primary)]" />
                   Personalizar com IA
                 </Label>
                 <p className="text-xs text-[var(--muted-foreground)]">
@@ -428,6 +366,15 @@ export function CadenceBuilder({ cadence, templates, metrics }: CadenceBuilderPr
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Enroll leads dialog */}
+      {cadence && (
+        <EnrollLeadsDialog
+          open={showEnrollDialog}
+          onOpenChange={setShowEnrollDialog}
+          cadenceId={cadence.id}
+        />
+      )}
 
       {/* Remove step confirmation */}
       <Dialog open={!!removeStepId} onOpenChange={() => setRemoveStepId(null)}>
@@ -453,5 +400,118 @@ export function CadenceBuilder({ cadence, templates, metrics }: CadenceBuilderPr
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+interface StepsCardProps {
+  steps: CadenceDetail['steps'];
+  isEditable: boolean;
+  channelIcon: Record<ChannelType, typeof Mail>;
+  channelLabel: Record<ChannelType, string>;
+  onAddStep: () => void;
+  onRemoveStep: (stepId: string) => void;
+}
+
+function StepsCard({ steps, isEditable, channelIcon, channelLabel, onAddStep, onRemoveStep }: StepsCardProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">
+            Passos ({steps.length})
+          </CardTitle>
+          {isEditable && (
+            <Button size="sm" variant="outline" onClick={onAddStep}>
+              <Plus className="mr-2 h-4 w-4" />
+              Adicionar Passo
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {steps.length === 0 ? (
+          <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">
+            Nenhum passo adicionado. Adicione pelo menos 2 passos para ativar a cadência.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {steps.map((step, index) => {
+              const Icon = channelIcon[step.channel];
+              return (
+                <div
+                  key={step.id}
+                  className="flex items-center gap-4 rounded-md border p-3"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] text-sm font-medium">
+                    {index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
+                      <span className="text-sm font-medium">
+                        {channelLabel[step.channel]}
+                      </span>
+                      {step.template && (
+                        <span className="text-sm text-[var(--muted-foreground)]">
+                          — {step.template.name}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {step.delay_days > 0 || step.delay_hours > 0
+                        ? `Esperar ${step.delay_days > 0 ? `${step.delay_days}d` : ''}${step.delay_hours > 0 ? ` ${step.delay_hours}h` : ''}`
+                        : 'Enviar imediatamente'}
+                      {step.ai_personalization && (
+                        <Badge variant="secondary" className="ml-1 inline-flex items-center gap-0.5 px-1 py-0 text-[10px]">
+                          <Sparkles className="h-2.5 w-2.5" />
+                          IA
+                        </Badge>
+                      )}
+                    </p>
+                  </div>
+                  {isEditable && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                      onClick={() => onRemoveStep(step.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {steps.length > 0 && (
+          <div className="mt-4 border-t pt-4">
+            <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">Timeline</p>
+            <div className="flex items-center gap-1">
+              {steps.map((step, index) => {
+                const Icon = channelIcon[step.channel];
+                return (
+                  <div key={step.id} className="flex items-center gap-1">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--muted)]">
+                      <Icon className="h-3 w-3" />
+                    </div>
+                    {index < steps.length - 1 && (
+                      <div className="flex items-center">
+                        <div className="h-px w-8 bg-[var(--border)]" />
+                        <span className="text-[10px] text-[var(--muted-foreground)]">
+                          {step.delay_days > 0 ? `${step.delay_days}d` : step.delay_hours > 0 ? `${step.delay_hours}h` : '0'}
+                        </span>
+                        <div className="h-px w-8 bg-[var(--border)]" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

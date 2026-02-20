@@ -30,12 +30,12 @@ export function DistributionCard({ title, data, maxItems = 8 }: DistributionCard
 
   // Color palette for bars
   const colors = [
-    'bg-blue-500',
+    'bg-red-400',
     'bg-green-500',
     'bg-yellow-500',
-    'bg-purple-500',
+    'bg-red-600',
     'bg-pink-500',
-    'bg-indigo-500',
+    'bg-red-300',
     'bg-orange-500',
     'bg-teal-500',
   ];

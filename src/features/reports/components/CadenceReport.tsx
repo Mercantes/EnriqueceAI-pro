@@ -72,10 +72,10 @@ export function CadenceReport({ metrics }: CadenceReportProps) {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <RateBar label="Abertura" value={m.openRate} color="bg-blue-500" />
+              <RateBar label="Abertura" value={m.openRate} color="bg-red-400" />
               <RateBar label="Resposta" value={m.replyRate} color="bg-green-500" />
               <RateBar label="Bounce" value={m.bounceRate} color="bg-red-500" />
-              <RateBar label="Conversão" value={m.conversionRate} color="bg-purple-500" />
+              <RateBar label="Conversão" value={m.conversionRate} color="bg-red-600" />
             </div>
           </CardContent>
         </Card>

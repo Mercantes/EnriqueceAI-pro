@@ -112,7 +112,7 @@ export function AIMessageGenerator({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-purple-500" />
+            <Sparkles className="h-5 w-5 text-[var(--primary)]" />
             Gerar Mensagem com IA
           </DialogTitle>
         </DialogHeader>

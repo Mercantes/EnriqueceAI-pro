@@ -51,6 +51,7 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
       { nome: 'João da Silva', qualificacao: 'Sócio-Administrador' },
     ],
     faturamento_estimado: 500000,
+    notes: null,
     enriched_at: '2026-02-10T10:00:00Z',
     created_by: null,
     import_id: null,

@@ -74,7 +74,7 @@ export function SdrReport({ metrics }: SdrReportProps) {
                   </div>
                   <div className="h-4 w-full rounded-md bg-[var(--muted)]">
                     <div
-                      className="h-full rounded-md bg-blue-500 transition-all"
+                      className="h-full rounded-md bg-red-500 transition-all"
                       style={{ width: `${(m.messagesSent / maxMessages) * 100}%` }}
                     />
                   </div>

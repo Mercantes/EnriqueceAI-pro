@@ -26,7 +26,7 @@ interface LeadTimelineProps {
 const typeConfig: Record<InteractionType, { label: string; icon: typeof Send; className: string }> = {
   sent: { label: 'Enviado', icon: Send, className: 'text-blue-500' },
   delivered: { label: 'Entregue', icon: Check, className: 'text-green-500' },
-  opened: { label: 'Aberto', icon: Mail, className: 'text-purple-500' },
+  opened: { label: 'Aberto', icon: Mail, className: 'text-[var(--primary)]' },
   clicked: { label: 'Clicou', icon: MousePointerClick, className: 'text-orange-500' },
   replied: { label: 'Respondeu', icon: Reply, className: 'text-emerald-600' },
   bounced: { label: 'Bounce', icon: XCircle, className: 'text-red-500' },

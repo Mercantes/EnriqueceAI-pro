@@ -57,7 +57,7 @@ export async function updateLead(
   }
 
   // Only allow safe fields
-  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'status'];
+  const safeFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'status', 'notes'];
   const safeUpdates: Record<string, unknown> = {};
   for (const key of safeFields) {
     if (key in updates) {
