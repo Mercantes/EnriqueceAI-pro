@@ -486,18 +486,18 @@ CREATE INDEX idx_cadences_deleted ON cadences(org_id, deleted_at) WHERE deleted_
 -- ============================================================================
 
 -- [CRITICAL #3] user_org_id com ORDER BY determinístico
-CREATE OR REPLACE FUNCTION auth.user_org_id()
+CREATE OR REPLACE FUNCTION public.user_org_id()
 RETURNS UUID AS $$
   SELECT org_id FROM organization_members
   WHERE user_id = auth.uid() AND status = 'active'
   ORDER BY accepted_at DESC NULLS LAST
   LIMIT 1;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
-COMMENT ON FUNCTION auth.user_org_id IS 'Retorna org_id do usuário autenticado. Usa membro mais recentemente aceito. SECURITY DEFINER.';
+COMMENT ON FUNCTION public.user_org_id IS 'Retorna org_id do usuário autenticado. Usa membro mais recentemente aceito. SECURITY DEFINER.';
 
 -- Helper: check if user is manager
-CREATE OR REPLACE FUNCTION auth.is_manager()
+CREATE OR REPLACE FUNCTION public.is_manager()
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (
     SELECT 1 FROM organization_members
@@ -505,9 +505,9 @@ RETURNS BOOLEAN AS $$
     AND role = 'manager'
     AND status = 'active'
   );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
-COMMENT ON FUNCTION auth.is_manager IS 'Verifica se usuário autenticado é manager na org. SECURITY DEFINER.';
+COMMENT ON FUNCTION public.is_manager IS 'Verifica se usuário autenticado é manager na org. SECURITY DEFINER.';
 
 -- ============================================================================
 -- 6. ENABLE RLS ON ALL TABLES
@@ -543,57 +543,57 @@ ALTER TABLE plans ENABLE ROW LEVEL SECURITY;
 
 -- 7.1 Organizations
 CREATE POLICY "org_member_read" ON organizations FOR SELECT
-  USING (id = auth.user_org_id());
+  USING (id = public.user_org_id());
 
 CREATE POLICY "org_owner_update" ON organizations FOR UPDATE
   USING (owner_id = auth.uid());
 
 -- 7.2 Organization Members
 CREATE POLICY "members_org_read" ON organization_members FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "members_manager_insert" ON organization_members FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id() AND auth.is_manager());
+  WITH CHECK (org_id = public.user_org_id() AND public.is_manager());
 
 CREATE POLICY "members_manager_update" ON organization_members FOR UPDATE
-  USING (org_id = auth.user_org_id() AND auth.is_manager());
+  USING (org_id = public.user_org_id() AND public.is_manager());
 
 CREATE POLICY "members_manager_delete" ON organization_members FOR DELETE
-  USING (org_id = auth.user_org_id() AND auth.is_manager());
+  USING (org_id = public.user_org_id() AND public.is_manager());
 
 -- 7.3 Leads
 CREATE POLICY "leads_org_read" ON leads FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "leads_org_insert" ON leads FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id());
+  WITH CHECK (org_id = public.user_org_id());
 
 CREATE POLICY "leads_org_update" ON leads FOR UPDATE
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "leads_org_delete" ON leads FOR DELETE
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 -- 7.4 Lead Imports
 CREATE POLICY "imports_org_read" ON lead_imports FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "imports_org_insert" ON lead_imports FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id());
+  WITH CHECK (org_id = public.user_org_id());
 
 -- [HIGH #8] Lead Import Errors — via import's org
 CREATE POLICY "import_errors_via_import" ON lead_import_errors FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM lead_imports
     WHERE lead_imports.id = lead_import_errors.import_id
-    AND lead_imports.org_id = auth.user_org_id()
+    AND lead_imports.org_id = public.user_org_id()
   ));
 
 CREATE POLICY "import_errors_insert" ON lead_import_errors FOR INSERT
   WITH CHECK (EXISTS (
     SELECT 1 FROM lead_imports
     WHERE lead_imports.id = lead_import_errors.import_id
-    AND lead_imports.org_id = auth.user_org_id()
+    AND lead_imports.org_id = public.user_org_id()
   ));
 
 -- [MEDIUM #11] Enrichment Attempts — via lead's org
@@ -601,49 +601,49 @@ CREATE POLICY "enrichment_attempts_via_lead" ON enrichment_attempts FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM leads
     WHERE leads.id = enrichment_attempts.lead_id
-    AND leads.org_id = auth.user_org_id()
+    AND leads.org_id = public.user_org_id()
   ));
 
 -- 7.5 Cadences
 CREATE POLICY "cadences_org_read" ON cadences FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "cadences_org_insert" ON cadences FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id());
+  WITH CHECK (org_id = public.user_org_id());
 
 CREATE POLICY "cadences_org_update" ON cadences FOR UPDATE
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "cadences_org_delete" ON cadences FOR DELETE
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 -- [HIGH #9] Steps: EXISTS em vez de IN para performance
 CREATE POLICY "steps_via_cadence_read" ON cadence_steps FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM cadences
     WHERE cadences.id = cadence_steps.cadence_id
-    AND cadences.org_id = auth.user_org_id()
+    AND cadences.org_id = public.user_org_id()
   ));
 
 CREATE POLICY "steps_via_cadence_insert" ON cadence_steps FOR INSERT
   WITH CHECK (EXISTS (
     SELECT 1 FROM cadences
     WHERE cadences.id = cadence_steps.cadence_id
-    AND cadences.org_id = auth.user_org_id()
+    AND cadences.org_id = public.user_org_id()
   ));
 
 CREATE POLICY "steps_via_cadence_update" ON cadence_steps FOR UPDATE
   USING (EXISTS (
     SELECT 1 FROM cadences
     WHERE cadences.id = cadence_steps.cadence_id
-    AND cadences.org_id = auth.user_org_id()
+    AND cadences.org_id = public.user_org_id()
   ));
 
 CREATE POLICY "steps_via_cadence_delete" ON cadence_steps FOR DELETE
   USING (EXISTS (
     SELECT 1 FROM cadences
     WHERE cadences.id = cadence_steps.cadence_id
-    AND cadences.org_id = auth.user_org_id()
+    AND cadences.org_id = public.user_org_id()
   ));
 
 -- [HIGH #9] Enrollments: EXISTS em vez de IN
@@ -651,75 +651,75 @@ CREATE POLICY "enrollments_via_cadence_read" ON cadence_enrollments FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM cadences
     WHERE cadences.id = cadence_enrollments.cadence_id
-    AND cadences.org_id = auth.user_org_id()
+    AND cadences.org_id = public.user_org_id()
   ));
 
 CREATE POLICY "enrollments_via_cadence_insert" ON cadence_enrollments FOR INSERT
   WITH CHECK (EXISTS (
     SELECT 1 FROM cadences
     WHERE cadences.id = cadence_enrollments.cadence_id
-    AND cadences.org_id = auth.user_org_id()
+    AND cadences.org_id = public.user_org_id()
   ));
 
 CREATE POLICY "enrollments_via_cadence_update" ON cadence_enrollments FOR UPDATE
   USING (EXISTS (
     SELECT 1 FROM cadences
     WHERE cadences.id = cadence_enrollments.cadence_id
-    AND cadences.org_id = auth.user_org_id()
+    AND cadences.org_id = public.user_org_id()
   ));
 
 -- 7.6 Message Templates
 CREATE POLICY "templates_org_read" ON message_templates FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "templates_org_insert" ON message_templates FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id());
+  WITH CHECK (org_id = public.user_org_id());
 
 CREATE POLICY "templates_org_update" ON message_templates FOR UPDATE
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "templates_org_delete" ON message_templates FOR DELETE
-  USING (org_id = auth.user_org_id() AND is_system = false);
+  USING (org_id = public.user_org_id() AND is_system = false);
 
 -- 7.7 Interactions (append-only para client, read own org)
 CREATE POLICY "interactions_org_read" ON interactions FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "interactions_org_insert" ON interactions FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id());
+  WITH CHECK (org_id = public.user_org_id());
 
 -- 7.8 CRM Connections (manager only)
 CREATE POLICY "crm_manager_read" ON crm_connections FOR SELECT
-  USING (org_id = auth.user_org_id() AND auth.is_manager());
+  USING (org_id = public.user_org_id() AND public.is_manager());
 
 CREATE POLICY "crm_manager_insert" ON crm_connections FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id() AND auth.is_manager());
+  WITH CHECK (org_id = public.user_org_id() AND public.is_manager());
 
 CREATE POLICY "crm_manager_update" ON crm_connections FOR UPDATE
-  USING (org_id = auth.user_org_id() AND auth.is_manager());
+  USING (org_id = public.user_org_id() AND public.is_manager());
 
 CREATE POLICY "crm_manager_delete" ON crm_connections FOR DELETE
-  USING (org_id = auth.user_org_id() AND auth.is_manager());
+  USING (org_id = public.user_org_id() AND public.is_manager());
 
 -- [HIGH #8] CRM Sync Log — via connection's org (manager only)
 CREATE POLICY "crm_sync_log_read" ON crm_sync_log FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM crm_connections
     WHERE crm_connections.id = crm_sync_log.connection_id
-    AND crm_connections.org_id = auth.user_org_id()
-    AND auth.is_manager()
+    AND crm_connections.org_id = public.user_org_id()
+    AND public.is_manager()
   ));
 
 -- 7.9 Subscriptions (org members can read, only system writes)
 CREATE POLICY "subscriptions_org_read" ON subscriptions FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 -- 7.10 Usage tracking (org members can read)
 CREATE POLICY "ai_usage_org_read" ON ai_usage FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 CREATE POLICY "wa_credits_org_read" ON whatsapp_credits FOR SELECT
-  USING (org_id = auth.user_org_id());
+  USING (org_id = public.user_org_id());
 
 -- [HIGH #8] Plans: público para leitura (todos os planos visíveis)
 CREATE POLICY "plans_public_read" ON plans FOR SELECT
@@ -727,42 +727,42 @@ CREATE POLICY "plans_public_read" ON plans FOR SELECT
 
 -- [HIGH #8] Gmail Connections — user owns their own connection
 CREATE POLICY "gmail_own_read" ON gmail_connections FOR SELECT
-  USING (org_id = auth.user_org_id() AND user_id = auth.uid());
+  USING (org_id = public.user_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "gmail_own_insert" ON gmail_connections FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id() AND user_id = auth.uid());
+  WITH CHECK (org_id = public.user_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "gmail_own_update" ON gmail_connections FOR UPDATE
-  USING (org_id = auth.user_org_id() AND user_id = auth.uid());
+  USING (org_id = public.user_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "gmail_own_delete" ON gmail_connections FOR DELETE
-  USING (org_id = auth.user_org_id() AND user_id = auth.uid());
+  USING (org_id = public.user_org_id() AND user_id = auth.uid());
 
 -- [HIGH #8] WhatsApp Connections — manager only (org-level)
 CREATE POLICY "whatsapp_manager_read" ON whatsapp_connections FOR SELECT
-  USING (org_id = auth.user_org_id() AND auth.is_manager());
+  USING (org_id = public.user_org_id() AND public.is_manager());
 
 CREATE POLICY "whatsapp_manager_insert" ON whatsapp_connections FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id() AND auth.is_manager());
+  WITH CHECK (org_id = public.user_org_id() AND public.is_manager());
 
 CREATE POLICY "whatsapp_manager_update" ON whatsapp_connections FOR UPDATE
-  USING (org_id = auth.user_org_id() AND auth.is_manager());
+  USING (org_id = public.user_org_id() AND public.is_manager());
 
 CREATE POLICY "whatsapp_manager_delete" ON whatsapp_connections FOR DELETE
-  USING (org_id = auth.user_org_id() AND auth.is_manager());
+  USING (org_id = public.user_org_id() AND public.is_manager());
 
 -- [HIGH #8] Calendar Connections — user owns their own
 CREATE POLICY "calendar_own_read" ON calendar_connections FOR SELECT
-  USING (org_id = auth.user_org_id() AND user_id = auth.uid());
+  USING (org_id = public.user_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "calendar_own_insert" ON calendar_connections FOR INSERT
-  WITH CHECK (org_id = auth.user_org_id() AND user_id = auth.uid());
+  WITH CHECK (org_id = public.user_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "calendar_own_update" ON calendar_connections FOR UPDATE
-  USING (org_id = auth.user_org_id() AND user_id = auth.uid());
+  USING (org_id = public.user_org_id() AND user_id = auth.uid());
 
 CREATE POLICY "calendar_own_delete" ON calendar_connections FOR DELETE
-  USING (org_id = auth.user_org_id() AND user_id = auth.uid());
+  USING (org_id = public.user_org_id() AND user_id = auth.uid());
 
 -- ============================================================================
 -- 8. TRIGGERS
@@ -835,7 +835,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users

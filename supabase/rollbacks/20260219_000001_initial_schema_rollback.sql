@@ -33,8 +33,8 @@ DROP TRIGGER IF EXISTS set_updated_at ON plans;
 DROP FUNCTION IF EXISTS update_updated_at();
 DROP FUNCTION IF EXISTS handle_new_user();
 DROP FUNCTION IF EXISTS calculate_next_step_due();
-DROP FUNCTION IF EXISTS auth.user_org_id();
-DROP FUNCTION IF EXISTS auth.is_manager();
+DROP FUNCTION IF EXISTS public.user_org_id();
+DROP FUNCTION IF EXISTS public.is_manager();
 
 -- 4. Drop tables (reverse dependency order)
 DROP TABLE IF EXISTS crm_sync_log CASCADE;

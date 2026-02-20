@@ -6,6 +6,8 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+
 import { inviteMemberSchema } from '../schemas/member.schemas';
 import { checkMemberLimit } from '../services/member-limits.service';
 
@@ -76,6 +78,18 @@ export async function inviteMember(formData: FormData): Promise<ActionResult<voi
       // For MVP, insert only after user actually signs up
       // Store the invite intent for now
     }
+
+    // Notify org managers about the invite
+    createNotificationsForOrgMembers({
+      orgId: currentMember.org_id,
+      type: 'member_invited',
+      title: 'Novo membro convidado',
+      body: `${parsed.data.email} foi convidado como ${parsed.data.role}`,
+      resourceType: 'member',
+      metadata: { email: parsed.data.email, role: parsed.data.role },
+      roleFilter: 'manager',
+      excludeUserId: user.id,
+    }).catch((err) => console.error('Failed to create invite notification:', err));
 
     revalidatePath('/settings/users');
     return { success: true, data: undefined };

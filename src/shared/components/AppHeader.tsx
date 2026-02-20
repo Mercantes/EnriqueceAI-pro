@@ -1,6 +1,7 @@
 'use client';
 
 import { UserMenu } from '@/features/auth/components/UserMenu';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 import { MobileMenuTrigger } from './AppSidebar';
 import { ThemeToggle } from './ThemeToggle';
@@ -11,6 +12,7 @@ export function AppHeader() {
       <MobileMenuTrigger />
       <div className="flex-1" />
       <ThemeToggle />
+      <NotificationBell />
       <UserMenu />
     </header>
   );

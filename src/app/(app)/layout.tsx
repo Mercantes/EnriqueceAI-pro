@@ -7,11 +7,13 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { OrganizationProvider } from '@/features/auth/components/OrganizationProvider';
 import type { MemberWithOrganization, OrganizationMemberRow } from '@/features/auth/types';
+import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
 import { AppHeader } from '@/shared/components/AppHeader';
 import { AppSidebar } from '@/shared/components/AppSidebar';
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
 import { PageSkeleton } from '@/shared/components/PageSkeleton';
+import { Toaster } from '@/shared/components/ui/sonner';
 import { TooltipProvider } from '@/shared/components/ui/tooltip';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -58,19 +60,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           initialMembers={members ?? []}
           initialMember={currentMember}
         >
-          <div className="flex h-screen">
-            <AppSidebar>
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <AppHeader />
-                <main className="flex-1 overflow-auto p-6">
-                  <Breadcrumbs />
-                  <Suspense fallback={<PageSkeleton />}>
-                    {children}
-                  </Suspense>
-                </main>
-              </div>
-            </AppSidebar>
-          </div>
+          <NotificationProvider userId={user.id}>
+            <div className="flex h-screen">
+              <AppSidebar>
+                <div className="flex flex-1 flex-col overflow-hidden">
+                  <AppHeader />
+                  <main className="flex-1 overflow-auto p-6">
+                    <Breadcrumbs />
+                    <Suspense fallback={<PageSkeleton />}>
+                      {children}
+                    </Suspense>
+                  </main>
+                </div>
+              </AppSidebar>
+            </div>
+            <Toaster />
+          </NotificationProvider>
         </OrganizationProvider>
       </TooltipProvider>
     </ThemeProvider>

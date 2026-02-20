@@ -3,6 +3,8 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+
 export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: string } | null>> {
   try {
     const supabase = await createServerSupabaseClient();
@@ -53,6 +55,18 @@ export async function acceptPendingInvite(): Promise<ActionResult<{ orgId: strin
     if (error) {
       return { success: false, error: error.message };
     }
+
+    // Notify org managers about the new member
+    createNotificationsForOrgMembers({
+      orgId: invite.org_id,
+      type: 'member_joined',
+      title: 'Novo membro na organização',
+      body: `${user.email ?? 'Um usuário'} aceitou o convite`,
+      resourceType: 'member',
+      metadata: { email: user.email },
+      roleFilter: 'manager',
+      excludeUserId: user.id,
+    }).catch((err) => console.error('Failed to create join notification:', err));
 
     return { success: true, data: { orgId: invite.org_id } };
   } catch (error) {
