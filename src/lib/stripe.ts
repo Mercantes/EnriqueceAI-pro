@@ -1,0 +1,21 @@
+import Stripe from 'stripe';
+
+let _stripe: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      throw new Error('Missing STRIPE_SECRET_KEY environment variable');
+    }
+    _stripe = new Stripe(key, { typescript: true });
+  }
+  return _stripe;
+}
+
+/** @deprecated Use getStripe() for lazy initialization */
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    return Reflect.get(getStripe(), prop);
+  },
+});

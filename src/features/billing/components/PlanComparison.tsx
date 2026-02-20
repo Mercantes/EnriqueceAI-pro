@@ -1,11 +1,14 @@
 'use client';
 
+import { useTransition } from 'react';
 import { Check, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
+import { createCheckoutSession } from '../actions/create-checkout';
 import { formatCents } from '../services/feature-flags';
 import type { PlanComparison as PlanComparisonData, PlanRow } from '../types';
 
@@ -45,6 +48,16 @@ interface PlanCardProps {
 
 function PlanCard({ plan, isCurrent }: PlanCardProps) {
   const aiUnlimited = plan.max_ai_per_day === -1;
+  const [isPending, startTransition] = useTransition();
+
+  function handleUpgrade() {
+    startTransition(async () => {
+      const result = await createCheckoutSession(plan.id);
+      if (!result.success) {
+        toast.error(result.error);
+      }
+    });
+  }
 
   return (
     <Card className={isCurrent ? 'border-[var(--primary)] ring-1 ring-[var(--primary)]' : ''}>
@@ -89,9 +102,10 @@ function PlanCard({ plan, isCurrent }: PlanCardProps) {
         <Button
           variant={isCurrent ? 'outline' : 'default'}
           className="w-full"
-          disabled={isCurrent}
+          disabled={isCurrent || isPending}
+          onClick={isCurrent ? undefined : handleUpgrade}
         >
-          {isCurrent ? 'Plano atual' : 'Fazer upgrade'}
+          {isCurrent ? 'Plano atual' : isPending ? 'Redirecionando...' : 'Fazer upgrade'}
         </Button>
       </CardContent>
     </Card>

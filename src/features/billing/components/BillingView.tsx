@@ -1,11 +1,15 @@
 'use client';
 
-import { AlertTriangle, Check, CreditCard, Users, Zap } from 'lucide-react';
+import { useTransition } from 'react';
+import { AlertTriangle, Check, CreditCard, ExternalLink, Users, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Progress } from '@/shared/components/ui/progress';
 
+import { createPortalSession } from '../actions/create-portal';
 import { formatCents, isNearLimit } from '../services/feature-flags';
 import type { BillingOverview } from '../types';
 
@@ -28,10 +32,31 @@ function statusLabel(status: string): { label: string; variant: 'default' | 'sec
   }
 }
 
+function trialDaysRemaining(periodEnd: string): number | null {
+  const end = new Date(periodEnd);
+  const now = new Date();
+  const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? diff : null;
+}
+
 export function BillingView({ data }: BillingViewProps) {
   const { plan, subscription, memberCount, additionalUsers, monthlyTotal, aiUsageToday, whatsappUsage } = data;
   const status = statusLabel(subscription.status);
   const aiUnlimited = plan.max_ai_per_day === -1;
+  const isTrial = subscription.status === 'trialing';
+  const hasStripeSubscription = !!subscription.stripe_subscription_id;
+  const trialDays = isTrial ? trialDaysRemaining(subscription.current_period_end) : null;
+
+  const [isPending, startTransition] = useTransition();
+
+  function handleManageSubscription() {
+    startTransition(async () => {
+      const result = await createPortalSession();
+      if (!result.success) {
+        toast.error(result.error);
+      }
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -57,7 +82,12 @@ export function BillingView({ data }: BillingViewProps) {
                 )}
               </p>
             </div>
-            <Badge variant={status.variant}>{status.label}</Badge>
+            <div className="flex items-center gap-2">
+              {isTrial && trialDays !== null && (
+                <Badge variant="secondary">{trialDays} dias restantes</Badge>
+              )}
+              <Badge variant={status.variant}>{status.label}</Badge>
+            </div>
           </div>
 
           <div className="rounded-lg bg-[var(--muted)] p-3">
@@ -82,6 +112,18 @@ export function BillingView({ data }: BillingViewProps) {
               </p>
             </div>
           </div>
+
+          {hasStripeSubscription && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={isPending}
+              onClick={handleManageSubscription}
+            >
+              <ExternalLink className="mr-2 size-4" />
+              {isPending ? 'Abrindo portal...' : 'Gerenciar Assinatura'}
+            </Button>
+          )}
         </CardContent>
       </Card>
 

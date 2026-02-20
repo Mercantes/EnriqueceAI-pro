@@ -244,9 +244,9 @@ export function IntegrationsView({ gmail, whatsapp, crm, calendar }: Integration
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--muted-foreground)]">
-                  Configure a integração WhatsApp Business para enviar mensagens automáticas.
+                  Integração WhatsApp Business estará disponível em breve. Requer verificação Meta Business.
                 </p>
-                <Badge variant="outline">Configuração via administrador</Badge>
+                <Badge variant="secondary">Em breve</Badge>
               </div>
             )}
           </CardContent>

@@ -10,6 +10,10 @@ vi.mock('../services/feature-flags', () => ({
   isNearLimit: vi.fn((current: number, max: number) => current >= max * 0.8),
 }));
 
+vi.mock('../actions/create-portal', () => ({
+  createPortalSession: vi.fn(),
+}));
+
 function makePlan(overrides: Partial<PlanRow> = {}): PlanRow {
   return {
     id: 'plan-1',

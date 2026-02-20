@@ -117,9 +117,9 @@ describe('IntegrationsView', () => {
     expect(screen.getByText('Phone ID: 123456789')).toBeInTheDocument();
   });
 
-  it('should show admin badge for WhatsApp when not connected', () => {
+  it('should show "Em breve" badge for WhatsApp when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Configuração via administrador')).toBeInTheDocument();
+    expect(screen.getByText('Em breve')).toBeInTheDocument();
   });
 
   it('should show error status for Gmail with error', () => {
