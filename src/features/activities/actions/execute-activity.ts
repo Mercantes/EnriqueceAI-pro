@@ -7,6 +7,8 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { EmailService } from '@/features/integrations/services/email.service';
+import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
+import { WhatsAppService } from '@/features/integrations/services/whatsapp.service';
 import type { InteractionRow } from '@/features/cadences/types';
 
 import type { ExecuteActivityInput } from '../types';
@@ -24,6 +26,7 @@ export async function executeActivity(
     leadId,
     orgId,
     cadenceCreatedBy,
+    channel,
     to,
     subject,
     body,
@@ -53,7 +56,7 @@ export async function executeActivity(
       lead_id: leadId,
       cadence_id: cadenceId,
       step_id: stepId,
-      channel: 'email',
+      channel: channel || 'email',
       type: 'sent',
       message_content: body || null,
       metadata: subject ? { subject } : null,
@@ -67,25 +70,48 @@ export async function executeActivity(
     return { success: false, error: 'Falha ao registrar interação' };
   }
 
-  // Send email via Gmail API
-  const emailResult = await EmailService.sendEmail(
-    cadenceCreatedBy,
-    orgId,
-    {
-      to,
-      subject: subject || '',
-      htmlBody: body,
-    },
-    interaction.id,
-    supabase,
-  );
+  // Send via appropriate channel
+  if (channel === 'whatsapp') {
+    // Check and deduct credit
+    const creditResult = await WhatsAppCreditService.checkAndDeductCredit(orgId, supabase);
+    if (!creditResult.allowed) {
+      return { success: false, error: creditResult.error ?? 'Sem créditos WhatsApp' };
+    }
 
-  if (emailResult.success && emailResult.messageId) {
-    await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
-      .update({ external_id: emailResult.messageId } as Record<string, unknown>)
-      .eq('id', interaction.id);
+    const waResult = await WhatsAppService.sendMessage(
+      orgId,
+      { to, body },
+      supabase,
+    );
+
+    if (waResult.success && waResult.messageId) {
+      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+        .update({ external_id: waResult.messageId } as Record<string, unknown>)
+        .eq('id', interaction.id);
+    } else {
+      console.error(`[activities] WhatsApp send failed for enrollment=${enrollmentId}: ${waResult.error}`);
+    }
   } else {
-    console.error(`[activities] Email send failed for enrollment=${enrollmentId}: ${emailResult.error}`);
+    // Email flow (default)
+    const emailResult = await EmailService.sendEmail(
+      cadenceCreatedBy,
+      orgId,
+      {
+        to,
+        subject: subject || '',
+        htmlBody: body,
+      },
+      interaction.id,
+      supabase,
+    );
+
+    if (emailResult.success && emailResult.messageId) {
+      await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+        .update({ external_id: emailResult.messageId } as Record<string, unknown>)
+        .eq('id', interaction.id);
+    } else {
+      console.error(`[activities] Email send failed for enrollment=${enrollmentId}: ${emailResult.error}`);
+    }
   }
 
   // Advance step or mark enrollment completed

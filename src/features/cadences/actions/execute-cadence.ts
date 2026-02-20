@@ -9,6 +9,8 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { AIService } from '@/features/ai/services/ai.service';
 import type { LeadContext } from '@/features/ai/types';
 import { EmailService } from '@/features/integrations/services/email.service';
+import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
+import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 
 import { renderTemplate } from '../utils/render-template';
 import type { CadenceStepRow, InteractionRow, MessageTemplateRow } from '../types';
@@ -235,6 +237,42 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           } else {
             console.error(`[cadence-engine] enrollment=${enrollment.id} email send failed: ${emailResult.error}`);
           }
+        }
+      } else if (step.channel === 'whatsapp') {
+        const phone = enrollment.lead.telefone;
+        if (!phone || !validateBrazilianPhone(phone)) {
+          result.failed++;
+          result.errors.push(`Lead ${enrollment.lead_id} sem telefone válido — não é possível enviar WhatsApp`);
+          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=invalid_phone duration_ms=${Date.now() - stepStart}`);
+          continue;
+        }
+
+        // Check and deduct WhatsApp credit
+        const creditResult = await WhatsAppCreditService.checkAndDeductCredit(enrollment.lead.org_id, supabase);
+        if (!creditResult.allowed) {
+          result.failed++;
+          result.errors.push(`Org ${enrollment.lead.org_id} sem créditos WhatsApp: ${creditResult.error}`);
+          console.error(`[cadence-engine] enrollment=${enrollment.id} status=failed reason=no_credits duration_ms=${Date.now() - stepStart}`);
+          continue;
+        }
+
+        if (creditResult.isOverage) {
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} whatsapp overage: used=${creditResult.used} limit=${creditResult.limit}`);
+        }
+
+        const waResult = await WhatsAppService.sendMessage(
+          enrollment.lead.org_id,
+          { to: phone, body: messageContent },
+          supabase,
+        );
+
+        if (waResult.success && waResult.messageId) {
+          await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+            .update({ external_id: waResult.messageId } as Record<string, unknown>)
+            .eq('id', interaction.id);
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} whatsapp sent messageId=${waResult.messageId}`);
+        } else {
+          console.error(`[cadence-engine] enrollment=${enrollment.id} whatsapp send failed: ${waResult.error}`);
         }
       }
 

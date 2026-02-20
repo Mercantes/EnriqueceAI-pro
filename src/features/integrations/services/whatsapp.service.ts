@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 interface SendWhatsAppParams {
@@ -52,8 +54,9 @@ export class WhatsAppService {
   static async sendMessage(
     orgId: string,
     params: SendWhatsAppParams,
+    supabaseClient?: SupabaseClient,
   ): Promise<SendWhatsAppResult> {
-    const supabase = await createServerSupabaseClient();
+    const supabase = supabaseClient ?? await createServerSupabaseClient();
 
     // Fetch WhatsApp connection
     const { data: connection } = (await (supabase

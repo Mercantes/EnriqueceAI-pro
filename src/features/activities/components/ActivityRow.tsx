@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Clock,
   Mail,
+  MessageSquare,
   Play,
 } from 'lucide-react';
 
@@ -56,8 +57,11 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
 
       {/* Channel badge */}
       <Badge variant="outline" className="shrink-0 gap-1">
-        <Mail className="h-3 w-3" />
-        Email
+        {activity.channel === 'whatsapp' ? (
+          <><MessageSquare className="h-3 w-3" />WhatsApp</>
+        ) : (
+          <><Mail className="h-3 w-3" />Email</>
+        )}
       </Badge>
 
       {/* Cadence + step info */}

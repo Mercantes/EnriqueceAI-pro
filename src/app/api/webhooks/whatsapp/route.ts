@@ -1,8 +1,10 @@
+import crypto from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
-interface WhatsAppStatusUpdate {
+interface WhatsAppWebhookPayload {
   object: string;
   entry?: {
     changes?: {
@@ -12,6 +14,13 @@ interface WhatsAppStatusUpdate {
           status: 'sent' | 'delivered' | 'read' | 'failed';
           timestamp: string;
           errors?: { code: number; title: string }[];
+        }[];
+        messages?: {
+          from: string;
+          id: string;
+          type: string;
+          text?: { body: string };
+          timestamp: string;
         }[];
       };
     }[];
@@ -35,38 +44,146 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as WhatsAppStatusUpdate;
+  const rawBody = await request.text();
 
-  // Handle WhatsApp status updates
-  if (body.object === 'whatsapp_business_account') {
-    const supabase = createServiceRoleClient();
+  // Verify signature if app secret is configured
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (appSecret) {
+    const signature = request.headers.get('x-hub-signature-256');
+    if (!signature) {
+      return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+    }
 
-    for (const entry of body.entry ?? []) {
-      for (const change of entry.changes ?? []) {
-        for (const status of change.value?.statuses ?? []) {
-          // Map WhatsApp status to our interaction type
-          const typeMap: Record<string, string> = {
-            sent: 'sent',
-            delivered: 'delivered',
-            read: 'opened',
-            failed: 'failed',
-          };
+    const expectedSignature = 'sha256=' + crypto
+      .createHmac('sha256', appSecret)
+      .update(rawBody)
+      .digest('hex');
 
-          const interactionType = typeMap[status.status];
-          if (!interactionType) continue;
+    const sigBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
 
-          // Update interaction by external_id
-          await (supabase
-            .from('interactions') as ReturnType<typeof supabase.from>)
-            .update({
-              type: interactionType,
-              metadata: status.errors ? { errors: status.errors } : null,
-            } as Record<string, unknown>)
-            .eq('external_id', status.id);
-        }
+    if (sigBuffer.length !== expectedBuffer.length ||
+        !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+  }
+
+  const body = JSON.parse(rawBody) as WhatsAppWebhookPayload;
+
+  if (body.object !== 'whatsapp_business_account') {
+    return NextResponse.json({ received: true });
+  }
+
+  const supabase = createServiceRoleClient();
+
+  for (const entry of body.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const value = change.value;
+      if (!value) continue;
+
+      // Process delivery status updates
+      for (const status of value.statuses ?? []) {
+        const typeMap: Record<string, string> = {
+          sent: 'sent',
+          delivered: 'delivered',
+          read: 'opened',
+          failed: 'failed',
+        };
+
+        const interactionType = typeMap[status.status];
+        if (!interactionType) continue;
+
+        await (supabase
+          .from('interactions') as ReturnType<typeof supabase.from>)
+          .update({
+            type: interactionType,
+            metadata: status.errors ? { errors: status.errors } : null,
+          } as Record<string, unknown>)
+          .eq('external_id', status.id);
+      }
+
+      // Process incoming messages (reply detection)
+      for (const message of value.messages ?? []) {
+        await processIncomingMessage(supabase, message);
       }
     }
   }
 
   return NextResponse.json({ received: true });
+}
+
+async function processIncomingMessage(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  message: { from: string; id: string; type: string; text?: { body: string } },
+) {
+  // Normalize the incoming phone: Meta sends "55XXXXXXXXXXX"
+  const phone = message.from;
+
+  // Find lead by phone — try matching with and without country code
+  const phonesToMatch = [phone, `+${phone}`];
+  // Also try without country code (55)
+  if (phone.startsWith('55') && phone.length >= 12) {
+    phonesToMatch.push(phone.slice(2));
+  }
+
+  const { data: lead } = (await (supabase
+    .from('leads') as ReturnType<typeof supabase.from>)
+    .select('id, org_id')
+    .in('telefone', phonesToMatch)
+    .limit(1)
+    .maybeSingle()) as { data: { id: string; org_id: string } | null };
+
+  if (!lead) {
+    console.warn(`[whatsapp-webhook] No lead found for phone=${phone}`);
+    return;
+  }
+
+  // Find active enrollment with whatsapp channel for this lead
+  const { data: enrollment } = (await (supabase
+    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    .select('id, cadence_id, current_step')
+    .eq('lead_id', lead.id)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()) as { data: { id: string; cadence_id: string; current_step: number } | null };
+
+  if (!enrollment) {
+    console.warn(`[whatsapp-webhook] No active enrollment for lead=${lead.id}`);
+    return;
+  }
+
+  // Find current step to verify it's a whatsapp step
+  const { data: step } = (await (supabase
+    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    .select('id')
+    .eq('cadence_id', enrollment.cadence_id)
+    .eq('step_order', enrollment.current_step)
+    .eq('channel', 'whatsapp')
+    .maybeSingle()) as { data: { id: string } | null };
+
+  const messageText = message.text?.body ?? '';
+
+  // Create interaction for the reply
+  await (supabase
+    .from('interactions') as ReturnType<typeof supabase.from>)
+    .insert({
+      org_id: lead.org_id,
+      lead_id: lead.id,
+      cadence_id: enrollment.cadence_id,
+      step_id: step?.id ?? null,
+      channel: 'whatsapp',
+      type: 'replied',
+      message_content: messageText,
+      external_id: message.id,
+      metadata: { from: phone, message_type: message.type },
+    } as Record<string, unknown>);
+
+  // Mark enrollment as replied
+  await (supabase
+    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    .update({ status: 'replied' } as Record<string, unknown>)
+    .eq('id', enrollment.id);
+
+  console.warn(`[whatsapp-webhook] Reply detected: lead=${lead.id} enrollment=${enrollment.id}`);
 }

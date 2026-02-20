@@ -40,7 +40,14 @@ export interface PreparedEmail {
   aiPersonalized: boolean;
 }
 
-// Input for executing an activity (sending the email)
+// Prepared WhatsApp message ready for review/send
+export interface PreparedWhatsApp {
+  to: string;
+  body: string;
+  aiPersonalized: boolean;
+}
+
+// Input for executing an activity (sending email or WhatsApp)
 export interface ExecuteActivityInput {
   enrollmentId: string;
   cadenceId: string;
@@ -48,6 +55,7 @@ export interface ExecuteActivityInput {
   leadId: string;
   orgId: string;
   cadenceCreatedBy: string;
+  channel: ChannelType;
   to: string;
   subject: string;
   body: string;

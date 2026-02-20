@@ -4,10 +4,11 @@ import { useState } from 'react';
 
 import { toast } from 'sonner';
 
-import { prepareActivityEmail } from '../actions/prepare-activity-email';
+import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepare-activity-email';
 import type { PendingActivity } from '../types';
 
 import { ActivityEmailCompose } from './ActivityEmailCompose';
+import { ActivityWhatsAppCompose } from './ActivityWhatsAppCompose';
 
 interface ActivityExecutionSheetContentProps {
   activity: PendingActivity;
@@ -26,33 +27,75 @@ export function ActivityExecutionSheetContent({
   const [subject, setSubject] = useState(activity.templateSubject ?? '');
   const [body, setBody] = useState(activity.templateBody ?? '');
   const [aiPersonalized, setAiPersonalized] = useState(false);
+  const [to, setTo] = useState(
+    activity.channel === 'whatsapp'
+      ? (activity.lead.telefone ?? '')
+      : (activity.lead.email ?? ''),
+  );
 
   // Fire-and-forget fetch on mount (key prop on parent forces remount per activity)
   useState(() => {
-    prepareActivityEmail({
-      lead: activity.lead,
-      templateSubject: activity.templateSubject,
-      templateBody: activity.templateBody,
-      aiPersonalization: activity.aiPersonalization,
-      channel: activity.channel,
-    }).then((result) => {
-      if (result.success) {
-        setSubject(result.data.subject);
-        setBody(result.data.body);
-        setAiPersonalized(result.data.aiPersonalized);
-      } else {
-        toast.error(result.error);
-      }
-      setIsLoading(false);
-    }).catch(() => {
-      setIsLoading(false);
-    });
+    if (activity.channel === 'whatsapp') {
+      prepareActivityWhatsApp({
+        lead: activity.lead,
+        templateSubject: activity.templateSubject,
+        templateBody: activity.templateBody,
+        aiPersonalization: activity.aiPersonalization,
+        channel: 'whatsapp',
+      }).then((result) => {
+        if (result.success) {
+          setTo(result.data.to);
+          setBody(result.data.body);
+          setAiPersonalized(result.data.aiPersonalized);
+        } else {
+          toast.error(result.error);
+        }
+        setIsLoading(false);
+      }).catch(() => {
+        setIsLoading(false);
+      });
+    } else {
+      prepareActivityEmail({
+        lead: activity.lead,
+        templateSubject: activity.templateSubject,
+        templateBody: activity.templateBody,
+        aiPersonalization: activity.aiPersonalization,
+        channel: activity.channel,
+      }).then((result) => {
+        if (result.success) {
+          setTo(result.data.to);
+          setSubject(result.data.subject);
+          setBody(result.data.body);
+          setAiPersonalized(result.data.aiPersonalized);
+        } else {
+          toast.error(result.error);
+        }
+        setIsLoading(false);
+      }).catch(() => {
+        setIsLoading(false);
+      });
+    }
     return null;
   });
 
+  if (activity.channel === 'whatsapp') {
+    return (
+      <ActivityWhatsAppCompose
+        to={to}
+        body={body}
+        aiPersonalized={aiPersonalized}
+        isLoading={isLoading}
+        isSending={isSending}
+        onBodyChange={setBody}
+        onSend={() => onSend('', body, aiPersonalized)}
+        onSkip={onSkip}
+      />
+    );
+  }
+
   return (
     <ActivityEmailCompose
-      to={activity.lead.email ?? ''}
+      to={to}
       subject={subject}
       body={body}
       aiPersonalized={aiPersonalized}

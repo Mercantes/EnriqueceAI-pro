@@ -22,6 +22,20 @@ vi.mock('@/features/integrations/services/email.service', () => ({
   },
 }));
 
+const mockCheckAndDeductCredit = vi.fn();
+vi.mock('@/features/integrations/services/whatsapp-credit.service', () => ({
+  WhatsAppCreditService: {
+    checkAndDeductCredit: (...args: unknown[]) => mockCheckAndDeductCredit(...args),
+  },
+}));
+
+const mockSendWhatsApp = vi.fn();
+vi.mock('@/features/integrations/services/whatsapp.service', () => ({
+  WhatsAppService: {
+    sendMessage: (...args: unknown[]) => mockSendWhatsApp(...args),
+  },
+}));
+
 import { executeActivity } from './execute-activity';
 import type { ExecuteActivityInput } from '../types';
 
@@ -36,11 +50,20 @@ const baseInput: ExecuteActivityInput = {
   leadId: 'lead-1',
   orgId: 'org-1',
   cadenceCreatedBy: 'user-1',
+  channel: 'email',
   to: 'contato@abc.com',
   subject: 'Olá Empresa ABC',
   body: '<p>Corpo do email</p>',
   aiGenerated: false,
   templateId: 'tpl-1',
+};
+
+const whatsappInput: ExecuteActivityInput = {
+  ...baseInput,
+  channel: 'whatsapp',
+  to: '5511999887766',
+  subject: '',
+  body: 'Olá, tudo bem?',
 };
 
 // ---------------------------------------------------------------------------
@@ -64,19 +87,19 @@ function createChainMock(finalResult: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// Tests — Email (existing)
 // ---------------------------------------------------------------------------
 
-describe('executeActivity', () => {
+describe('executeActivity — email channel', () => {
   beforeEach(() => {
     resetMocks();
     mockSendEmail.mockReset();
+    mockSendWhatsApp.mockReset();
+    mockCheckAndDeductCredit.mockReset();
   });
 
   it('should return ALREADY_EXECUTED if interaction exists', async () => {
-    // 1st from() = idempotency check → existing interaction found
     const idempotencyChain = createChainMock({ data: { id: 'existing-int' } });
-
     mockFrom.mockImplementation(() => idempotencyChain);
 
     const result = await executeActivity(baseInput);
@@ -90,9 +113,7 @@ describe('executeActivity', () => {
   });
 
   it('should return error if interaction insert fails', async () => {
-    // 1st = idempotency check → no existing
     const idempotencyChain = createChainMock({ data: null });
-    // 2nd = insert interaction → returns null (failure)
     const insertChain = createChainMock({ data: null });
 
     let callIndex = 0;
@@ -112,17 +133,11 @@ describe('executeActivity', () => {
   });
 
   it('should send email, record interaction, and advance step on success', async () => {
-    // 1st = idempotency → no existing
     const idempotencyChain = createChainMock({ data: null });
-    // 2nd = insert interaction → success
     const insertChain = createChainMock({ data: { id: 'int-1' } });
-    // 3rd = update interaction with external_id (after email send)
     const updateExtChain = createChainMock({ data: null });
-    // 4th = get current step_order (inner query for gt comparison)
     const currentStepChain = createChainMock({ data: { step_order: 1 } });
-    // 5th = check next step → found
     const nextStepChain = createChainMock({ data: { step_order: 2 } });
-    // 6th = update enrollment current_step
     const advanceChain = createChainMock({ data: null });
 
     mockSendEmail.mockResolvedValue({
@@ -149,16 +164,15 @@ describe('executeActivity', () => {
 
     expect(result.data.interactionId).toBe('int-1');
 
-    // Verify email was sent
     expect(mockSendEmail).toHaveBeenCalledWith(
-      'user-1', // cadenceCreatedBy
-      'org-1',   // orgId
+      'user-1',
+      'org-1',
       {
         to: 'contato@abc.com',
         subject: 'Olá Empresa ABC',
         htmlBody: '<p>Corpo do email</p>',
       },
-      'int-1',   // interactionId
+      'int-1',
       mockSupabase,
     );
   });
@@ -168,9 +182,7 @@ describe('executeActivity', () => {
     const insertChain = createChainMock({ data: { id: 'int-2' } });
     const updateExtChain = createChainMock({ data: null });
     const currentStepChain = createChainMock({ data: { step_order: 3 } });
-    // No next step
     const nextStepChain = createChainMock({ data: null });
-    // Update enrollment to completed
     const completeChain = createChainMock({ data: null });
 
     mockSendEmail.mockResolvedValue({ success: true, messageId: 'msg-2' });
@@ -212,7 +224,6 @@ describe('executeActivity', () => {
       callIndex++;
       if (callIndex === 1) return idempotencyChain;
       if (callIndex === 2) return insertChain;
-      // No update for external_id since email failed
       if (callIndex === 3) return currentStepChain;
       if (callIndex === 4) return nextStepChain;
       if (callIndex === 5) return advanceChain;
@@ -221,10 +232,132 @@ describe('executeActivity', () => {
 
     const result = await executeActivity(baseInput);
 
-    // Still succeeds — interaction was recorded, email failure is logged
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.interactionId).toBe('int-3');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — WhatsApp channel
+// ---------------------------------------------------------------------------
+
+describe('executeActivity — whatsapp channel', () => {
+  beforeEach(() => {
+    resetMocks();
+    mockSendEmail.mockReset();
+    mockSendWhatsApp.mockReset();
+    mockCheckAndDeductCredit.mockReset();
+  });
+
+  it('should return error when no WhatsApp credits', async () => {
+    const idempotencyChain = createChainMock({ data: null });
+    const insertChain = createChainMock({ data: { id: 'int-wa-1' } });
+
+    mockCheckAndDeductCredit.mockResolvedValue({
+      allowed: false,
+      error: 'Sem plano WhatsApp ativo',
+    });
+
+    let callIndex = 0;
+    mockFrom.mockImplementation(() => {
+      callIndex++;
+      if (callIndex === 1) return idempotencyChain;
+      return insertChain;
+    });
+
+    const result = await executeActivity(whatsappInput);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain('WhatsApp');
+    }
+    expect(mockSendWhatsApp).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('should send WhatsApp message and record interaction on success', async () => {
+    const idempotencyChain = createChainMock({ data: null });
+    const insertChain = createChainMock({ data: { id: 'int-wa-2' } });
+    const updateExtChain = createChainMock({ data: null });
+    const currentStepChain = createChainMock({ data: { step_order: 1 } });
+    const nextStepChain = createChainMock({ data: { step_order: 2 } });
+    const advanceChain = createChainMock({ data: null });
+
+    mockCheckAndDeductCredit.mockResolvedValue({
+      allowed: true,
+      used: 11,
+      limit: 500,
+      isOverage: false,
+    });
+
+    mockSendWhatsApp.mockResolvedValue({
+      success: true,
+      messageId: 'wamid.123',
+    });
+
+    let callIndex = 0;
+    mockFrom.mockImplementation(() => {
+      callIndex++;
+      if (callIndex === 1) return idempotencyChain;
+      if (callIndex === 2) return insertChain;
+      if (callIndex === 3) return updateExtChain;
+      if (callIndex === 4) return currentStepChain;
+      if (callIndex === 5) return nextStepChain;
+      if (callIndex === 6) return advanceChain;
+      return createChainMock({ data: null });
+    });
+
+    const result = await executeActivity(whatsappInput);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.interactionId).toBe('int-wa-2');
+    expect(mockSendWhatsApp).toHaveBeenCalledWith(
+      'org-1',
+      { to: '5511999887766', body: 'Olá, tudo bem?' },
+      mockSupabase,
+    );
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('should succeed even when WhatsApp send fails (logs error)', async () => {
+    const idempotencyChain = createChainMock({ data: null });
+    const insertChain = createChainMock({ data: { id: 'int-wa-3' } });
+    const currentStepChain = createChainMock({ data: { step_order: 1 } });
+    const nextStepChain = createChainMock({ data: null });
+    const completeChain = createChainMock({ data: null });
+
+    mockCheckAndDeductCredit.mockResolvedValue({
+      allowed: true,
+      used: 100,
+      limit: 500,
+      isOverage: false,
+    });
+
+    mockSendWhatsApp.mockResolvedValue({
+      success: false,
+      error: 'Connection not found',
+    });
+
+    let callIndex = 0;
+    mockFrom.mockImplementation(() => {
+      callIndex++;
+      if (callIndex === 1) return idempotencyChain;
+      if (callIndex === 2) return insertChain;
+      if (callIndex === 3) return currentStepChain;
+      if (callIndex === 4) return nextStepChain;
+      if (callIndex === 5) return completeChain;
+      return createChainMock({ data: null });
+    });
+
+    const result = await executeActivity(whatsappInput);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.interactionId).toBe('int-wa-3');
     }
   });
 });

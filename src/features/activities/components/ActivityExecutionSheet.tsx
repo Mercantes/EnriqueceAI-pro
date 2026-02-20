@@ -41,9 +41,14 @@ export function ActivityExecutionSheet({
 
   const handleSend = (subject: string, body: string, aiGenerated: boolean) => {
     if (!activity || !activity.cadenceCreatedBy) {
-      toast.error('Cadência sem usuário criador — não é possível enviar email');
+      toast.error('Cadência sem usuário criador — não é possível enviar');
       return;
     }
+
+    const isWhatsApp = activity.channel === 'whatsapp';
+    const to = isWhatsApp
+      ? (activity.lead.telefone ?? '')
+      : (activity.lead.email ?? '');
 
     startSendTransition(async () => {
       const result = await executeActivity({
@@ -53,7 +58,8 @@ export function ActivityExecutionSheet({
         leadId: activity.lead.id,
         orgId: activity.lead.org_id,
         cadenceCreatedBy: activity.cadenceCreatedBy!,
-        to: activity.lead.email ?? '',
+        channel: activity.channel,
+        to,
         subject,
         body,
         aiGenerated,
@@ -61,7 +67,7 @@ export function ActivityExecutionSheet({
       });
 
       if (result.success) {
-        toast.success('Email enviado com sucesso!');
+        toast.success(isWhatsApp ? 'WhatsApp enviado com sucesso!' : 'Email enviado com sucesso!');
         onActivityDone(activity.enrollmentId);
 
         if (selectedIndex !== null && selectedIndex < activities.length - 1) {
