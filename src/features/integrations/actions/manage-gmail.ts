@@ -1,0 +1,211 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireAuth } from '@/lib/auth/require-auth';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+import type { GmailConnectionSafe } from '../types';
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ?? '';
+
+export async function getGmailAuthUrl(): Promise<ActionResult<{ url: string }>> {
+  await requireAuth();
+
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_REDIRECT_URI) {
+    return { success: false, error: 'Configuração do Google OAuth não encontrada' };
+  }
+
+  const scopes = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/userinfo.email',
+  ];
+
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: GOOGLE_REDIRECT_URI,
+    response_type: 'code',
+    scope: scopes.join(' '),
+    access_type: 'offline',
+    prompt: 'consent',
+  });
+
+  return {
+    success: true,
+    data: { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` },
+  };
+}
+
+export async function handleGmailCallback(
+  code: string,
+): Promise<ActionResult<GmailConnectionSafe>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+    return { success: false, error: 'Configuração do Google OAuth não encontrada' };
+  }
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Exchange code for tokens
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: GOOGLE_REDIRECT_URI,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  if (!tokenResponse.ok) {
+    return { success: false, error: 'Erro ao autenticar com Google' };
+  }
+
+  const tokens = (await tokenResponse.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+  };
+
+  if (!tokens.access_token) {
+    return { success: false, error: 'Token de acesso não recebido' };
+  }
+
+  // Get user email
+  const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+
+  if (!userInfoResponse.ok) {
+    return { success: false, error: 'Erro ao obter informações do usuário' };
+  }
+
+  const userInfo = (await userInfoResponse.json()) as { email: string };
+  const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+  // Upsert connection
+  const { data, error } = (await (supabase
+    .from('gmail_connections') as ReturnType<typeof supabase.from>)
+    .upsert(
+      {
+        org_id: member.org_id,
+        user_id: user.id,
+        access_token_encrypted: tokens.access_token,
+        refresh_token_encrypted: tokens.refresh_token ?? '',
+        token_expires_at: expiresAt,
+        email_address: userInfo.email,
+        status: 'connected',
+      } as Record<string, unknown>,
+      { onConflict: 'org_id,user_id' },
+    )
+    .select('id, email_address, status, created_at, updated_at')
+    .single()) as { data: GmailConnectionSafe | null; error: { message: string } | null };
+
+  if (error) {
+    return { success: false, error: 'Erro ao salvar conexão Gmail' };
+  }
+
+  return { success: true, data: data! };
+}
+
+export async function disconnectGmail(): Promise<ActionResult<{ disconnected: boolean }>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const { error } = await (supabase
+    .from('gmail_connections') as ReturnType<typeof supabase.from>)
+    .delete()
+    .eq('org_id', member.org_id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { success: false, error: 'Erro ao desconectar Gmail' };
+  }
+
+  return { success: true, data: { disconnected: true } };
+}
+
+export async function refreshGmailToken(
+  connectionId: string,
+): Promise<ActionResult<{ refreshed: boolean }>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return { success: false, error: 'Configuração do Google OAuth não encontrada' };
+  }
+
+  // Fetch current connection (needs refresh token)
+  const { data: connection } = (await (supabase
+    .from('gmail_connections') as ReturnType<typeof supabase.from>)
+    .select('*')
+    .eq('id', connectionId)
+    .eq('user_id', user.id)
+    .single()) as { data: { refresh_token_encrypted: string } | null };
+
+  if (!connection) {
+    return { success: false, error: 'Conexão não encontrada' };
+  }
+
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      refresh_token: connection.refresh_token_encrypted,
+      grant_type: 'refresh_token',
+    }),
+  });
+
+  if (!tokenResponse.ok) {
+    // Mark connection as error
+    await (supabase.from('gmail_connections') as ReturnType<typeof supabase.from>)
+      .update({ status: 'error' } as Record<string, unknown>)
+      .eq('id', connectionId);
+    return { success: false, error: 'Erro ao renovar token' };
+  }
+
+  const tokens = (await tokenResponse.json()) as {
+    access_token: string;
+    expires_in: number;
+  };
+
+  const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+  await (supabase.from('gmail_connections') as ReturnType<typeof supabase.from>)
+    .update({
+      access_token_encrypted: tokens.access_token,
+      token_expires_at: expiresAt,
+      status: 'connected',
+    } as Record<string, unknown>)
+    .eq('id', connectionId);
+
+  return { success: true, data: { refreshed: true } };
+}

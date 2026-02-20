@@ -1,0 +1,165 @@
+'use client';
+
+import { useActionState, useState } from 'react';
+
+import { Button } from '@/shared/components/ui/button';
+
+import { updateMemberRole } from '../actions/update-member-role';
+import { updateMemberStatus } from '../actions/update-member-status';
+import type { OrganizationMemberRow } from '../types';
+import { InviteMemberDialog } from './InviteMemberDialog';
+
+type FormState = { error?: string; success?: boolean };
+
+const STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  active: { label: 'Ativo', className: 'bg-green-100 text-green-800' },
+  invited: { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800' },
+  suspended: { label: 'Desativado', className: 'bg-red-100 text-red-800' },
+  removed: { label: 'Removido', className: 'bg-gray-100 text-gray-500' },
+};
+
+export function UserManagement({
+  members,
+  ownerId,
+  currentUserId,
+  memberCount,
+  memberMax,
+}: {
+  members: OrganizationMemberRow[];
+  ownerId: string;
+  currentUserId: string;
+  memberCount: number;
+  memberMax: number;
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const [statusState, statusAction, statusPending] = useActionState(
+    async (_prev: FormState, formData: FormData): Promise<FormState> => {
+      const result = await updateMemberStatus(formData);
+      if (result.success) return { success: true };
+      return { error: result.error };
+    },
+    {} as FormState,
+  );
+
+  const [roleState, roleAction, rolePending] = useActionState(
+    async (_prev: FormState, formData: FormData): Promise<FormState> => {
+      const result = await updateMemberRole(formData);
+      if (result.success) return { success: true };
+      return { error: result.error };
+    },
+    {} as FormState,
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Membros da equipe</h2>
+          <p className="text-sm text-muted-foreground">
+            {memberCount}/{memberMax} membros
+          </p>
+        </div>
+        <Button onClick={() => setDialogOpen(true)}>Convidar membro</Button>
+      </div>
+
+      {(statusState.error || roleState.error) && (
+        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {statusState.error || roleState.error}
+        </div>
+      )}
+
+      {(statusState.success || roleState.success) && (
+        <div className="rounded-md bg-green-50 p-3 text-sm text-green-700">
+          Membro atualizado com sucesso.
+        </div>
+      )}
+
+      <div className="rounded-md border">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="p-3 text-left text-sm font-medium">Membro</th>
+              <th className="p-3 text-left text-sm font-medium">Role</th>
+              <th className="p-3 text-left text-sm font-medium">Status</th>
+              <th className="p-3 text-right text-sm font-medium">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((member) => {
+              const isOwner = member.user_id === ownerId;
+              const isSelf = member.user_id === currentUserId;
+              const canEdit = !isOwner && !isSelf;
+              const statusInfo = STATUS_LABELS[member.status] ?? STATUS_LABELS.active!;
+
+              return (
+                <tr key={member.id} className="border-b last:border-0">
+                  <td className="p-3">
+                    <span className="text-sm">{member.user_id}</span>
+                    {isOwner && (
+                      <span className="ml-2 text-xs text-muted-foreground">(Proprietário)</span>
+                    )}
+                    {isSelf && (
+                      <span className="ml-2 text-xs text-muted-foreground">(Você)</span>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    {canEdit ? (
+                      <form action={roleAction} className="inline">
+                        <input type="hidden" name="memberId" value={member.id} />
+                        <input
+                          type="hidden"
+                          name="role"
+                          value={member.role === 'manager' ? 'sdr' : 'manager'}
+                        />
+                        <button
+                          type="submit"
+                          disabled={rolePending}
+                          className="text-sm text-primary hover:underline"
+                        >
+                          {member.role === 'manager' ? 'Manager' : 'SDR'}
+                        </button>
+                      </form>
+                    ) : (
+                      <span className="text-sm">
+                        {member.role === 'manager' ? 'Manager' : 'SDR'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusInfo.className}`}
+                    >
+                      {statusInfo.label}
+                    </span>
+                  </td>
+                  <td className="p-3 text-right">
+                    {canEdit && member.status !== 'removed' && (
+                      <form action={statusAction} className="inline">
+                        <input type="hidden" name="memberId" value={member.id} />
+                        <input
+                          type="hidden"
+                          name="status"
+                          value={member.status === 'suspended' ? 'active' : 'suspended'}
+                        />
+                        <button
+                          type="submit"
+                          disabled={statusPending}
+                          className="text-sm text-primary hover:underline"
+                        >
+                          {member.status === 'suspended' ? 'Reativar' : 'Desativar'}
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <InviteMemberDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+    </div>
+  );
+}

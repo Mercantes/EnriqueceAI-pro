@@ -1,0 +1,102 @@
+'use client';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+
+import type { CadenceMetrics } from '../reports.contract';
+
+interface CadenceReportProps {
+  metrics: CadenceMetrics[];
+}
+
+export function CadenceReport({ metrics }: CadenceReportProps) {
+  if (metrics.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-[var(--muted-foreground)]">
+          Nenhuma cadência ativa no período selecionado.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Performance por Cadência</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
+                  <th className="pb-2 pr-4 font-medium">Cadência</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Inscritos</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Enviados</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Abertos</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Respondidos</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Bounce</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Reuniões</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Abertura</th>
+                  <th className="pb-2 pr-4 text-right font-medium">Resposta</th>
+                  <th className="pb-2 text-right font-medium">Conversão</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.map((m) => (
+                  <tr key={m.cadenceId} className="border-b border-[var(--border)] last:border-0">
+                    <td className="py-2 pr-4 font-medium">{m.cadenceName}</td>
+                    <td className="py-2 pr-4 text-right">{m.totalEnrollments}</td>
+                    <td className="py-2 pr-4 text-right">{m.sent}</td>
+                    <td className="py-2 pr-4 text-right">{m.opened}</td>
+                    <td className="py-2 pr-4 text-right">{m.replied}</td>
+                    <td className="py-2 pr-4 text-right">{m.bounced}</td>
+                    <td className="py-2 pr-4 text-right">{m.meetings}</td>
+                    <td className="py-2 pr-4 text-right">{m.openRate}%</td>
+                    <td className="py-2 pr-4 text-right">{m.replyRate}%</td>
+                    <td className="py-2 text-right font-medium">{m.conversionRate}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Rate bars per cadence */}
+      {metrics.map((m) => (
+        <Card key={m.cadenceId}>
+          <CardHeader>
+            <CardTitle className="text-sm">{m.cadenceName}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <RateBar label="Abertura" value={m.openRate} color="bg-blue-500" />
+              <RateBar label="Resposta" value={m.replyRate} color="bg-green-500" />
+              <RateBar label="Bounce" value={m.bounceRate} color="bg-red-500" />
+              <RateBar label="Conversão" value={m.conversionRate} color="bg-purple-500" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function RateBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-[var(--muted-foreground)]">{label}</span>
+        <span className="font-medium">{value}%</span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-[var(--muted)]">
+        <div
+          className={`h-full rounded-full ${color} transition-all`}
+          style={{ width: `${Math.max(value, 1)}%` }}
+        />
+      </div>
+    </div>
+  );
+}

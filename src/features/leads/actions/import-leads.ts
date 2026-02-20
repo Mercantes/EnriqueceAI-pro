@@ -1,0 +1,175 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireAuth } from '@/lib/auth/require-auth';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+import type { LeadImportErrorRow } from '../types';
+import { parseCsv } from '../utils/csv-parser';
+
+export interface ImportLeadsResult {
+  importId: string;
+  totalRows: number;
+  successCount: number;
+  errorCount: number;
+  duplicateCount: number;
+  errors: LeadImportErrorRow[];
+}
+
+export async function importLeads(formData: FormData): Promise<ActionResult<ImportLeadsResult>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  // Get user's org
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Get file from form
+  const file = formData.get('file') as File | null;
+  if (!file || !(file instanceof File)) {
+    return { success: false, error: 'Arquivo CSV é obrigatório' };
+  }
+
+  if (!file.name.endsWith('.csv')) {
+    return { success: false, error: 'Apenas arquivos CSV são aceitos' };
+  }
+
+  // Read file content
+  const content = await file.text();
+  const parsed = parseCsv(content);
+
+  // Check for parser-level errors (empty file, no CNPJ column, too many rows)
+  if (parsed.rows.length === 0 && parsed.errors.length > 0 && parsed.errors[0]?.rowNumber === 0) {
+    return { success: false, error: parsed.errors[0].errorMessage };
+  }
+
+  // Create import record
+  const { data: importRecord, error: importError } = (await (supabase
+    .from('lead_imports') as ReturnType<typeof supabase.from>)
+    .insert({
+      org_id: member.org_id,
+      file_name: file.name,
+      total_rows: parsed.totalRows,
+      processed_rows: 0,
+      success_count: 0,
+      error_count: 0,
+      status: 'processing',
+      created_by: user.id,
+    } as Record<string, unknown>)
+    .select('id')
+    .single()) as { data: { id: string } | null; error: { message: string } | null };
+
+  if (importError || !importRecord) {
+    return { success: false, error: 'Erro ao criar registro de importação' };
+  }
+
+  const importId = importRecord.id;
+  let successCount = 0;
+  let duplicateCount = 0;
+  const importErrors: LeadImportErrorRow[] = [];
+
+  // Insert valid rows
+  for (const row of parsed.rows) {
+    const { error: insertError } = await (supabase
+      .from('leads') as ReturnType<typeof supabase.from>)
+      .insert({
+        org_id: member.org_id,
+        cnpj: row.cnpj,
+        status: 'new',
+        enrichment_status: 'pending',
+        razao_social: row.razao_social ?? null,
+        nome_fantasia: row.nome_fantasia ?? null,
+        created_by: user.id,
+        import_id: importId,
+      } as Record<string, unknown>);
+
+    if (insertError) {
+      const isDuplicate = insertError.message?.includes('unique') || insertError.message?.includes('duplicate');
+      if (isDuplicate) {
+        duplicateCount++;
+      }
+
+      const errorEntry = {
+        id: '',
+        import_id: importId,
+        row_number: row.rowNumber,
+        cnpj: row.cnpj,
+        error_message: isDuplicate ? 'CNPJ duplicado nesta organização' : (insertError.message ?? 'Erro ao inserir'),
+        created_at: new Date().toISOString(),
+      };
+
+      // Record error in database
+      await (supabase
+        .from('lead_import_errors') as ReturnType<typeof supabase.from>)
+        .insert({
+          import_id: importId,
+          row_number: row.rowNumber,
+          cnpj: row.cnpj,
+          error_message: errorEntry.error_message,
+        } as Record<string, unknown>);
+
+      importErrors.push(errorEntry);
+    } else {
+      successCount++;
+    }
+  }
+
+  // Record parse validation errors
+  for (const error of parsed.errors) {
+    await (supabase
+      .from('lead_import_errors') as ReturnType<typeof supabase.from>)
+      .insert({
+        import_id: importId,
+        row_number: error.rowNumber,
+        cnpj: error.cnpj,
+        error_message: error.errorMessage,
+      } as Record<string, unknown>);
+
+    importErrors.push({
+      id: '',
+      import_id: importId,
+      row_number: error.rowNumber,
+      cnpj: error.cnpj,
+      error_message: error.errorMessage,
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  const totalErrorCount = importErrors.length;
+
+  // Update import record with final counts
+  await (supabase
+    .from('lead_imports') as ReturnType<typeof supabase.from>)
+    .update({
+      processed_rows: parsed.totalRows,
+      success_count: successCount,
+      error_count: totalErrorCount,
+      status: 'completed',
+    } as Record<string, unknown>)
+    .eq('id', importId);
+
+  revalidatePath('/leads');
+  revalidatePath('/leads/import');
+
+  return {
+    success: true,
+    data: {
+      importId,
+      totalRows: parsed.totalRows,
+      successCount,
+      errorCount: totalErrorCount,
+      duplicateCount,
+      errors: importErrors,
+    },
+  };
+}

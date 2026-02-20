@@ -1,0 +1,365 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { mockSupabase, mockSupabaseFrom, resetMocks } from '@tests/mocks/supabase';
+const mockFrom = mockSupabaseFrom as any;
+
+vi.mock('@/lib/supabase/server', () => ({
+  createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
+}));
+
+vi.mock('@/lib/auth/require-auth', () => ({
+  requireAuth: vi.fn(() => Promise.resolve({ id: 'user-1', email: 'test@test.com' })),
+}));
+
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+}));
+
+vi.mock('../services/enrichment-provider', () => {
+  return {
+    CnpjWsProvider: class MockCnpjWsProvider {},
+  };
+});
+
+vi.mock('../services/enrichment.service', () => ({
+  enrichLead: vi.fn(),
+}));
+
+import { revalidatePath } from 'next/cache';
+import { enrichLead } from '../services/enrichment.service';
+import { bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from './bulk-actions';
+
+// Helper to build a chainable mock for: .from().select().eq().eq().single()
+function makeOrgMemberChain(orgId: string | null) {
+  const singleMock = vi.fn().mockResolvedValue({ data: orgId ? { org_id: orgId } : null });
+  const eqStatusMock = vi.fn().mockReturnValue({ single: singleMock });
+  const eqUserMock = vi.fn().mockReturnValue({ eq: eqStatusMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqUserMock });
+  return { select: selectMock };
+}
+
+// Helper to build a chainable mock for: .from('leads').update().eq().in()
+function makeUpdateChain(error: { message: string } | null = null) {
+  const inMock = vi.fn().mockResolvedValue({ error });
+  const eqMock = vi.fn().mockReturnValue({ in: inMock });
+  const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+  return { update: updateMock };
+}
+
+// Helper to build a chainable mock for: .from('leads').select().eq().single()
+function makeLeadSingleChain(leadData: { cnpj: string; org_id: string } | null) {
+  const singleMock = vi.fn().mockResolvedValue({ data: leadData });
+  const eqMock = vi.fn().mockReturnValue({ single: singleMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+  return { select: selectMock };
+}
+
+// Helper to build a chainable mock for: .from('leads').select().eq().in()
+function makeLeadsExportChain(
+  data: Record<string, unknown>[] | null,
+  error: { message: string } | null = null,
+) {
+  const inMock = vi.fn().mockResolvedValue({ data, error });
+  const eqMock = vi.fn().mockReturnValue({ in: inMock });
+  const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+  return { select: selectMock };
+}
+
+describe('bulkArchiveLeads', () => {
+  beforeEach(() => {
+    resetMocks();
+    vi.useFakeTimers();
+  });
+
+  it('should archive leads and return count on success', async () => {
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        // getOrgId: organization_members
+        return makeOrgMemberChain('org-1');
+      }
+      // Archive: leads update
+      return makeUpdateChain(null);
+    });
+
+    const result = await bulkArchiveLeads(['lead-1', 'lead-2', 'lead-3']);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.count).toBe(3);
+    }
+    expect(revalidatePath).toHaveBeenCalledWith('/leads');
+  });
+
+  it('should return error when org is not found', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain(null));
+
+    const result = await bulkArchiveLeads(['lead-1']);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Organização não encontrada');
+    }
+  });
+
+  it('should return error when leadIds is empty', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain('org-1'));
+
+    const result = await bulkArchiveLeads([]);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Nenhum lead selecionado');
+    }
+  });
+
+  it('should return error when DB update fails', async () => {
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        return makeOrgMemberChain('org-1');
+      }
+      return makeUpdateChain({ message: 'Update failed' });
+    });
+
+    const result = await bulkArchiveLeads(['lead-1', 'lead-2']);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Erro ao arquivar leads');
+    }
+  });
+});
+
+describe('bulkEnrichLeads', () => {
+  beforeEach(() => {
+    resetMocks();
+    vi.useFakeTimers();
+  });
+
+  it('should enrich all leads successfully', async () => {
+    vi.mocked(enrichLead).mockResolvedValue({ success: true, data: undefined });
+
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        // getOrgId
+        return makeOrgMemberChain('org-1');
+      }
+      // Per-lead: leads select -> single
+      return makeLeadSingleChain({ cnpj: '11222333000181', org_id: 'org-1' });
+    });
+
+    const promise = bulkEnrichLeads(['lead-1', 'lead-2']);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.successCount).toBe(2);
+      expect(result.data.failCount).toBe(0);
+    }
+  });
+
+  it('should count partial failures when some leads fail or belong to different org', async () => {
+    vi.mocked(enrichLead)
+      .mockResolvedValueOnce({ success: true, data: undefined })
+      .mockResolvedValueOnce({ success: false, error: 'Enrichment failed' });
+
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        // getOrgId
+        return makeOrgMemberChain('org-1');
+      }
+      if (fromCallCount === 2) {
+        // lead-1: correct org
+        return makeLeadSingleChain({ cnpj: '11222333000181', org_id: 'org-1' });
+      }
+      if (fromCallCount === 3) {
+        // lead-2: correct org but enrichment fails
+        return makeLeadSingleChain({ cnpj: '22333444000195', org_id: 'org-1' });
+      }
+      if (fromCallCount === 4) {
+        // lead-3: belongs to another org -> failCount++
+        return makeLeadSingleChain({ cnpj: '33444555000107', org_id: 'org-other' });
+      }
+      return makeLeadSingleChain(null);
+    });
+
+    const promise = bulkEnrichLeads(['lead-1', 'lead-2', 'lead-3']);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.successCount).toBe(1);
+      expect(result.data.failCount).toBe(2);
+    }
+  });
+
+  it('should return error when leadIds is empty', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain('org-1'));
+
+    const result = await bulkEnrichLeads([]);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Nenhum lead selecionado');
+    }
+  });
+
+  it('should return error when org is not found', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain(null));
+
+    const result = await bulkEnrichLeads(['lead-1']);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Organização não encontrada');
+    }
+  });
+});
+
+describe('exportLeadsCsv', () => {
+  beforeEach(() => {
+    resetMocks();
+    vi.useFakeTimers();
+  });
+
+  it('should export leads as CSV with correct headers and rows', async () => {
+    const mockLeads = [
+      {
+        cnpj: '11222333000181',
+        razao_social: 'Empresa Teste Ltda',
+        nome_fantasia: 'Empresa Teste',
+        porte: 'ME',
+        cnae: '6201-5/01',
+        email: 'contato@empresa.com',
+        telefone: '11999999999',
+        status: 'active',
+        enrichment_status: 'enriched',
+        endereco: { uf: 'SP', cidade: 'São Paulo' },
+        created_at: '2024-01-15T10:00:00.000Z',
+      },
+    ];
+
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        return makeOrgMemberChain('org-1');
+      }
+      return makeLeadsExportChain(mockLeads);
+    });
+
+    const result = await exportLeadsCsv(['lead-1']);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const { csv, filename } = result.data;
+
+      // Verify CSV headers
+      const lines = csv.split('\n');
+      expect(lines[0]).toBe(
+        'CNPJ,Razão Social,Nome Fantasia,Porte,CNAE,Email,Telefone,UF,Cidade,Status,Enriquecimento,Criado em',
+      );
+
+      // Verify data row contains correct values
+      expect(lines[1]).toContain('"11222333000181"');
+      expect(lines[1]).toContain('"Empresa Teste Ltda"');
+      expect(lines[1]).toContain('"Empresa Teste"');
+      expect(lines[1]).toContain('"ME"');
+      expect(lines[1]).toContain('"6201-5/01"');
+      expect(lines[1]).toContain('"contato@empresa.com"');
+      expect(lines[1]).toContain('"11999999999"');
+      expect(lines[1]).toContain('"SP"');
+      expect(lines[1]).toContain('"São Paulo"');
+      expect(lines[1]).toContain('"active"');
+      expect(lines[1]).toContain('"enriched"');
+
+      // Verify filename format
+      expect(filename).toMatch(/^leads-export-\d{4}-\d{2}-\d{2}\.csv$/);
+    }
+  });
+
+  it('should handle leads without endereco gracefully', async () => {
+    const mockLeads = [
+      {
+        cnpj: '11222333000181',
+        razao_social: 'Empresa Sem Endereco',
+        nome_fantasia: null,
+        porte: null,
+        cnae: null,
+        email: null,
+        telefone: null,
+        status: 'active',
+        enrichment_status: 'pending',
+        endereco: null,
+        created_at: '2024-01-15T10:00:00.000Z',
+      },
+    ];
+
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        return makeOrgMemberChain('org-1');
+      }
+      return makeLeadsExportChain(mockLeads);
+    });
+
+    const result = await exportLeadsCsv(['lead-1']);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const lines = result.data.csv.split('\n');
+      // UF and Cidade should be empty strings
+      expect(lines[1]).toContain('""');
+    }
+  });
+
+  it('should return error when org is not found', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain(null));
+
+    const result = await exportLeadsCsv(['lead-1']);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Organização não encontrada');
+    }
+  });
+
+  it('should return error when leadIds is empty', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain('org-1'));
+
+    const result = await exportLeadsCsv([]);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Nenhum lead selecionado');
+    }
+  });
+
+  it('should return error when DB query fails', async () => {
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        return makeOrgMemberChain('org-1');
+      }
+      return makeLeadsExportChain(null, { message: 'Query failed' });
+    });
+
+    const result = await exportLeadsCsv(['lead-1']);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Erro ao exportar leads');
+    }
+  });
+});

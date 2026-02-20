@@ -1,0 +1,117 @@
+'use client';
+
+import { Check, X } from 'lucide-react';
+
+import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+
+import { formatCents } from '../services/feature-flags';
+import type { PlanComparison as PlanComparisonData, PlanRow } from '../types';
+
+interface PlanComparisonProps {
+  data: PlanComparisonData;
+}
+
+export function PlanComparisonView({ data }: PlanComparisonProps) {
+  const { plans, currentPlanSlug } = data;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">Comparação de Planos</h2>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          Escolha o plano ideal para sua equipe
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {plans.map((plan) => (
+          <PlanCard
+            key={plan.id}
+            plan={plan}
+            isCurrent={plan.slug === currentPlanSlug}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface PlanCardProps {
+  plan: PlanRow;
+  isCurrent: boolean;
+}
+
+function PlanCard({ plan, isCurrent }: PlanCardProps) {
+  const aiUnlimited = plan.max_ai_per_day === -1;
+
+  return (
+    <Card className={isCurrent ? 'border-[var(--primary)] ring-1 ring-[var(--primary)]' : ''}>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">{plan.name}</CardTitle>
+          {isCurrent && <Badge variant="default">Atual</Badge>}
+        </div>
+        <div className="mt-2">
+          <span className="text-2xl font-bold">{formatCents(plan.price_cents)}</span>
+          <span className="text-sm text-[var(--muted-foreground)]">/mês</span>
+        </div>
+        {plan.additional_user_price_cents > 0 && (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            + {formatCents(plan.additional_user_price_cents)} por usuário adicional
+          </p>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-2 text-sm">
+          <PlanFeatureRow label={`${plan.max_leads.toLocaleString('pt-BR')} leads`} included />
+          <PlanFeatureRow
+            label={aiUnlimited ? 'IA ilimitada' : `${plan.max_ai_per_day} IA/dia`}
+            included
+          />
+          <PlanFeatureRow
+            label={`${plan.max_whatsapp_per_month.toLocaleString('pt-BR')} WhatsApp/mês`}
+            included
+          />
+          <PlanFeatureRow
+            label={`${plan.included_users} usuário${plan.included_users > 1 ? 's' : ''} inclusos`}
+            included
+          />
+          <PlanFeatureRow
+            label={`Enriquecimento ${plan.features.enrichment === 'full' ? 'completo' : plan.features.enrichment === 'lemit' ? 'intermediário' : 'básico'}`}
+            included
+          />
+          <PlanFeatureRow label="CRM" included={plan.features.crm} />
+          <PlanFeatureRow label="Calendário" included={plan.features.calendar} />
+        </div>
+
+        <Button
+          variant={isCurrent ? 'outline' : 'default'}
+          className="w-full"
+          disabled={isCurrent}
+        >
+          {isCurrent ? 'Plano atual' : 'Fazer upgrade'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface PlanFeatureRowProps {
+  label: string;
+  included: boolean;
+}
+
+function PlanFeatureRow({ label, included }: PlanFeatureRowProps) {
+  return (
+    <div className="flex items-center gap-2">
+      {included ? (
+        <Check className="size-4 text-green-500" />
+      ) : (
+        <X className="size-4 text-[var(--muted-foreground)]" />
+      )}
+      <span className={included ? '' : 'text-[var(--muted-foreground)]'}>{label}</span>
+    </div>
+  );
+}

@@ -1,0 +1,64 @@
+'use client';
+
+import { LogOut, Settings, User } from 'lucide-react';
+
+import { Button } from '@/shared/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+
+import { useAuth } from '../hooks/useAuth';
+import { useOrganization } from '../hooks/useOrganization';
+
+export function UserMenu() {
+  const { user, signOut } = useAuth();
+  const { organization } = useOrganization();
+
+  const email = user?.email ?? '';
+  const initials = email
+    .split('@')[0]
+    ?.slice(0, 2)
+    .toUpperCase() ?? 'U';
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-xs font-medium text-[var(--primary-foreground)]">
+            {initials}
+          </div>
+          <span className="hidden text-sm md:inline">{organization?.name}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>
+          <p className="text-sm font-medium">{email}</p>
+          <p className="text-xs text-[var(--muted-foreground)]">{organization?.name}</p>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <a href="/settings" className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Meu Perfil
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="/settings" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Configurações
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => signOut()} className="flex items-center gap-2 text-[var(--destructive)]">
+          <LogOut className="h-4 w-4" />
+          Sair
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

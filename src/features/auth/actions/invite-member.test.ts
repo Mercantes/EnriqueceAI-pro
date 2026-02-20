@@ -1,0 +1,152 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { mockSupabase, mockSupabaseAuth, resetMocks } from '@tests/mocks/supabase';
+
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn((...args: unknown[]) => {
+    throw new Error('NEXT_REDIRECT: ' + args[0]);
+  }),
+}));
+
+vi.mock('@/lib/supabase/server', () => ({
+  createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
+}));
+
+import { inviteMember } from './invite-member';
+
+function makeFormData(data: Record<string, string>): FormData {
+  const fd = new FormData();
+  for (const [key, value] of Object.entries(data)) {
+    fd.set(key, value);
+  }
+  return fd;
+}
+
+function setupManagerWithOrg() {
+  mockSupabaseAuth.getUser.mockResolvedValue({
+    data: { user: { id: 'user-123' } },
+  });
+
+  let fromCallCount = 0;
+  mockSupabase.from.mockImplementation(() => {
+    fromCallCount++;
+
+    if (fromCallCount === 1) {
+      // requireManager: organization_members -> role check
+      const singleMock = vi.fn().mockResolvedValue({ data: { role: 'manager' } });
+      const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
+      const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
+      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
+    }
+
+    if (fromCallCount === 2) {
+      // Get current user's org
+      const singleMock = vi.fn().mockResolvedValue({ data: { org_id: 'org-abc' } });
+      const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
+      const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
+      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
+    }
+
+    if (fromCallCount === 3) {
+      // checkMemberLimit: subscriptions -> select().eq().single()
+      const singleMock = vi.fn().mockResolvedValue({
+        data: { plan_id: 'plan-1', plans: { included_users: 5 } },
+      });
+      const eqMock = vi.fn().mockReturnValue({ single: singleMock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
+    }
+
+    if (fromCallCount === 4) {
+      // checkMemberLimit: count -> select().eq().in()
+      const inMock = vi.fn().mockResolvedValue({ count: 2 });
+      const eqMock = vi.fn().mockReturnValue({ in: inMock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
+    }
+
+    if (fromCallCount === 5) {
+      // Check if user already a member
+      const singleMock = vi.fn().mockResolvedValue({ data: null });
+      const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
+      const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
+      return { select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() };
+    }
+
+    return { select: vi.fn().mockReturnThis(), update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn().mockReturnThis(), single: vi.fn() };
+  });
+}
+
+describe('inviteMember', () => {
+  beforeEach(() => {
+    resetMocks();
+  });
+
+  it('should return validation error for invalid email', async () => {
+    // Setup manager mock for requireManager
+    mockSupabaseAuth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+    });
+    const singleMock = vi.fn().mockResolvedValue({ data: { role: 'manager' } });
+    const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
+    const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
+    mockSupabase.from.mockReturnValue({ select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() });
+
+    const result = await inviteMember(makeFormData({ email: 'not-an-email', role: 'sdr' }));
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain('Email');
+    }
+  });
+
+  it('should return validation error for invalid role', async () => {
+    mockSupabaseAuth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+    });
+    const singleMock = vi.fn().mockResolvedValue({ data: { role: 'manager' } });
+    const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
+    const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
+    mockSupabase.from.mockReturnValue({ select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() });
+
+    const result = await inviteMember(makeFormData({ email: 'test@email.com', role: 'admin' }));
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain('Role');
+    }
+  });
+
+  it('should succeed with valid data and OTP', async () => {
+    setupManagerWithOrg();
+    mockSupabaseAuth.signInWithOtp.mockResolvedValue({ error: null });
+
+    const result = await inviteMember(makeFormData({ email: 'new@email.com', role: 'sdr' }));
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should redirect if not a manager', async () => {
+    mockSupabaseAuth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+    });
+    const singleMock = vi.fn().mockResolvedValue({ data: { role: 'sdr' } });
+    const eqMock2 = vi.fn().mockReturnValue({ single: singleMock });
+    const eqMock1 = vi.fn().mockReturnValue({ eq: eqMock2 });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock1 });
+    mockSupabase.from.mockReturnValue({ select: selectMock, update: vi.fn(), insert: vi.fn(), delete: vi.fn(), eq: vi.fn(), single: vi.fn() });
+
+    await expect(inviteMember(makeFormData({ email: 'x@y.com', role: 'sdr' }))).rejects.toThrow(
+      'NEXT_REDIRECT',
+    );
+  });
+});
