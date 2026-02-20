@@ -1,0 +1,94 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PageSkeleton > should match snapshot 1`] = `
+<div>
+  <div
+    class="space-y-6"
+  >
+    <div
+      class="space-y-2"
+    >
+      <div
+        class="bg-accent animate-pulse rounded-md h-8 w-48"
+        data-slot="skeleton"
+      />
+      <div
+        class="bg-accent animate-pulse rounded-md h-4 w-72"
+        data-slot="skeleton"
+      />
+    </div>
+    <div
+      class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+    >
+      <div
+        class="rounded-lg border p-6 space-y-3"
+      >
+        <div
+          class="bg-accent animate-pulse rounded-md h-4 w-24"
+          data-slot="skeleton"
+        />
+        <div
+          class="bg-accent animate-pulse rounded-md h-8 w-16"
+          data-slot="skeleton"
+        />
+        <div
+          class="bg-accent animate-pulse rounded-md h-3 w-32"
+          data-slot="skeleton"
+        />
+      </div>
+      <div
+        class="rounded-lg border p-6 space-y-3"
+      >
+        <div
+          class="bg-accent animate-pulse rounded-md h-4 w-24"
+          data-slot="skeleton"
+        />
+        <div
+          class="bg-accent animate-pulse rounded-md h-8 w-16"
+          data-slot="skeleton"
+        />
+        <div
+          class="bg-accent animate-pulse rounded-md h-3 w-32"
+          data-slot="skeleton"
+        />
+      </div>
+      <div
+        class="rounded-lg border p-6 space-y-3"
+      >
+        <div
+          class="bg-accent animate-pulse rounded-md h-4 w-24"
+          data-slot="skeleton"
+        />
+        <div
+          class="bg-accent animate-pulse rounded-md h-8 w-16"
+          data-slot="skeleton"
+        />
+        <div
+          class="bg-accent animate-pulse rounded-md h-3 w-32"
+          data-slot="skeleton"
+        />
+      </div>
+      <div
+        class="rounded-lg border p-6 space-y-3"
+      >
+        <div
+          class="bg-accent animate-pulse rounded-md h-4 w-24"
+          data-slot="skeleton"
+        />
+        <div
+          class="bg-accent animate-pulse rounded-md h-8 w-16"
+          data-slot="skeleton"
+        />
+        <div
+          class="bg-accent animate-pulse rounded-md h-3 w-32"
+          data-slot="skeleton"
+        />
+      </div>
+    </div>
+    <div
+      class="bg-accent animate-pulse h-64 w-full rounded-lg"
+      data-slot="skeleton"
+    />
+  </div>
+</div>
+`;

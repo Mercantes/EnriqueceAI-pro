@@ -1,0 +1,299 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireAuth } from '@/lib/auth/require-auth';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+import { createCadenceSchema, createCadenceStepSchema } from '../cadence.schemas';
+import type { CadenceRow, CadenceStepRow } from '../types';
+
+async function getOrgId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, userId: string) {
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+  return member?.org_id ?? null;
+}
+
+export async function createCadence(
+  input: Record<string, unknown>,
+): Promise<ActionResult<CadenceRow>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const parsed = createCadenceSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
+  }
+
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const { data, error } = (await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .insert({
+      org_id: orgId,
+      name: parsed.data.name,
+      description: parsed.data.description ?? null,
+      status: 'draft',
+      total_steps: 0,
+      created_by: user.id,
+    } as Record<string, unknown>)
+    .select('*')
+    .single()) as { data: CadenceRow | null; error: { message: string } | null };
+
+  if (error) {
+    return { success: false, error: 'Erro ao criar cadência' };
+  }
+
+  return { success: true, data: data! };
+}
+
+export async function updateCadence(
+  cadenceId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<CadenceRow>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const { data, error } = (await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .update(input as Record<string, unknown>)
+    .eq('id', cadenceId)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .select('*')
+    .single()) as { data: CadenceRow | null; error: { message: string } | null };
+
+  if (error) {
+    return { success: false, error: 'Erro ao atualizar cadência' };
+  }
+
+  return { success: true, data: data! };
+}
+
+export async function deleteCadence(
+  cadenceId: string,
+): Promise<ActionResult<{ deleted: boolean }>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Soft delete
+  const { error } = await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .update({ deleted_at: new Date().toISOString() } as Record<string, unknown>)
+    .eq('id', cadenceId)
+    .eq('org_id', orgId);
+
+  if (error) {
+    return { success: false, error: 'Erro ao deletar cadência' };
+  }
+
+  return { success: true, data: { deleted: true } };
+}
+
+export async function activateCadence(
+  cadenceId: string,
+): Promise<ActionResult<CadenceRow>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Check minimum 2 steps
+  const { count } = (await (supabase
+    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    .select('id', { count: 'exact', head: true })
+    .eq('cadence_id', cadenceId)) as { count: number | null };
+
+  if ((count ?? 0) < 2) {
+    return { success: false, error: 'Cadência precisa de no mínimo 2 passos para ser ativada' };
+  }
+
+  const { data, error } = (await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .update({ status: 'active' } as Record<string, unknown>)
+    .eq('id', cadenceId)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .select('*')
+    .single()) as { data: CadenceRow | null; error: { message: string } | null };
+
+  if (error) {
+    return { success: false, error: 'Erro ao ativar cadência' };
+  }
+
+  return { success: true, data: data! };
+}
+
+export async function addCadenceStep(
+  cadenceId: string,
+  input: Record<string, unknown>,
+): Promise<ActionResult<CadenceStepRow>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const parsed = createCadenceStepSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
+  }
+
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Verify cadence belongs to org
+  const { data: cadence } = (await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .select('id, total_steps')
+    .eq('id', cadenceId)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .single()) as { data: { id: string; total_steps: number } | null };
+
+  if (!cadence) {
+    return { success: false, error: 'Cadência não encontrada' };
+  }
+
+  const { data: step, error } = (await (supabase
+    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    .insert({
+      cadence_id: cadenceId,
+      step_order: parsed.data.step_order,
+      channel: parsed.data.channel,
+      template_id: parsed.data.template_id ?? null,
+      delay_days: parsed.data.delay_days,
+      delay_hours: parsed.data.delay_hours,
+      ai_personalization: parsed.data.ai_personalization,
+    } as Record<string, unknown>)
+    .select('*')
+    .single()) as { data: CadenceStepRow | null; error: { message: string } | null };
+
+  if (error) {
+    return { success: false, error: 'Erro ao adicionar passo' };
+  }
+
+  // Update total_steps
+  await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .update({ total_steps: cadence.total_steps + 1 } as Record<string, unknown>)
+    .eq('id', cadenceId);
+
+  return { success: true, data: step! };
+}
+
+export async function removeCadenceStep(
+  cadenceId: string,
+  stepId: string,
+): Promise<ActionResult<{ removed: boolean }>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Verify cadence belongs to org
+  const { data: cadence } = (await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .select('id, total_steps')
+    .eq('id', cadenceId)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .single()) as { data: { id: string; total_steps: number } | null };
+
+  if (!cadence) {
+    return { success: false, error: 'Cadência não encontrada' };
+  }
+
+  const { error } = await (supabase
+    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    .delete()
+    .eq('id', stepId)
+    .eq('cadence_id', cadenceId);
+
+  if (error) {
+    return { success: false, error: 'Erro ao remover passo' };
+  }
+
+  // Update total_steps
+  const newTotal = Math.max(0, cadence.total_steps - 1);
+  await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .update({ total_steps: newTotal } as Record<string, unknown>)
+    .eq('id', cadenceId);
+
+  return { success: true, data: { removed: true } };
+}
+
+export async function enrollLeads(
+  cadenceId: string,
+  leadIds: string[],
+): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const orgId = await getOrgId(supabase, user.id);
+  if (!orgId) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  // Verify cadence is active
+  const { data: cadence } = (await (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .select('id, status')
+    .eq('id', cadenceId)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .single()) as { data: { id: string; status: string } | null };
+
+  if (!cadence) {
+    return { success: false, error: 'Cadência não encontrada' };
+  }
+
+  if (cadence.status !== 'active') {
+    return { success: false, error: 'Cadência precisa estar ativa para inscrever leads' };
+  }
+
+  let enrolled = 0;
+  const errors: string[] = [];
+
+  for (const leadId of leadIds) {
+    const { error } = await (supabase
+      .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+      .insert({
+        cadence_id: cadenceId,
+        lead_id: leadId,
+        current_step: 1,
+        status: 'active',
+        enrolled_by: user.id,
+      } as Record<string, unknown>);
+
+    if (error) {
+      errors.push(`Lead ${leadId}: ${error.message ?? 'já inscrito ou erro'}`);
+    } else {
+      enrolled++;
+    }
+  }
+
+  return { success: true, data: { enrolled, errors } };
+}

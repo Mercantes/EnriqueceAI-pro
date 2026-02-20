@@ -1,0 +1,44 @@
+import { AlertTriangle } from 'lucide-react';
+
+import { requireAuth } from '@/lib/auth/require-auth';
+
+import { EmptyState } from '@/shared/components/EmptyState';
+
+import { fetchLeads } from '@/features/leads/actions/fetch-leads';
+import { LeadListView } from '@/features/leads/components/LeadListView';
+
+interface LeadsPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function LeadsPage({ searchParams }: LeadsPageProps) {
+  await requireAuth();
+
+  const params = await searchParams;
+
+  // Build filters from URL search params
+  const filters: Record<string, unknown> = {};
+  if (params.status) filters.status = params.status;
+  if (params.enrichment_status) filters.enrichment_status = params.enrichment_status;
+  if (params.porte) filters.porte = params.porte;
+  if (params.cnae) filters.cnae = params.cnae;
+  if (params.uf) filters.uf = params.uf;
+  if (params.search) filters.search = params.search;
+  if (params.page) filters.page = params.page;
+
+  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.search);
+
+  const result = await fetchLeads(filters);
+
+  if (!result.success) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Erro ao carregar leads"
+        description={result.error}
+      />
+    );
+  }
+
+  return <LeadListView result={result.data} hasFilters={hasFilters} />;
+}

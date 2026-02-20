@@ -1,0 +1,121 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireAuth } from '@/lib/auth/require-auth';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+import type { DashboardMetrics, EnrichmentStats, ImportSummary } from '../dashboard.contract';
+
+type Period = '7d' | '30d' | '90d';
+
+function getPeriodDate(period: Period): string {
+  const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString();
+}
+
+export async function fetchDashboardMetrics(
+  period: Period = '30d',
+): Promise<ActionResult<DashboardMetrics>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  // Get user's org
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const sinceDate = getPeriodDate(period);
+
+  // Fetch leads (non-deleted) for the org within period
+  const { data: leads, error: leadsError } = (await (supabase
+    .from('leads') as ReturnType<typeof supabase.from>)
+    .select('status, enrichment_status, porte, endereco, created_at')
+    .eq('org_id', member.org_id)
+    .is('deleted_at', null)
+    .gte('created_at', sinceDate)) as {
+    data: Array<{
+      status: string;
+      enrichment_status: string;
+      porte: string | null;
+      endereco: { uf?: string } | null;
+      created_at: string;
+    }> | null;
+    error: { message: string } | null;
+  };
+
+  if (leadsError) {
+    return { success: false, error: 'Erro ao buscar métricas' };
+  }
+
+  const allLeads = leads ?? [];
+
+  // Leads by status
+  const leadsByStatus: Record<string, number> = {};
+  for (const lead of allLeads) {
+    leadsByStatus[lead.status] = (leadsByStatus[lead.status] ?? 0) + 1;
+  }
+
+  // Enrichment stats
+  const enrichmentCounts = { enriched: 0, pending: 0, failed: 0, notFound: 0, enriching: 0 };
+  for (const lead of allLeads) {
+    if (lead.enrichment_status === 'enriched') enrichmentCounts.enriched++;
+    else if (lead.enrichment_status === 'pending') enrichmentCounts.pending++;
+    else if (lead.enrichment_status === 'enrichment_failed') enrichmentCounts.failed++;
+    else if (lead.enrichment_status === 'not_found') enrichmentCounts.notFound++;
+    else if (lead.enrichment_status === 'enriching') enrichmentCounts.enriching++;
+  }
+
+  const enrichmentStats: EnrichmentStats = {
+    total: allLeads.length,
+    enriched: enrichmentCounts.enriched,
+    pending: enrichmentCounts.pending + enrichmentCounts.enriching,
+    failed: enrichmentCounts.failed,
+    notFound: enrichmentCounts.notFound,
+    successRate: allLeads.length > 0
+      ? Math.round((enrichmentCounts.enriched / allLeads.length) * 100)
+      : 0,
+  };
+
+  // Leads by porte
+  const leadsByPorte: Record<string, number> = {};
+  for (const lead of allLeads) {
+    const porte = lead.porte ?? 'Não informado';
+    leadsByPorte[porte] = (leadsByPorte[porte] ?? 0) + 1;
+  }
+
+  // Leads by UF
+  const leadsByUf: Record<string, number> = {};
+  for (const lead of allLeads) {
+    const uf = lead.endereco?.uf ?? 'N/A';
+    leadsByUf[uf] = (leadsByUf[uf] ?? 0) + 1;
+  }
+
+  // Recent imports (last 5)
+  const { data: imports } = (await (supabase
+    .from('lead_imports') as ReturnType<typeof supabase.from>)
+    .select('id, file_name, total_rows, success_count, error_count, status, created_at')
+    .eq('org_id', member.org_id)
+    .order('created_at', { ascending: false })
+    .limit(5)) as { data: ImportSummary[] | null };
+
+  return {
+    success: true,
+    data: {
+      leadsByStatus,
+      totalLeads: allLeads.length,
+      recentImports: imports ?? [],
+      enrichmentStats,
+      leadsByPorte,
+      leadsByUf,
+    },
+  };
+}
