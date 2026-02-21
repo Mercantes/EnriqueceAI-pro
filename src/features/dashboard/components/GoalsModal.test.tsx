@@ -40,20 +40,20 @@ describe('GoalsModal', () => {
 
   it('renders title with month name', async () => {
     render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
-    expect(await screen.findByText('Metas Fevereiro 2026')).toBeInTheDocument();
+    expect(await screen.findByText('Metas Fevereiro')).toBeInTheDocument();
   });
 
   it('shows loading state initially', () => {
     mockGetGoals.mockReturnValue(new Promise(() => {})); // never resolves
     render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'Salvar' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Salvar metas' })).toBeDisabled();
   });
 
   it('displays org-level goal fields after loading', async () => {
     render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
     const oppInput = await screen.findByLabelText('Meta de Oportunidades');
     expect(oppInput).toHaveValue(50);
-    const convInput = screen.getByLabelText('Taxa de Conversão (%)');
+    const convInput = screen.getByLabelText('Taxa de Conversão');
     expect(convInput).toHaveValue(25);
   });
 
@@ -61,16 +61,17 @@ describe('GoalsModal', () => {
     render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
     expect(await screen.findByText('alice')).toBeInTheDocument();
     expect(screen.getByText('bob')).toBeInTheDocument();
-    expect(screen.getByText('Anterior: 15')).toBeInTheDocument();
-    // bob has no previous target, so "Anterior:" should not appear twice
-    expect(screen.queryAllByText(/Anterior:/)).toHaveLength(1);
+    // Previous month value is displayed as plain number
+    expect(screen.getByText('15')).toBeInTheDocument();
+    // bob has no previous target, shows dash
+    expect(screen.getByText('–')).toBeInTheDocument();
   });
 
   it('shows effort estimate', async () => {
     render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
     await screen.findByText('alice');
-    expect(screen.getByText(/leads/)).toBeInTheDocument();
-    expect(screen.getByText(/atividades diárias/)).toBeInTheDocument();
+    expect(screen.getByText(/finalizar/)).toBeInTheDocument();
+    expect(screen.getByText(/diárias por vendedor/)).toBeInTheDocument();
   });
 
   it('calls saveGoals on submit', async () => {
@@ -79,7 +80,7 @@ describe('GoalsModal', () => {
     render(<GoalsModal open month="2026-02" onOpenChange={onOpenChange} />);
 
     await screen.findByText('alice');
-    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await user.click(screen.getByRole('button', { name: 'Salvar metas' }));
 
     await waitFor(() => {
       expect(mockSaveGoals).toHaveBeenCalledWith({
@@ -94,19 +95,37 @@ describe('GoalsModal', () => {
     });
   });
 
-  it('calls onOpenChange(false) when Cancel clicked', async () => {
+  it('calls onOpenChange(false) when Fechar clicked', async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
     render(<GoalsModal open month="2026-02" onOpenChange={onOpenChange} />);
 
     await screen.findByText('alice');
-    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await user.click(screen.getByRole('button', { name: 'Fechar' }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('does not render content when closed', () => {
     render(<GoalsModal open={false} month="2026-02" onOpenChange={vi.fn()} />);
-    expect(screen.queryByText('Metas Fevereiro 2026')).not.toBeInTheDocument();
+    expect(screen.queryByText('Metas Fevereiro')).not.toBeInTheDocument();
+  });
+
+  it('shows vendedores section with count', async () => {
+    render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
+    expect(await screen.findByText('Vendedores (2)')).toBeInTheDocument();
+  });
+
+  it('shows previous month column header', async () => {
+    render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
+    await screen.findByText('alice');
+    // Previous month of February is January
+    expect(screen.getAllByText('janeiro').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows estimativa section title', async () => {
+    render(<GoalsModal open month="2026-02" onOpenChange={vi.fn()} />);
+    await screen.findByText('alice');
+    expect(screen.getByText('Estimativa de esforço para atingir a meta')).toBeInTheDocument();
   });
 });

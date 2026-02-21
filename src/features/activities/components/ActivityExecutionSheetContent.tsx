@@ -54,7 +54,7 @@ export function ActivityExecutionSheetContent({
       }).catch(() => {
         setIsLoading(false);
       });
-    } else {
+    } else if (activity.channel === 'email') {
       prepareActivityEmail({
         lead: activity.lead,
         templateSubject: activity.templateSubject,
@@ -74,6 +74,9 @@ export function ActivityExecutionSheetContent({
       }).catch(() => {
         setIsLoading(false);
       });
+    } else {
+      // phone, linkedin, research — no auto-prepare needed
+      setIsLoading(false);
     }
     return null;
   });

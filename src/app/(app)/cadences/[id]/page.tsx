@@ -7,14 +7,18 @@ import { fetchCadenceEnrollments } from '@/features/cadences/actions/manage-enro
 import { fetchCadenceMetrics } from '@/features/cadences/actions/fetch-interactions';
 import { fetchTemplates } from '@/features/templates/actions/fetch-templates';
 import { CadenceBuilder } from '@/features/cadences/components/CadenceBuilder';
+import { TimelineBuilder } from '@/features/cadences/components/TimelineBuilder';
 
 interface CadenceDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function CadenceDetailPage({ params }: CadenceDetailPageProps) {
+export default async function CadenceDetailPage({ params, searchParams }: CadenceDetailPageProps) {
   await requireAuth();
   const { id } = await params;
+  const sp = await searchParams;
+  const view = sp.view as string | undefined;
 
   const [cadenceResult, templatesResult, metricsResult, enrollmentsResult] = await Promise.all([
     fetchCadenceDetail(id),
@@ -30,6 +34,10 @@ export default async function CadenceDetailPage({ params }: CadenceDetailPagePro
   const templates = templatesResult.success ? templatesResult.data.data : [];
   const metrics = metricsResult.success ? metricsResult.data : undefined;
   const enrollments = enrollmentsResult.success ? enrollmentsResult.data.data : [];
+
+  if (view === 'timeline') {
+    return <TimelineBuilder cadence={cadenceResult.data} />;
+  }
 
   return (
     <CadenceBuilder

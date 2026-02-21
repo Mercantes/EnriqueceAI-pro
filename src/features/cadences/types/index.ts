@@ -14,7 +14,7 @@ export type CadenceType = 'standard' | 'auto_email';
 export type EnrollmentStatus = 'active' | 'paused' | 'completed' | 'replied' | 'bounced' | 'unsubscribed';
 
 // Channel type enum matching database
-export type ChannelType = 'email' | 'whatsapp';
+export type ChannelType = 'email' | 'whatsapp' | 'phone' | 'linkedin' | 'research';
 
 // Interaction type enum matching database
 export type InteractionType =

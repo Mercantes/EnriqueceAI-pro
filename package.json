@@ -22,6 +22,9 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.2.2",
     "@sentry/nextjs": "^10.39.0",
     "@supabase/ssr": "^0.8.0",
@@ -37,6 +40,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hook-form": "^7.71.1",
+    "recharts": "^3.7.0",
     "sonner": "^2.0.7",
     "stripe": "^20.3.1",
     "tailwind-merge": "^3.5.0",

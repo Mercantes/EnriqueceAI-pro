@@ -2,20 +2,15 @@
 
 import { useEffect, useState, useTransition } from 'react';
 
-import { Loader2, Target } from 'lucide-react';
+import { Loader2, Lock, Plus, User, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
 
 import { getGoals } from '../actions/get-goals';
 import { saveGoals } from '../actions/save-goals';
@@ -32,9 +27,15 @@ const MONTH_NAMES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
-function formatMonthLabel(month: string) {
+function getMonthName(month: string) {
+  const m = parseInt(month.split('-')[1]!, 10);
+  return MONTH_NAMES[m - 1]!;
+}
+
+function getPreviousMonthName(month: string) {
   const [y, m] = month.split('-').map(Number) as [number, number];
-  return `${MONTH_NAMES[m - 1]} ${y}`;
+  const prevDate = new Date(y, m - 2, 1);
+  return MONTH_NAMES[prevDate.getMonth()]!.toLowerCase();
 }
 
 function computeEstimate(
@@ -58,6 +59,10 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
   const [opportunityTarget, setOpportunityTarget] = useState(0);
   const [conversionTarget, setConversionTarget] = useState(0);
   const [userGoals, setUserGoals] = useState<UserGoalRow[]>([]);
+
+  const monthName = getMonthName(month);
+  const prevMonthName = getPreviousMonthName(month);
+  const currentMonthLabel = `meta ${monthName.toLowerCase()}`;
 
   /* eslint-disable react-hooks/set-state-in-effect -- fetch-on-open pattern */
   useEffect(() => {
@@ -110,95 +115,157 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
-            Metas {formatMonthLabel(month)}
-          </DialogTitle>
-          <DialogDescription>
-            Defina as metas mensais da equipe de vendas.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0" showCloseButton={false}>
+        {/* Banner header */}
+        <div className="flex items-center justify-between bg-[var(--primary)] px-6 py-5">
+          <h2 className="text-lg font-bold text-[var(--primary-foreground)]">
+            Metas {monthName}
+          </h2>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="text-[var(--primary-foreground)] opacity-80 hover:opacity-100"
+          >
+            <X className="h-5 w-5" />
+            <span className="sr-only">Fechar modal</span>
+          </button>
+        </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)]" />
           </div>
         ) : (
-          <div className="space-y-5">
-            {/* Org-level goals */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="opportunity-target">Meta de Oportunidades</Label>
+          <div className="max-h-[70vh] space-y-6 overflow-y-auto px-6 py-6">
+            {/* Meta de Oportunidades */}
+            <div className="rounded-lg border bg-[var(--card)] p-5">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <p className="font-semibold text-[var(--foreground)]">Meta de Oportunidades</p>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                    Número total de oportunidades para o mês
+                  </p>
+                </div>
                 <Input
                   id="opportunity-target"
                   type="number"
                   min={0}
+                  className="w-32 text-right text-base"
                   value={opportunityTarget}
                   onChange={(e) => setOpportunityTarget(Number(e.target.value) || 0)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="conversion-target">Taxa de Conversão (%)</Label>
-                <Input
-                  id="conversion-target"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                  value={conversionTarget}
-                  onChange={(e) => setConversionTarget(Number(e.target.value) || 0)}
+                  aria-label="Meta de Oportunidades"
                 />
               </div>
             </div>
 
-            {/* Effort estimate */}
-            {estimate && (
-              <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                Será necessário finalizar <strong>{estimate.leadsNeeded} leads</strong> e
-                realizar <strong>{estimate.activitiesPerDay} atividades diárias</strong> por
-                vendedor.
+            {/* Meta de Taxa de Conversão */}
+            <div className="rounded-lg border bg-[var(--card)] p-5">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <p className="font-semibold text-[var(--foreground)]">Meta de Taxa de Conversão</p>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                    Percentual dos leads finalizados no mês que a empresa espera transformar em oportunidades
+                  </p>
+                </div>
+                <div className="relative w-32">
+                  <Input
+                    id="conversion-target"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    className="pr-8 text-right text-base"
+                    value={conversionTarget}
+                    onChange={(e) => setConversionTarget(Number(e.target.value) || 0)}
+                    aria-label="Taxa de Conversão"
+                  />
+                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-[var(--muted-foreground)]">
+                    %
+                  </span>
+                </div>
               </div>
-            )}
+            </div>
 
-            {/* Per-user goals */}
-            {userGoals.length > 0 && (
-              <div className="space-y-3">
-                <Label>Metas por vendedor</Label>
-                <div className="max-h-48 space-y-2 overflow-y-auto">
+            {/* Vendedores */}
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[var(--foreground)]">
+                  Vendedores ({userGoals.length})
+                </h3>
+                <button
+                  type="button"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border bg-[var(--card)] text-[var(--muted-foreground)] shadow-sm hover:bg-[var(--accent)]"
+                  aria-label="Adicionar vendedor"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+
+              {userGoals.length > 0 && (
+                <div className="space-y-2">
                   {userGoals.map((ug) => (
                     <div
                       key={ug.userId}
-                      className="flex items-center gap-3 rounded-md border p-2"
+                      className="flex items-center gap-4 rounded-lg border bg-[var(--card)] px-4 py-3"
                     >
+                      {/* Avatar */}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--muted)]">
+                        <User className="h-5 w-5 text-[var(--muted-foreground)]" />
+                      </div>
+
+                      {/* Nome */}
                       <span className="flex-1 text-sm font-medium">{ug.userName}</span>
-                      {ug.previousTarget !== null && (
-                        <span className="text-xs text-muted-foreground">
-                          Anterior: {ug.previousTarget}
-                        </span>
-                      )}
-                      <Input
-                        type="number"
-                        min={0}
-                        className="w-24"
-                        value={ug.opportunityTarget}
-                        onChange={(e) =>
-                          updateUserGoal(ug.userId, Number(e.target.value) || 0)
-                        }
-                        aria-label={`Meta de ${ug.userName}`}
-                      />
+
+                      {/* Mês anterior */}
+                      <div className="text-center">
+                        <p className="text-xs text-[var(--muted-foreground)]">{prevMonthName}</p>
+                        <p className="text-sm text-[var(--muted-foreground)]">
+                          {ug.previousTarget !== null ? ug.previousTarget : '–'}
+                        </p>
+                      </div>
+
+                      {/* Meta atual */}
+                      <div className="text-center">
+                        <p className="text-xs text-[var(--muted-foreground)]">{currentMonthLabel}</p>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="w-20 text-center text-sm"
+                          value={ug.opportunityTarget}
+                          onChange={(e) =>
+                            updateUserGoal(ug.userId, Number(e.target.value) || 0)
+                          }
+                          aria-label={`Meta de ${ug.userName}`}
+                        />
+                      </div>
+
+                      {/* Lock icon */}
+                      <Lock className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Estimativa de esforço */}
+            {estimate && (
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-[var(--foreground)]">
+                  Estimativa de esforço para atingir a meta
+                </h3>
+                <div className="rounded-lg border bg-[var(--card)] p-4 text-sm text-[var(--foreground)]">
+                  Será necessário finalizar <strong>{estimate.leadsNeeded} leads</strong> e
+                  realizar uma média de <strong>{estimate.activitiesPerDay} atividades</strong> diárias por vendedor.
                 </div>
               </div>
             )}
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Fechar
           </Button>
           <Button onClick={handleSave} disabled={isPending || loading}>
             {isPending ? (
@@ -207,10 +274,10 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                 Salvando...
               </>
             ) : (
-              'Salvar'
+              'Salvar metas'
             )}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

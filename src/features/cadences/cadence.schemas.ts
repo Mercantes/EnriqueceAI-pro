@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Enums
 export const cadenceStatusSchema = z.enum(['draft', 'active', 'paused', 'archived']);
 export const enrollmentStatusSchema = z.enum(['active', 'paused', 'completed', 'replied', 'bounced', 'unsubscribed']);
-export const channelTypeSchema = z.enum(['email', 'whatsapp']);
+export const channelTypeSchema = z.enum(['email', 'whatsapp', 'phone', 'linkedin', 'research']);
 export const interactionTypeSchema = z.enum([
   'sent', 'delivered', 'opened', 'clicked', 'replied', 'bounced', 'failed', 'meeting_scheduled',
 ]);

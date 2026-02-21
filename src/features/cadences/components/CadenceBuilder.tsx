@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowLeft, Mail, MessageSquare, Plus, Save, Sparkles, Trash2, UserPlus, Zap } from 'lucide-react';
+import { ArrowLeft, LayoutList, Linkedin, Mail, MessageSquare, Phone, Plus, Save, Search, Sparkles, Trash2, UserPlus, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -42,8 +42,8 @@ interface CadenceBuilderProps {
   enrollments?: EnrollmentWithLead[];
 }
 
-const channelIcon: Record<ChannelType, typeof Mail> = { email: Mail, whatsapp: MessageSquare };
-const channelLabel: Record<ChannelType, string> = { email: 'Email', whatsapp: 'WhatsApp' };
+const channelIcon: Record<ChannelType, typeof Mail> = { email: Mail, whatsapp: MessageSquare, phone: Phone, linkedin: Linkedin, research: Search };
+const channelLabel: Record<ChannelType, string> = { email: 'Email', whatsapp: 'WhatsApp', phone: 'Ligação', linkedin: 'LinkedIn', research: 'Pesquisa' };
 
 export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }: CadenceBuilderProps) {
   const router = useRouter();
@@ -156,6 +156,12 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }
           <Badge variant="outline">
             {cadence.status === 'draft' ? 'Rascunho' : cadence.status === 'active' ? 'Ativa' : cadence.status === 'paused' ? 'Pausada' : 'Arquivada'}
           </Badge>
+        )}
+        {cadence && isEditable && (
+          <Button size="sm" variant="outline" onClick={() => router.push(`/cadences/${cadence.id}?view=timeline`)}>
+            <LayoutList className="mr-2 h-4 w-4" />
+            Timeline Builder
+          </Button>
         )}
         {cadence && cadence.status === 'active' && (
           <Button size="sm" onClick={() => setShowEnrollDialog(true)}>

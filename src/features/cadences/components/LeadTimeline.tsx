@@ -5,10 +5,13 @@ import {
   Calendar,
   Check,
   Clock,
+  Linkedin,
   Mail,
   MessageSquare,
   MousePointerClick,
+  Phone,
   Reply,
+  Search,
   Send,
   XCircle,
 } from 'lucide-react';
@@ -34,8 +37,8 @@ const typeConfig: Record<InteractionType, { label: string; icon: typeof Send; cl
   meeting_scheduled: { label: 'Reunião', icon: Calendar, className: 'text-indigo-500' },
 };
 
-const channelIcon = { email: Mail, whatsapp: MessageSquare };
-const channelLabel = { email: 'Email', whatsapp: 'WhatsApp' };
+const channelIcon: { [k: string]: typeof Mail } = { email: Mail, whatsapp: MessageSquare, phone: Phone, linkedin: Linkedin, research: Search };
+const channelLabel: { [k: string]: string } = { email: 'Email', whatsapp: 'WhatsApp', phone: 'Ligação', linkedin: 'LinkedIn', research: 'Pesquisa' };
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -67,7 +70,7 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
             {entries.map((entry) => {
               const config = typeConfig[entry.type];
               const Icon = config.icon;
-              const ChannelIcon = channelIcon[entry.channel];
+              const ChannelIcon = channelIcon[entry.channel] ?? Mail;
 
               return (
                 <div key={entry.id} className="flex gap-3">
@@ -83,7 +86,7 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
                       <span className="text-sm font-medium">{config.label}</span>
                       <Badge variant="outline" className="h-5 gap-1 text-xs">
                         <ChannelIcon className="h-3 w-3" />
-                        {channelLabel[entry.channel]}
+                        {channelLabel[entry.channel] ?? entry.channel}
                       </Badge>
                       {entry.ai_generated && (
                         <Badge variant="outline" className="h-5 text-xs">IA</Badge>

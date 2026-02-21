@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { Copy, FileText, Mail, MessageSquare, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Copy, FileText, Linkedin, Mail, MessageSquare, MoreHorizontal, Pencil, Phone, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -44,14 +44,20 @@ interface TemplateListViewProps {
 
 const ALL_VALUE = '__all__';
 
-const channelIcon = {
+const channelIcon: { [k: string]: typeof Mail } = {
   email: Mail,
   whatsapp: MessageSquare,
+  phone: Phone,
+  linkedin: Linkedin,
+  research: Search,
 };
 
-const channelLabel = {
+const channelLabel: { [k: string]: string } = {
   email: 'Email',
   whatsapp: 'WhatsApp',
+  phone: 'Ligação',
+  linkedin: 'LinkedIn',
+  research: 'Pesquisa',
 };
 
 export function TemplateListView({ templates, total, page, perPage }: TemplateListViewProps) {
@@ -176,7 +182,7 @@ export function TemplateListView({ templates, total, page, perPage }: TemplateLi
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {templates.map((template) => {
-            const Icon = channelIcon[template.channel];
+            const Icon = channelIcon[template.channel] ?? Mail;
             return (
               <Card key={template.id} className="relative">
                 <CardContent className="p-4">
@@ -184,7 +190,7 @@ export function TemplateListView({ templates, total, page, perPage }: TemplateLi
                     <div className="flex items-center gap-2">
                       <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
                       <Badge variant="outline" className="text-xs">
-                        {channelLabel[template.channel]}
+                        {channelLabel[template.channel] ?? template.channel}
                       </Badge>
                       {template.is_system && (
                         <Badge variant="secondary" className="text-xs">Sistema</Badge>

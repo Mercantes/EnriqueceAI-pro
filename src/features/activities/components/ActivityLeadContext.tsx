@@ -7,12 +7,14 @@ import {
   Calendar,
   Check,
   Clock,
+  Linkedin,
   Mail,
   MapPin,
   MessageSquare,
   MousePointerClick,
   Phone,
   Reply,
+  Search,
   Send,
   XCircle,
   Zap,
@@ -43,7 +45,7 @@ const typeConfig: Record<InteractionType, { label: string; icon: typeof Send; cl
   meeting_scheduled: { label: 'Reunião', icon: Calendar, className: 'text-indigo-500' },
 };
 
-const channelIcon = { email: Mail, whatsapp: MessageSquare };
+const channelIcon: { [key: string]: typeof Mail } = { email: Mail, whatsapp: MessageSquare, phone: Phone, linkedin: Linkedin, research: Search };
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('pt-BR', {
@@ -152,7 +154,7 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps }
             {timeline.map((entry) => {
               const config = typeConfig[entry.type];
               const Icon = config.icon;
-              const ChannelIcon = channelIcon[entry.channel];
+              const ChannelIcon = channelIcon[entry.channel] ?? Mail;
 
               return (
                 <div key={entry.id} className="flex gap-2">
