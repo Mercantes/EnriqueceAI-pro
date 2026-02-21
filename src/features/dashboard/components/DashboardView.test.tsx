@@ -42,6 +42,11 @@ vi.mock('recharts', () => ({
   Legend: () => <div />,
 }));
 
+// Mock GoalsModal to avoid action imports in DashboardView tests
+vi.mock('./GoalsModal', () => ({
+  GoalsModal: () => <div data-testid="goals-modal" />,
+}));
+
 const defaultFilters: DashboardFilters = {
   month: '2026-02',
   cadenceIds: [],
@@ -111,11 +116,11 @@ describe('DashboardView', () => {
     expect(screen.getByText(/Nenhuma meta definida/)).toBeInTheDocument();
   });
 
-  it('should render "Editar metas" button (disabled)', () => {
+  it('should render "Editar metas" button (enabled)', () => {
     render(<DashboardView data={createData()} filters={defaultFilters} />);
     const btn = screen.getByText('Editar metas');
     expect(btn).toBeInTheDocument();
-    expect(btn.closest('button')).toBeDisabled();
+    expect(btn.closest('button')).not.toBeDisabled();
   });
 
   it('should render chart section', () => {

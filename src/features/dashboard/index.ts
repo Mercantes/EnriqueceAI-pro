@@ -20,6 +20,8 @@ export type {
   InsightsData,
   LossReasonEntry,
   ConversionByOriginEntry,
+  GoalsData,
+  UserGoalRow,
 } from './types';
 
 // Components
@@ -35,10 +37,13 @@ export { MetricCard } from './components/MetricCard';
 export { RecentImports } from './components/RecentImports';
 export { EnrichmentCard } from './components/EnrichmentCard';
 export { DistributionCard } from './components/DistributionCard';
+export { GoalsModal } from './components/GoalsModal';
 export { PeriodFilter } from './components/PeriodFilter';
 
 // Actions
 export { getDashboardData } from './actions/get-dashboard-data';
 export { getRankingData } from './actions/get-ranking-data';
 export { getInsightsData } from './actions/get-insights-data';
+export { getGoals } from './actions/get-goals';
+export { saveGoals } from './actions/save-goals';
 export { fetchDashboardMetrics } from './actions/fetch-dashboard';

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 
 import { Activity, Settings, TrendingUp, Users } from 'lucide-react';
 
@@ -10,6 +10,7 @@ import { Skeleton } from '@/shared/components/ui/skeleton';
 import type { DashboardData, DashboardFilters, InsightsData, RankingData } from '../types';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
 import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilters';
+import { GoalsModal } from './GoalsModal';
 import { LossReasonsChart } from './LossReasonsChart';
 import { OpportunityChart } from './OpportunityChart';
 import { OpportunityKpiCard } from './OpportunityKpiCard';
@@ -23,6 +24,8 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ data, filters, ranking, insights }: DashboardViewProps) {
+  const [goalsOpen, setGoalsOpen] = useState(false);
+
   return (
     <div className="space-y-6">
       {/* Header: Filters + Edit goals button */}
@@ -34,11 +37,13 @@ export function DashboardView({ data, filters, ranking, insights }: DashboardVie
           />
         </Suspense>
 
-        <Button variant="outline" size="sm" className="gap-2" disabled>
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => setGoalsOpen(true)}>
           <Settings className="h-3.5 w-3.5" />
           Editar metas
         </Button>
       </div>
+
+      <GoalsModal open={goalsOpen} onOpenChange={setGoalsOpen} month={filters.month} />
 
       {/* KPI + Chart */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

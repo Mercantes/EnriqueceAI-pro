@@ -71,3 +71,19 @@ export interface InsightsData {
   lossReasons: LossReasonEntry[];
   conversionByOrigin: ConversionByOriginEntry[];
 }
+
+// Story 3.5: Goals Modal
+
+export interface UserGoalRow {
+  userId: string;
+  userName: string;
+  opportunityTarget: number;
+  previousTarget: number | null; // previous month reference
+}
+
+export interface GoalsData {
+  month: string; // YYYY-MM
+  opportunityTarget: number;
+  conversionTarget: number;
+  userGoals: UserGoalRow[];
+}
