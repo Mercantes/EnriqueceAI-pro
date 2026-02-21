@@ -63,14 +63,6 @@ describe('TopBar', () => {
     expect(screen.getByRole('button', { name: 'Ajuda' })).toBeInTheDocument();
   });
 
-  it('renders sub-bar with Ligar button and Usuário link', () => {
-    render(<TopBar />);
-    expect(screen.getByText('Ligar')).toBeInTheDocument();
-    const userLink = screen.getByText('Usuário');
-    expect(userLink).toBeInTheDocument();
-    expect(userLink.closest('a')).toHaveAttribute('href', '/settings');
-  });
-
   it('renders MobileNav component', () => {
     render(<TopBar />);
     expect(screen.getByTestId('mobile-nav')).toBeInTheDocument();

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { ChevronDown, HelpCircle, Phone, User } from 'lucide-react';
+import { ChevronDown, HelpCircle } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { UserMenu } from '@/features/auth/components/UserMenu';
@@ -151,20 +151,6 @@ export function TopBar() {
         </div>
       </div>
 
-      {/* Sub-bar */}
-      <div className="flex h-10 items-center gap-4 border-t bg-muted/30 px-4">
-        <Button variant="outline" size="sm" className="gap-2">
-          <Phone className="h-3.5 w-3.5" />
-          Ligar
-        </Button>
-        <Link
-          href="/settings"
-          className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <User className="h-3.5 w-3.5" />
-          Usuário
-        </Link>
-      </div>
     </div>
   );
 }

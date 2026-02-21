@@ -5,7 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { ChevronDown, Menu, Phone, User } from 'lucide-react';
+import { ChevronDown, Menu } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -140,27 +140,6 @@ export function MobileNav() {
             )}
           </nav>
 
-          {/* Mobile sub-actions */}
-          <div className="border-t p-4">
-            <div className="flex flex-col gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2"
-              >
-                <Phone className="h-3.5 w-3.5" />
-                Ligar
-              </Button>
-              <Link
-                href="/settings"
-                onClick={handleNavigate}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <User className="h-3.5 w-3.5" />
-                Usuário
-              </Link>
-            </div>
-          </div>
         </SheetContent>
       </Sheet>
     </>

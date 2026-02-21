@@ -58,13 +58,4 @@ describe('MobileNav', () => {
     expect(await screen.findByText('Em breve')).toBeInTheDocument();
   });
 
-  it('renders mobile sub-actions (Ligar and Usuário)', async () => {
-    const user = userEvent.setup();
-    render(<MobileNav />);
-
-    await user.click(screen.getByRole('button', { name: 'Menu' }));
-
-    expect(await screen.findByText('Ligar')).toBeInTheDocument();
-    expect(screen.getByText('Usuário')).toBeInTheDocument();
-  });
 });
