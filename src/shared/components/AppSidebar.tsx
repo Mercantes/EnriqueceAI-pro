@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useSyncExternalStore, useState } from 'react';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -123,9 +124,12 @@ function SidebarContent({
       {/* Logo */}
       <div className={cn('flex h-14 items-center border-b border-[var(--sidebar-border)] px-4', collapsed && 'justify-center px-2')}>
         {collapsed ? (
-          <span className="text-lg font-bold text-[var(--sidebar-primary)]">E</span>
+          <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={28} height={28} className="rounded-full" />
         ) : (
-          <span className="text-xl font-bold text-[var(--sidebar-primary)]">Enriquece AI</span>
+          <div className="flex items-center gap-2">
+            <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={32} height={32} className="rounded-full" />
+            <span className="text-xl font-bold text-[var(--sidebar-primary)]">Enriquece AI</span>
+          </div>
         )}
       </div>
 

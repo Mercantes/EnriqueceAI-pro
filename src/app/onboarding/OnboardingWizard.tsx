@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 import { Building2, Loader2, Plug, Rocket, Users } from 'lucide-react';
@@ -77,7 +78,7 @@ export function OnboardingWizard() {
         {step === 0 && (
           <div className="space-y-6">
             <div className="text-center">
-              <Building2 className="mx-auto h-10 w-10 text-[var(--primary)]" />
+              <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={48} height={48} className="mx-auto rounded-full" />
               <h1 className="mt-4 text-2xl font-bold">Bem-vindo ao Enriquece AI!</h1>
               <p className="mt-2 text-sm text-[var(--muted-foreground)]">
                 Primeiro, como se chama sua empresa?

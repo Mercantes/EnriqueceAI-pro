@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -113,7 +114,8 @@ export function TopBar() {
         <MobileNav />
 
         {/* Logo */}
-        <Link href="/dashboard" className="flex items-center">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={32} height={32} className="rounded-full" />
           <span className="text-xl font-bold text-primary">Enriquece AI</span>
         </Link>
 
