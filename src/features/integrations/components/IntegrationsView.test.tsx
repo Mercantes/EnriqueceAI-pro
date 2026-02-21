@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
 import { IntegrationsView } from './IntegrationsView';
 
 vi.mock('next/navigation', () => ({
@@ -63,7 +63,15 @@ const calendarConnected: CalendarConnectionSafe = {
   updated_at: '2026-02-15T10:00:00Z',
 };
 
-const defaultProps = { gmail: null, whatsapp: null, crm: null, calendar: null };
+const api4comConnected: Api4ComConnectionSafe = {
+  id: 'voip-1',
+  ramal: '1014',
+  status: 'connected',
+  created_at: '2026-02-15T10:00:00Z',
+  updated_at: '2026-02-15T10:00:00Z',
+};
+
+const defaultProps = { gmail: null, whatsapp: null, crm: null, calendar: null, api4com: null };
 
 describe('IntegrationsView', () => {
   it('should render integrations header', () => {
@@ -115,7 +123,7 @@ describe('IntegrationsView', () => {
 
   it('should show "Em breve" badge for WhatsApp when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Em breve')).toBeInTheDocument();
+    expect(screen.getAllByText('Em breve').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should show error status for Google when Gmail has error', () => {
@@ -197,6 +205,38 @@ describe('IntegrationsView', () => {
       <IntegrationsView
         {...defaultProps}
         calendar={{ ...calendarConnected, status: 'error' }}
+      />,
+    );
+    expect(screen.getAllByText('Erro').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should show API4Com card with description', () => {
+    render(<IntegrationsView {...defaultProps} />);
+    expect(screen.getByText('API4Com')).toBeInTheDocument();
+    expect(screen.getByText('Discador VoIP')).toBeInTheDocument();
+  });
+
+  it('should show "Em breve" badge for API4Com when not connected', () => {
+    render(<IntegrationsView {...defaultProps} />);
+    expect(screen.getAllByText('Em breve').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should show ramal and Gerenciar button when API4Com connected', () => {
+    render(<IntegrationsView {...defaultProps} api4com={api4comConnected} />);
+    expect(screen.getByText('Ramal 1014')).toBeInTheDocument();
+    expect(screen.getByText('Gerenciar')).toBeInTheDocument();
+  });
+
+  it('should show connected status for API4Com', () => {
+    render(<IntegrationsView {...defaultProps} api4com={api4comConnected} />);
+    expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should show error status for API4Com when error', () => {
+    render(
+      <IntegrationsView
+        {...defaultProps}
+        api4com={{ ...api4comConnected, status: 'error' }}
       />,
     );
     expect(screen.getAllByText('Erro').length).toBeGreaterThanOrEqual(1);

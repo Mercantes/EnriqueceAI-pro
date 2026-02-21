@@ -67,6 +67,26 @@ export interface CalendarConnectionSafe {
   updated_at: string;
 }
 
+// API4Com (VoIP) connection row matching database table
+export interface Api4ComConnectionRow {
+  id: string;
+  org_id: string;
+  user_id: string;
+  api_key_encrypted: string;
+  ramal: string;
+  status: ConnectionStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Api4ComConnectionSafe {
+  id: string;
+  ramal: string;
+  status: ConnectionStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 // Re-export CRM types
 export type {
   CrmProvider,

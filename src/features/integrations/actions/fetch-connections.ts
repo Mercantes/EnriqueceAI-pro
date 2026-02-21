@@ -4,13 +4,14 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-import type { CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
 
 export interface ConnectionsOverview {
   gmail: GmailConnectionSafe | null;
   whatsapp: WhatsAppConnectionSafe | null;
   crm: CrmConnectionSafe | null;
   calendar: CalendarConnectionSafe | null;
+  api4com: Api4ComConnectionSafe | null;
 }
 
 export async function fetchConnections(): Promise<ActionResult<ConnectionsOverview>> {
@@ -59,6 +60,14 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('user_id', user.id)
     .maybeSingle()) as { data: CalendarConnectionSafe | null };
 
+  // Fetch API4Com connection (per user) — exclude encrypted api key
+  const { data: api4comRow } = (await (supabase
+    .from('api4com_connections' as never) as ReturnType<typeof supabase.from>)
+    .select('id, ramal, status, created_at, updated_at')
+    .eq('org_id', member.org_id)
+    .eq('user_id', user.id)
+    .maybeSingle()) as { data: Api4ComConnectionSafe | null };
+
   return {
     success: true,
     data: {
@@ -66,6 +75,7 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
       whatsapp: whatsappRow ?? null,
       crm: crmRow ?? null,
       calendar: calendarRow ?? null,
+      api4com: api4comRow ?? null,
     },
   };
 }

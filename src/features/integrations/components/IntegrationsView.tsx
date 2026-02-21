@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
-import type { CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectCrm, getCrmAuthUrl, triggerCrmSync } from '../actions/manage-crm';
 import { disconnectCalendar } from '../actions/manage-calendar';
@@ -35,6 +35,7 @@ interface IntegrationsViewProps {
   whatsapp: WhatsAppConnectionSafe | null;
   crm: CrmConnectionSafe | null;
   calendar: CalendarConnectionSafe | null;
+  api4com: Api4ComConnectionSafe | null;
 }
 
 const statusConfig = {
@@ -50,7 +51,7 @@ const CRM_LABELS: Record<string, string> = {
   rdstation: 'RD Station',
 };
 
-export function IntegrationsView({ gmail, whatsapp, crm, calendar }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crm, calendar, api4com }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showDisconnect, setShowDisconnect] = useState<'google' | 'crm' | null>(null);
@@ -241,6 +242,52 @@ export function IntegrationsView({ gmail, whatsapp, crm, calendar }: Integration
               <div className="space-y-3">
                 <p className="text-sm text-[var(--muted-foreground)]">
                   Integração WhatsApp Business estará disponível em breve. Requer verificação Meta Business.
+                </p>
+                <Badge variant="secondary">Em breve</Badge>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* API4Com VoIP Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Image src="/logos/api4com-logo.png" alt="API4Com" width={40} height={40} className="rounded-lg" />
+                <div>
+                  <CardTitle className="text-base">API4Com</CardTitle>
+                  <p className="text-xs text-[var(--muted-foreground)]">Discador VoIP</p>
+                </div>
+              </div>
+              {api4com && (
+                <Badge variant="outline" className={statusConfig[api4com.status].className}>
+                  {api4com.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
+                  {api4com.status === 'error' && <X className="mr-1 h-3 w-3" />}
+                  {statusConfig[api4com.status].label}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {api4com ? (
+              <div className="space-y-4">
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Discador VoIP integrado. Sincronize ligações e grave chamadas automaticamente.
+                </p>
+                <div className="border-t border-[var(--border)] pt-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm">Ramal {api4com.ramal}</p>
+                    <Button variant="outline" size="sm">
+                      Gerenciar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Discador VoIP integrado. Sincronize ligações e grave chamadas automaticamente.
                 </p>
                 <Badge variant="secondary">Em breve</Badge>
               </div>

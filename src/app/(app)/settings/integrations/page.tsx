@@ -18,6 +18,7 @@ export default async function IntegrationsPage() {
       whatsapp={result.data.whatsapp}
       crm={result.data.crm}
       calendar={result.data.calendar}
+      api4com={result.data.api4com}
     />
   );
 }
