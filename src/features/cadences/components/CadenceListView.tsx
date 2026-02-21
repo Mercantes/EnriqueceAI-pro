@@ -2,7 +2,18 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { MoreHorizontal, Pause, Play, Plus, Trash2, Zap } from 'lucide-react';
+import {
+  Archive,
+  Copy,
+  MoreHorizontal,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  Search,
+  Trash2,
+  Zap,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -20,6 +31,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import { Input } from '@/shared/components/ui/input';
@@ -30,15 +42,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
-import type { CadenceRow, CadenceStatus } from '../types';
-import { deleteCadence, updateCadence } from '../actions/manage-cadences';
+import type { CadenceTabCounts } from '../actions/fetch-cadences';
+import { createCadence, deleteCadence, updateCadence } from '../actions/manage-cadences';
+import type { CadenceRow, CadenceStatus, CadenceType } from '../types';
+import { PriorityIcon } from './PriorityIcon';
 
 interface CadenceListViewProps {
   cadences: CadenceRow[];
   total: number;
   page: number;
   perPage: number;
+  tabCounts: CadenceTabCounts;
 }
 
 const ALL_VALUE = '__all__';
@@ -62,11 +78,13 @@ const statusConfig: Record<CadenceStatus, { label: string; className: string }> 
   },
 };
 
-export function CadenceListView({ cadences, total, page, perPage }: CadenceListViewProps) {
+export function CadenceListView({ cadences, total, page, perPage, tabCounts }: CadenceListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const activeTab = (searchParams.get('type') ?? 'standard') as CadenceType;
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -79,6 +97,10 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
     }
     params.set('page', '1');
     router.push(`/cadences?${params.toString()}`);
+  }
+
+  function handleTabChange(value: string) {
+    updateParams({ type: value === 'standard' ? '' : value });
   }
 
   function handleDelete(id: string) {
@@ -107,6 +129,33 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
     });
   }
 
+  function handleArchive(cadence: CadenceRow) {
+    startTransition(async () => {
+      const result = await updateCadence(cadence.id, { status: 'archived' });
+      if (result.success) {
+        toast.success('Cadência arquivada');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleDuplicate(cadence: CadenceRow) {
+    startTransition(async () => {
+      const result = await createCadence({
+        name: `${cadence.name} (cópia)`,
+        description: cadence.description,
+      });
+      if (result.success) {
+        toast.success('Cadência duplicada');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
   const totalPages = Math.ceil(total / perPage);
 
   return (
@@ -115,8 +164,8 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Cadências</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            {total} cadência{total !== 1 ? 's' : ''}
+          <p className="text-sm text-muted-foreground">
+            Exibindo {total} cadência{total !== 1 ? 's' : ''}
           </p>
         </div>
         <Button onClick={() => router.push('/cadences/new')}>
@@ -125,31 +174,80 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
         </Button>
       </div>
 
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList>
+          <TabsTrigger value="standard">
+            Padrão
+            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+              {tabCounts.standard}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="auto_email">
+            E-mail Automático
+            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+              {tabCounts.auto_email}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* Filters */}
-      <div className="flex items-center gap-4">
-        <Input
-          placeholder="Buscar por nome..."
-          defaultValue={searchParams.get('search') ?? ''}
-          className="max-w-xs"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              updateParams({ search: (e.target as HTMLInputElement).value });
-            }
-          }}
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-xs flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome..."
+            defaultValue={searchParams.get('search') ?? ''}
+            className="pl-9"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                updateParams({ search: (e.target as HTMLInputElement).value });
+              }
+            }}
+          />
+        </div>
         <Select
           value={searchParams.get('status') ?? ALL_VALUE}
           onValueChange={(v) => updateParams({ status: v })}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-36">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todos</SelectItem>
+            <SelectItem value={ALL_VALUE}>Todos status</SelectItem>
             <SelectItem value="draft">Rascunho</SelectItem>
             <SelectItem value="active">Ativa</SelectItem>
             <SelectItem value="paused">Pausada</SelectItem>
             <SelectItem value="archived">Arquivada</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={searchParams.get('priority') ?? ALL_VALUE}
+          onValueChange={(v) => updateParams({ priority: v })}
+        >
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Prioridade" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>Todas prioridades</SelectItem>
+            <SelectItem value="high">Alta</SelectItem>
+            <SelectItem value="medium">Média</SelectItem>
+            <SelectItem value="low">Baixa</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={searchParams.get('origin') ?? ALL_VALUE}
+          onValueChange={(v) => updateParams({ origin: v })}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Foco/Origem" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>Todas origens</SelectItem>
+            <SelectItem value="inbound_active">Inbound Ativo</SelectItem>
+            <SelectItem value="inbound_passive">Inbound Passivo</SelectItem>
+            <SelectItem value="outbound">Outbound</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -157,11 +255,11 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
       {/* Cadence list */}
       {cadences.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 rounded-full bg-[var(--muted)] p-4">
-            <Zap className="h-10 w-10 text-[var(--muted-foreground)]" />
+          <div className="mb-4 rounded-full bg-muted p-4">
+            <Zap className="h-10 w-10 text-muted-foreground" />
           </div>
           <h3 className="mb-2 text-lg font-semibold">Nenhuma cadência encontrada</h3>
-          <p className="mb-6 max-w-sm text-sm text-[var(--muted-foreground)]">
+          <p className="mb-6 max-w-sm text-sm text-muted-foreground">
             Crie sua primeira cadência para automatizar o contato com leads.
           </p>
           <Button onClick={() => router.push('/cadences/new')}>
@@ -177,9 +275,12 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
               <Card key={cadence.id} className="relative">
                 <CardContent className="p-4">
                   <div className="mb-3 flex items-start justify-between">
-                    <Badge variant="outline" className={config.className}>
-                      {config.label}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <PriorityIcon priority={cadence.priority} />
+                      <Badge variant="outline" className={config.className}>
+                        {config.label}
+                      </Badge>
+                    </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={`Ações para ${cadence.name}`}>
@@ -187,6 +288,10 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => router.push(`/cadences/${cadence.id}`)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
                         {(cadence.status === 'active' || cadence.status === 'paused') && (
                           <DropdownMenuItem onClick={() => handleToggleStatus(cadence)}>
                             {cadence.status === 'active' ? (
@@ -196,6 +301,17 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
                             )}
                           </DropdownMenuItem>
                         )}
+                        {cadence.status !== 'archived' && (
+                          <DropdownMenuItem onClick={() => handleArchive(cadence)}>
+                            <Archive className="mr-2 h-4 w-4" />
+                            Arquivar
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => handleDuplicate(cadence)}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Duplicar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-red-600"
                           onClick={() => setDeleteId(cadence.id)}
@@ -214,13 +330,13 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
                   >
                     <h3 className="mb-1 font-medium">{cadence.name}</h3>
                     {cadence.description && (
-                      <p className="mb-2 line-clamp-2 text-sm text-[var(--muted-foreground)]">
+                      <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">
                         {cadence.description}
                       </p>
                     )}
                   </button>
 
-                  <div className="mt-3 flex items-center gap-4 text-xs text-[var(--muted-foreground)]">
+                  <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Zap className="h-3 w-3" />
                       {cadence.total_steps} passo{cadence.total_steps !== 1 ? 's' : ''}
@@ -249,7 +365,7 @@ export function CadenceListView({ cadences, total, page, perPage }: CadenceListV
           >
             Anterior
           </Button>
-          <span className="text-sm text-[var(--muted-foreground)]">
+          <span className="text-sm text-muted-foreground">
             Página {page} de {totalPages}
           </span>
           <Button

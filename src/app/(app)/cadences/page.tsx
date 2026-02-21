@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
-import { fetchCadences } from '@/features/cadences/actions/fetch-cadences';
+import { fetchCadences, fetchCadenceTabCounts } from '@/features/cadences/actions/fetch-cadences';
 import { CadenceListView } from '@/features/cadences/components/CadenceListView';
 
 interface CadencesPageProps {
@@ -19,9 +19,15 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
 
   const status = typeof params.status === 'string' ? params.status : undefined;
   const search = typeof params.search === 'string' ? params.search : undefined;
+  const type = typeof params.type === 'string' ? params.type : undefined;
+  const priority = typeof params.priority === 'string' ? params.priority : undefined;
+  const origin = typeof params.origin === 'string' ? params.origin : undefined;
   const page = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
 
-  const result = await fetchCadences({ status, search, page });
+  const [result, countsResult] = await Promise.all([
+    fetchCadences({ status, search, type: type || 'standard', priority, origin, page }),
+    fetchCadenceTabCounts(),
+  ]);
 
   if (!result.success) {
     return (
@@ -33,6 +39,10 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
     );
   }
 
+  const tabCounts = countsResult.success
+    ? countsResult.data
+    : { standard: 0, auto_email: 0 };
+
   return (
     <Suspense fallback={<Skeleton className="h-96 w-full" />}>
       <CadenceListView
@@ -40,6 +50,7 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
         total={result.data.total}
         page={result.data.page}
         perPage={result.data.per_page}
+        tabCounts={tabCounts}
       />
     </Suspense>
   );

@@ -1,6 +1,15 @@
 // Cadence status enum matching database
 export type CadenceStatus = 'draft' | 'active' | 'paused' | 'archived';
 
+// Cadence priority enum matching database
+export type CadencePriority = 'high' | 'medium' | 'low';
+
+// Cadence origin enum matching database
+export type CadenceOrigin = 'inbound_active' | 'inbound_passive' | 'outbound';
+
+// Cadence type enum matching database
+export type CadenceType = 'standard' | 'auto_email';
+
 // Enrollment status enum matching database
 export type EnrollmentStatus = 'active' | 'paused' | 'completed' | 'replied' | 'bounced' | 'unsubscribed';
 
@@ -25,6 +34,9 @@ export interface CadenceRow {
   name: string;
   description: string | null;
   status: CadenceStatus;
+  priority: CadencePriority;
+  origin: CadenceOrigin;
+  type: CadenceType;
   total_steps: number;
   created_by: string | null;
   deleted_at: string | null;
@@ -97,6 +109,9 @@ export interface CadenceInsert {
   name: string;
   description?: string | null;
   status?: CadenceStatus;
+  priority?: CadencePriority;
+  origin?: CadenceOrigin;
+  type?: CadenceType;
   total_steps?: number;
   created_by?: string | null;
 }

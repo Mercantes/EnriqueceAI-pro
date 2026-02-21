@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { GoalsData } from '../types';
@@ -37,15 +38,40 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
     .eq('month', monthDate)
     .maybeSingle()) as { data: { opportunity_target: number; conversion_target: number } | null };
 
-  // Fetch SDRs in the org
+  // Fetch active SDRs in the org (no join with auth.users — not accessible via PostgREST)
   const { data: sdrs } = (await supabase
     .from('organization_members')
-    .select('user_id, users:user_id(email)')
+    .select('user_id, role')
     .eq('org_id', member.org_id)
-    .eq('status', 'active')) as { data: { user_id: string; users: { email: string } }[] | null };
+    .eq('status', 'active')) as { data: { user_id: string; role: string }[] | null };
 
-  if (!sdrs) {
-    return { success: false, error: 'Erro ao buscar membros' };
+  if (!sdrs || sdrs.length === 0) {
+    return {
+      success: true,
+      data: {
+        month,
+        opportunityTarget: orgGoal?.opportunity_target ?? 0,
+        conversionTarget: orgGoal?.conversion_target ?? 0,
+        userGoals: [],
+      },
+    };
+  }
+
+  // Fetch emails via admin client (service_role can access auth.users)
+  let emailMap = new Map<string, string>();
+  try {
+    const adminClient = createAdminSupabaseClient();
+    const userIds = sdrs.map((s) => s.user_id);
+    const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
+    if (usersData?.users) {
+      for (const u of usersData.users) {
+        if (userIds.includes(u.id)) {
+          emailMap.set(u.id, u.email ?? '');
+        }
+      }
+    }
+  } catch {
+    // Fallback: if service_role key is missing, use truncated user_id
   }
 
   // Fetch user goals for current month
@@ -71,12 +97,16 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
       month,
       opportunityTarget: orgGoal?.opportunity_target ?? 0,
       conversionTarget: orgGoal?.conversion_target ?? 0,
-      userGoals: sdrs.map((sdr) => ({
-        userId: sdr.user_id,
-        userName: sdr.users?.email?.split('@')[0] ?? sdr.user_id.slice(0, 8),
-        opportunityTarget: currentMap.get(sdr.user_id) ?? 0,
-        previousTarget: prevMap.get(sdr.user_id) ?? null,
-      })),
+      userGoals: sdrs.map((sdr) => {
+        const email = emailMap.get(sdr.user_id);
+        const userName = email ? email.split('@')[0]! : sdr.user_id.slice(0, 8);
+        return {
+          userId: sdr.user_id,
+          userName,
+          opportunityTarget: currentMap.get(sdr.user_id) ?? 0,
+          previousTarget: prevMap.get(sdr.user_id) ?? null,
+        };
+      }),
     },
   };
 }

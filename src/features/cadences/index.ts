@@ -1,6 +1,9 @@
 // Types
 export type {
   CadenceStatus,
+  CadencePriority,
+  CadenceOrigin,
+  CadenceType,
   EnrollmentStatus,
   ChannelType,
   InteractionType,

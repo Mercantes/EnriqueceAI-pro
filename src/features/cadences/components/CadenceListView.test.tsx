@@ -10,9 +10,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('../actions/manage-cadences', () => ({
+  createCadence: vi.fn(),
   deleteCadence: vi.fn(),
   updateCadence: vi.fn(),
 }));
+
+const defaultTabCounts = { standard: 5, auto_email: 2 };
 
 function createCadence(overrides: Partial<CadenceRow> = {}): CadenceRow {
   return {
@@ -21,6 +24,9 @@ function createCadence(overrides: Partial<CadenceRow> = {}): CadenceRow {
     name: 'Follow Up Inicial',
     description: 'Cadência de primeiro contato',
     status: 'draft',
+    priority: 'medium',
+    origin: 'outbound',
+    type: 'standard',
     total_steps: 3,
     created_by: 'user-1',
     created_at: '2026-02-15T10:00:00Z',
@@ -38,10 +44,11 @@ describe('CadenceListView', () => {
         total={1}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('Cadências')).toBeInTheDocument();
-    expect(screen.getByText('1 cadência')).toBeInTheDocument();
+    expect(screen.getByText('Exibindo 1 cadência')).toBeInTheDocument();
   });
 
   it('should show plural count for multiple cadences', () => {
@@ -51,9 +58,10 @@ describe('CadenceListView', () => {
         total={2}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
-    expect(screen.getByText('2 cadências')).toBeInTheDocument();
+    expect(screen.getByText('Exibindo 2 cadências')).toBeInTheDocument();
   });
 
   it('should render cadence card with name', () => {
@@ -63,6 +71,7 @@ describe('CadenceListView', () => {
         total={1}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('Follow Up Inicial')).toBeInTheDocument();
@@ -75,6 +84,7 @@ describe('CadenceListView', () => {
         total={1}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('Cadência de primeiro contato')).toBeInTheDocument();
@@ -87,6 +97,7 @@ describe('CadenceListView', () => {
         total={1}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('3 passos')).toBeInTheDocument();
@@ -99,6 +110,7 @@ describe('CadenceListView', () => {
         total={1}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('1 passo')).toBeInTheDocument();
@@ -111,6 +123,7 @@ describe('CadenceListView', () => {
         total={1}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('Rascunho')).toBeInTheDocument();
@@ -123,6 +136,7 @@ describe('CadenceListView', () => {
         total={1}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('Ativa')).toBeInTheDocument();
@@ -135,6 +149,7 @@ describe('CadenceListView', () => {
         total={0}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('Nenhuma cadência encontrada')).toBeInTheDocument();
@@ -147,8 +162,103 @@ describe('CadenceListView', () => {
         total={1}
         page={1}
         perPage={20}
+        tabCounts={defaultTabCounts}
       />,
     );
     expect(screen.getByText('Nova Cadência')).toBeInTheDocument();
+  });
+
+  it('should render tabs with badge counts', () => {
+    render(
+      <CadenceListView
+        cadences={[createCadence()]}
+        total={1}
+        page={1}
+        perPage={20}
+        tabCounts={{ standard: 10, auto_email: 3 }}
+      />,
+    );
+    expect(screen.getByText('Padrão')).toBeInTheDocument();
+    expect(screen.getByText('E-mail Automático')).toBeInTheDocument();
+    expect(screen.getByText('10')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('should render priority icon on cadence card', () => {
+    render(
+      <CadenceListView
+        cadences={[createCadence({ priority: 'high' })]}
+        total={1}
+        page={1}
+        perPage={20}
+        tabCounts={defaultTabCounts}
+      />,
+    );
+    expect(screen.getByLabelText('Prioridade Alta')).toBeInTheDocument();
+  });
+
+  it('should render priority filter select', () => {
+    render(
+      <CadenceListView
+        cadences={[createCadence()]}
+        total={1}
+        page={1}
+        perPage={20}
+        tabCounts={defaultTabCounts}
+      />,
+    );
+    expect(screen.getByText('Todas prioridades')).toBeInTheDocument();
+  });
+
+  it('should render origin filter select', () => {
+    render(
+      <CadenceListView
+        cadences={[createCadence()]}
+        total={1}
+        page={1}
+        perPage={20}
+        tabCounts={defaultTabCounts}
+      />,
+    );
+    expect(screen.getByText('Todas origens')).toBeInTheDocument();
+  });
+
+  it('should render search input with search icon', () => {
+    render(
+      <CadenceListView
+        cadences={[createCadence()]}
+        total={1}
+        page={1}
+        perPage={20}
+        tabCounts={defaultTabCounts}
+      />,
+    );
+    expect(screen.getByPlaceholderText('Buscar por nome...')).toBeInTheDocument();
+  });
+
+  it('should render action menu button for each cadence', () => {
+    render(
+      <CadenceListView
+        cadences={[createCadence()]}
+        total={1}
+        page={1}
+        perPage={20}
+        tabCounts={defaultTabCounts}
+      />,
+    );
+    expect(screen.getByLabelText('Ações para Follow Up Inicial')).toBeInTheDocument();
+  });
+
+  it('should show dynamic count text', () => {
+    render(
+      <CadenceListView
+        cadences={[createCadence(), createCadence({ id: 'cad-2', name: 'Outbound V2' }), createCadence({ id: 'cad-3', name: 'Inbound' })]}
+        total={3}
+        page={1}
+        perPage={20}
+        tabCounts={defaultTabCounts}
+      />,
+    );
+    expect(screen.getByText('Exibindo 3 cadências')).toBeInTheDocument();
   });
 });

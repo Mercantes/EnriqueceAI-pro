@@ -10,8 +10,16 @@ import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '../types';
 interface FetchCadencesParams {
   status?: string;
   search?: string;
+  type?: string;
+  priority?: string;
+  origin?: string;
   page?: number;
   per_page?: number;
+}
+
+export interface CadenceTabCounts {
+  standard: number;
+  auto_email: number;
 }
 
 export async function fetchCadences(
@@ -46,6 +54,18 @@ export async function fetchCadences(
     query = query.eq('status', params.status);
   }
 
+  if (params.type) {
+    query = query.eq('type', params.type);
+  }
+
+  if (params.priority) {
+    query = query.eq('priority', params.priority);
+  }
+
+  if (params.origin) {
+    query = query.eq('origin', params.origin);
+  }
+
   if (params.search) {
     query = query.ilike('name', `%${params.search}%`);
   }
@@ -69,6 +89,46 @@ export async function fetchCadences(
       total: count ?? 0,
       page,
       per_page,
+    },
+  };
+}
+
+export async function fetchCadenceTabCounts(): Promise<ActionResult<CadenceTabCounts>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const baseQuery = (supabase
+    .from('cadences') as ReturnType<typeof supabase.from>)
+    .select('id', { count: 'exact', head: true })
+    .eq('org_id', member.org_id)
+    .is('deleted_at', null);
+
+  const [standardResult, autoEmailResult] = await Promise.all([
+    baseQuery.eq('type', 'standard') as Promise<{ count: number | null }>,
+    (supabase
+      .from('cadences') as ReturnType<typeof supabase.from>)
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', member.org_id)
+      .is('deleted_at', null)
+      .eq('type', 'auto_email') as Promise<{ count: number | null }>,
+  ]);
+
+  return {
+    success: true,
+    data: {
+      standard: standardResult.count ?? 0,
+      auto_email: autoEmailResult.count ?? 0,
     },
   };
 }
