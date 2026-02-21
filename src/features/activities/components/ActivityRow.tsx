@@ -3,9 +3,12 @@
 import {
   ChevronDown,
   Clock,
+  Linkedin,
   Mail,
   MessageSquare,
+  Phone,
   Play,
+  Search,
 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -25,7 +28,7 @@ interface ActivityRowProps {
   onSkip: () => void;
 }
 
-function formatRelativeTime(dateStr: string): { text: string; isUrgent: boolean } {
+export function formatRelativeTime(dateStr: string): { text: string; isUrgent: boolean } {
   const now = Date.now();
   const due = new Date(dateStr).getTime();
   const diffMs = now - due;
@@ -33,22 +36,41 @@ function formatRelativeTime(dateStr: string): { text: string; isUrgent: boolean 
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
 
-  const isUrgent = diffHours >= 24;
+  // Urgent if overdue > 1 hour (AC 7)
+  const isUrgent = diffHours >= 1;
 
-  if (diffMinutes < 1) return { text: 'Agora', isUrgent };
+  if (diffMinutes < 1) return { text: 'Agora', isUrgent: false };
   if (diffMinutes < 60) return { text: `Há ${diffMinutes}min`, isUrgent };
   if (diffHours < 24) return { text: `Há ${diffHours}h`, isUrgent };
   return { text: `Há ${diffDays}d`, isUrgent };
 }
 
+const channelIcon: Record<string, typeof Mail> = {
+  email: Mail,
+  whatsapp: MessageSquare,
+  phone: Phone,
+  linkedin: Linkedin,
+  research: Search,
+};
+
+const channelLabel: Record<string, string> = {
+  email: 'Email',
+  whatsapp: 'WhatsApp',
+  phone: 'Ligação',
+  linkedin: 'LinkedIn',
+  research: 'Pesquisa',
+};
+
 export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
   const { text: timeText, isUrgent } = formatRelativeTime(activity.nextStepDue);
+  const Icon = channelIcon[activity.channel] ?? Mail;
+  const label = channelLabel[activity.channel] ?? activity.channel;
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:bg-[var(--accent)]/50">
       {/* Time badge */}
       <span
-        className={`shrink-0 text-xs font-semibold tabular-nums ${
+        className={`shrink-0 min-w-[60px] text-xs font-bold uppercase tabular-nums ${
           isUrgent ? 'text-red-500' : 'text-[var(--muted-foreground)]'
         }`}
       >
@@ -57,11 +79,8 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
 
       {/* Channel badge */}
       <Badge variant="outline" className="shrink-0 gap-1">
-        {activity.channel === 'whatsapp' ? (
-          <><MessageSquare className="h-3 w-3" />WhatsApp</>
-        ) : (
-          <><Mail className="h-3 w-3" />Email</>
-        )}
+        <Icon className="h-3 w-3" />
+        {label}
       </Badge>
 
       {/* Cadence + step info */}

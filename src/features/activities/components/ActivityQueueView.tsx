@@ -1,22 +1,81 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import { ListChecks } from 'lucide-react';
+import { ChevronDown, ListChecks, Zap } from 'lucide-react';
 
+import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
+
+import type { PendingCallLead } from '../actions/fetch-pending-calls';
+import type { DailyProgress } from '../actions/fetch-daily-progress';
 import type { PendingActivity } from '../types';
 
-import { ActivityRow } from './ActivityRow';
 import { ActivityEmptyState } from './ActivityEmptyState';
 import { ActivityExecutionSheet } from './ActivityExecutionSheet';
+import {
+  ActivityFilters,
+  defaultFilters,
+  type ActivityFilterValues,
+} from './ActivityFilters';
+import { ActivityRow } from './ActivityRow';
+import { DailyGoalCard } from './DailyGoalCard';
+import { PendingCallsSection } from './PendingCallsSection';
+import { ProgressCard } from './ProgressCard';
 
 interface ActivityQueueViewProps {
   initialActivities: PendingActivity[];
+  progress: DailyProgress;
+  pendingCalls: PendingCallLead[];
 }
 
-export function ActivityQueueView({ initialActivities }: ActivityQueueViewProps) {
+const channelGroupLabel: Record<string, string> = {
+  email: 'E-mail',
+  whatsapp: 'WhatsApp',
+  phone: 'Ligação',
+  linkedin: 'LinkedIn',
+  research: 'Pesquisa',
+};
+
+function applyFilters(activities: PendingActivity[], filters: ActivityFilterValues): PendingActivity[] {
+  return activities.filter((a) => {
+    // Status filter
+    if (filters.status === 'overdue') {
+      const diffH = (Date.now() - new Date(a.nextStepDue).getTime()) / 3600000;
+      if (diffH < 1) return false;
+    }
+    if (filters.status === 'due') {
+      const diffH = (Date.now() - new Date(a.nextStepDue).getTime()) / 3600000;
+      if (diffH >= 1) return false;
+    }
+
+    // Channel
+    if (filters.channel !== 'all' && a.channel !== filters.channel) return false;
+
+    // Cadence
+    if (filters.cadence !== 'all' && a.cadenceName !== filters.cadence) return false;
+
+    // Step
+    if (filters.step !== 'all' && String(a.stepOrder) !== filters.step) return false;
+
+    // Search
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      const leadName = (a.lead.nome_fantasia ?? a.lead.razao_social ?? a.lead.cnpj).toLowerCase();
+      const cadence = a.cadenceName.toLowerCase();
+      if (!leadName.includes(q) && !cadence.includes(q)) return false;
+    }
+
+    return true;
+  });
+}
+
+export function ActivityQueueView({ initialActivities, progress, pendingCalls }: ActivityQueueViewProps) {
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
+  const [quickMode, setQuickMode] = useState(false);
+  const [filters, setFilters] = useState<ActivityFilterValues>(defaultFilters);
 
   const handleActivityDone = useCallback((enrollmentId: string) => {
     setActivities((prev) => prev.filter((a) => a.enrollmentId !== enrollmentId));
@@ -30,45 +89,178 @@ export function ActivityQueueView({ initialActivities }: ActivityQueueViewProps)
     setSelectedIndex(index);
   }, []);
 
-  if (activities.length === 0) {
-    return <ActivityEmptyState />;
+  // Filtered activities
+  const filtered = useMemo(() => applyFilters(activities, filters), [activities, filters]);
+
+  // Cadence options for filter
+  const cadenceOptions = useMemo(
+    () => [...new Set(activities.map((a) => a.cadenceName))].sort(),
+    [activities],
+  );
+
+  // Grouped by channel for quick mode
+  const grouped = useMemo(() => {
+    if (!quickMode) return null;
+    const groups = new Map<string, PendingActivity[]>();
+    for (const a of filtered) {
+      const list = groups.get(a.channel) ?? [];
+      list.push(a);
+      groups.set(a.channel, list);
+    }
+    return groups;
+  }, [quickMode, filtered]);
+
+  // Collapsed state for quick mode groups
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  function toggleGroup(channel: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(channel)) next.delete(channel);
+      else next.add(channel);
+      return next;
+    });
+  }
+
+  // Find index in full activities array for execution sheet
+  function findGlobalIndex(activity: PendingActivity) {
+    return activities.findIndex((a) => a.enrollmentId === activity.enrollmentId);
   }
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-4 flex items-center gap-2">
-        <ListChecks className="h-5 w-5 text-[var(--muted-foreground)]" />
-        <h2 className="text-lg font-semibold">
-          Atividades ({activities.length})
-        </h2>
+    <div className="space-y-6">
+      {/* Progress cards */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <ProgressCard completed={progress.completed} total={progress.total} />
+        <DailyGoalCard target={progress.target} completed={progress.completed} />
       </div>
 
-      {/* Queue list */}
-      <div className="space-y-2">
-        {activities.map((activity, index) => (
-          <ActivityRow
-            key={activity.enrollmentId}
-            activity={activity}
-            onExecute={() => setSelectedIndex(index)}
-            onSkip={() => {
-              handleActivityDone(activity.enrollmentId);
-              import('../actions/skip-activity').then(({ skipActivity }) =>
-                skipActivity(activity.enrollmentId),
-              );
-            }}
+      {/* Tabs */}
+      <div className="flex items-center gap-4 border-b">
+        <button
+          type="button"
+          onClick={() => setActiveTab('execution')}
+          className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+            activeTab === 'execution'
+              ? 'border-[var(--primary)] text-[var(--primary)]'
+              : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+          }`}
+        >
+          Execução
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('dialer')}
+          className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+            activeTab === 'dialer'
+              ? 'border-[var(--primary)] text-[var(--primary)]'
+              : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+          }`}
+        >
+          Power Dialer
+          <Badge variant="secondary" className="ml-2 text-xs">Em breve</Badge>
+        </button>
+      </div>
+
+      {activeTab === 'dialer' ? (
+        <div className="flex items-center justify-center py-16 text-[var(--muted-foreground)]">
+          Power Dialer estará disponível em breve.
+        </div>
+      ) : (
+        <>
+          {/* Pending calls section */}
+          <PendingCallsSection leads={pendingCalls} />
+
+          {/* Filters + Quick mode toggle */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <ActivityFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              cadenceOptions={cadenceOptions}
+            />
+            <Button
+              variant={quickMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setQuickMode(!quickMode)}
+              className="gap-1.5 shrink-0"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Modo Execução rápida
+            </Button>
+          </div>
+
+          {/* Activity list header */}
+          <div className="flex items-center gap-2">
+            <ListChecks className="h-5 w-5 text-[var(--muted-foreground)]" />
+            <h2 className="text-lg font-semibold">
+              Atividades ({filtered.length})
+            </h2>
+          </div>
+
+          {filtered.length === 0 ? (
+            <ActivityEmptyState />
+          ) : quickMode && grouped ? (
+            /* Quick mode: grouped by channel */
+            <div className="space-y-4">
+              {[...grouped.entries()].map(([channel, items]) => (
+                <div key={channel} className="rounded-lg border">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(channel)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold hover:bg-[var(--accent)]/50"
+                  >
+                    <span>{channelGroupLabel[channel] ?? channel} ({items.length})</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${collapsedGroups.has(channel) ? '-rotate-180' : ''}`} />
+                  </button>
+                  {!collapsedGroups.has(channel) && (
+                    <div className="space-y-2 p-2">
+                      {items.map((activity) => (
+                        <ActivityRow
+                          key={activity.enrollmentId}
+                          activity={activity}
+                          onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
+                          onSkip={() => {
+                            handleActivityDone(activity.enrollmentId);
+                            import('../actions/skip-activity').then(({ skipActivity }) =>
+                              skipActivity(activity.enrollmentId),
+                            );
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Normal mode: flat list */
+            <div className="space-y-2">
+              {filtered.map((activity) => (
+                <ActivityRow
+                  key={activity.enrollmentId}
+                  activity={activity}
+                  onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
+                  onSkip={() => {
+                    handleActivityDone(activity.enrollmentId);
+                    import('../actions/skip-activity').then(({ skipActivity }) =>
+                      skipActivity(activity.enrollmentId),
+                    );
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Execution Sheet */}
+          <ActivityExecutionSheet
+            activities={activities}
+            selectedIndex={selectedIndex}
+            onClose={handleClose}
+            onNavigate={handleNavigate}
+            onActivityDone={handleActivityDone}
           />
-        ))}
-      </div>
-
-      {/* Execution Sheet */}
-      <ActivityExecutionSheet
-        activities={activities}
-        selectedIndex={selectedIndex}
-        onClose={handleClose}
-        onNavigate={handleNavigate}
-        onActivityDone={handleActivityDone}
-      />
+        </>
+      )}
     </div>
   );
 }
