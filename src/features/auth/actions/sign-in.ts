@@ -1,12 +1,32 @@
 'use server';
 
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { headers } from 'next/headers';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { checkRateLimit, resetRateLimit } from '@/lib/security/rate-limit';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { signInSchema } from '../schemas/auth.schemas';
 
+// 5 attempts per 15 minutes per IP
+const LOGIN_LIMIT = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
 export async function signIn(formData: FormData): Promise<ActionResult<void>> {
+  const headerStore = await headers();
+  const ip = headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const rateLimitKey = `login:${ip}`;
+
+  const rateCheck = checkRateLimit(rateLimitKey, LOGIN_LIMIT, LOGIN_WINDOW_MS);
+  if (!rateCheck.allowed) {
+    const retryMinutes = Math.ceil((rateCheck.retryAfterMs ?? 0) / 60000);
+    return {
+      success: false,
+      error: `Muitas tentativas de login. Tente novamente em ${retryMinutes} minuto(s).`,
+      code: 'RATE_LIMITED',
+    };
+  }
+
   const raw = {
     email: formData.get('email'),
     password: formData.get('password'),
@@ -26,6 +46,9 @@ export async function signIn(formData: FormData): Promise<ActionResult<void>> {
   if (error) {
     return { success: false, error: error.message, code: error.code };
   }
+
+  // Reset rate limit on successful login
+  resetRateLimit(rateLimitKey);
 
   return { success: true, data: undefined };
 }

@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -14,10 +15,13 @@ import { GoogleButton } from './GoogleButton';
 type FormState = { error?: string; success?: boolean };
 
 export function SignupForm() {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(
     async (_prev: FormState, formData: FormData): Promise<FormState> => {
       const result = await signUp(formData);
       if (result.success) {
+        const email = formData.get('email') as string;
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
         return { success: true };
       }
       return { error: result.error };

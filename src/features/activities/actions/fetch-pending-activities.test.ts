@@ -158,7 +158,7 @@ describe('fetchPendingActivities', () => {
 
     expect(result.data).toHaveLength(1);
 
-    const activity = result.data[0];
+    const activity = result.data[0]!;
     expect(activity.enrollmentId).toBe('enr-1');
     expect(activity.cadenceId).toBe('cad-1');
     expect(activity.cadenceName).toBe('Outbound V1');
@@ -226,9 +226,9 @@ describe('fetchPendingActivities', () => {
     if (!result.success) return;
 
     expect(result.data).toHaveLength(1);
-    expect(result.data[0].templateId).toBeNull();
-    expect(result.data[0].templateSubject).toBeNull();
-    expect(result.data[0].templateBody).toBeNull();
+    expect(result.data[0]!.templateId).toBeNull();
+    expect(result.data[0]!.templateSubject).toBeNull();
+    expect(result.data[0]!.templateBody).toBeNull();
   });
 
   it('should skip enrollments missing lead or cadence', async () => {
@@ -297,7 +297,7 @@ describe('fetchPendingActivities', () => {
     if (!result.success) return;
 
     expect(result.data).toHaveLength(2);
-    expect(result.data[0].cadenceName).toBe('Outbound V1');
-    expect(result.data[1].cadenceName).toBe('Follow Up');
+    expect(result.data[0]!.cadenceName).toBe('Outbound V1');
+    expect(result.data[1]!.cadenceName).toBe('Follow Up');
   });
 });

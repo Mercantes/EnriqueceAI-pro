@@ -2,6 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+
+const ALERT_THRESHOLD = 0.8;
+
 export interface CreditCheckResult {
   allowed: boolean;
   used: number;
@@ -37,7 +41,7 @@ export class WhatsAppCreditService {
       };
 
     if (credit) {
-      return deductFromExisting(supabase, credit);
+      return deductFromExisting(supabase, credit, orgId);
     }
 
     // No row for this period — create one from the org's plan
@@ -55,11 +59,13 @@ function getCurrentPeriod(): string {
 async function deductFromExisting(
   supabase: SupabaseClient,
   credit: { id: string; plan_credits: number; used_credits: number; overage_count: number },
+  orgId: string,
 ): Promise<CreditCheckResult> {
   const isOverage = credit.used_credits >= credit.plan_credits;
+  const newUsed = credit.used_credits + 1;
 
   const updatePayload: Record<string, unknown> = {
-    used_credits: credit.used_credits + 1,
+    used_credits: newUsed,
   };
   if (isOverage) {
     updatePayload.overage_count = credit.overage_count + 1;
@@ -69,9 +75,17 @@ async function deductFromExisting(
     .update(updatePayload as Record<string, unknown>)
     .eq('id', credit.id);
 
+  // Send alert when crossing the 80% threshold
+  const threshold = Math.floor(credit.plan_credits * ALERT_THRESHOLD);
+  if (credit.used_credits < threshold && newUsed >= threshold) {
+    fireThresholdAlert(orgId, newUsed, credit.plan_credits).catch((err) =>
+      console.error('[whatsapp-credits] Failed to send threshold alert:', err),
+    );
+  }
+
   return {
     allowed: true,
-    used: credit.used_credits + 1,
+    used: newUsed,
     limit: credit.plan_credits,
     isOverage,
   };
@@ -122,7 +136,7 @@ async function createAndDeduct(
       };
 
     if (retryCredit) {
-      return deductFromExisting(supabase, retryCredit);
+      return deductFromExisting(supabase, retryCredit, orgId);
     }
 
     return { allowed: false, used: 0, limit: planCredits, isOverage: false, error: 'Falha ao criar créditos' };
@@ -134,4 +148,17 @@ async function createAndDeduct(
     limit: planCredits,
     isOverage: false,
   };
+}
+
+async function fireThresholdAlert(orgId: string, used: number, limit: number): Promise<void> {
+  const pct = Math.round((used / limit) * 100);
+  await createNotificationsForOrgMembers({
+    orgId,
+    type: 'usage_limit_alert',
+    title: `WhatsApp: ${pct}% dos créditos utilizados`,
+    body: `Sua organização já usou ${used} de ${limit} mensagens WhatsApp neste mês. Considere fazer upgrade do plano para evitar interrupções.`,
+    resourceType: 'integration',
+    metadata: { channel: 'whatsapp', used, limit, percentage: pct },
+    roleFilter: 'owner',
+  });
 }

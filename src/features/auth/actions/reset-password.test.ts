@@ -2,6 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mockSupabase, mockSupabaseAuth, resetMocks } from '@tests/mocks/supabase';
 
+vi.mock('next/headers', () => ({
+  headers: vi.fn(() => Promise.resolve(new Headers({ 'x-forwarded-for': '127.0.0.1' }))),
+}));
+
+vi.mock('@/lib/security/rate-limit', () => ({
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 3, limit: 3 })),
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(() => Promise.resolve(mockSupabase)),
 }));

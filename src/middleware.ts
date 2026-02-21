@@ -17,6 +17,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // CSRF origin check for non-GET requests (defense-in-depth)
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    const origin = request.headers.get('origin');
+    if (origin) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+      const allowedOrigin = new URL(appUrl).origin;
+      if (origin !== allowedOrigin) {
+        return NextResponse.json({ error: 'CSRF origin mismatch' }, { status: 403 });
+      }
+    }
+  }
+
   // Create supabase client with cookie handling
   let response = NextResponse.next({ request });
 
