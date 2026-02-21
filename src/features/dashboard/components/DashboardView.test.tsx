@@ -1,110 +1,231 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { DashboardMetrics } from '../dashboard.contract';
+import type { DashboardData, DashboardFilters, InsightsData, RankingData } from '../types';
 import { DashboardView } from './DashboardView';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(''),
+  usePathname: () => '/dashboard',
 }));
 
-function createMetrics(overrides: Partial<DashboardMetrics> = {}): DashboardMetrics {
-  return {
-    totalLeads: 100,
-    leadsByStatus: { new: 40, contacted: 30, qualified: 20, unqualified: 5, archived: 5 },
-    recentImports: [
-      {
-        id: 'imp-1',
-        file_name: 'leads.csv',
-        total_rows: 50,
-        success_count: 45,
-        error_count: 5,
-        status: 'completed',
-        created_at: '2026-02-15T10:00:00Z',
-      },
+// Mock useOrganization
+vi.mock('@/features/auth/hooks/useOrganization', () => ({
+  useOrganization: () => ({
+    members: [
+      { user_id: 'u-1', role: 'admin', status: 'active' },
+      { user_id: 'u-2', role: 'member', status: 'active' },
     ],
-    enrichmentStats: {
-      total: 100,
-      enriched: 60,
-      pending: 25,
-      failed: 10,
-      notFound: 5,
-      successRate: 60,
+    org: { id: 'org-1', name: 'Test Org' },
+  }),
+}));
+
+// Mock recharts — jsdom can't render SVG charts
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="responsive-container">{children}</div>
+  ),
+  LineChart: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="line-chart">{children}</div>
+  ),
+  BarChart: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="bar-chart">{children}</div>
+  ),
+  Line: () => <div data-testid="line" />,
+  Bar: () => <div data-testid="bar" />,
+  XAxis: () => <div />,
+  YAxis: () => <div />,
+  CartesianGrid: () => <div />,
+  Tooltip: () => <div />,
+  Legend: () => <div />,
+}));
+
+const defaultFilters: DashboardFilters = {
+  month: '2026-02',
+  cadenceIds: [],
+  userIds: [],
+};
+
+function createData(overrides: Partial<DashboardData> = {}): DashboardData {
+  return {
+    kpi: {
+      totalOpportunities: 42,
+      monthTarget: 100,
+      conversionTarget: 15,
+      percentOfTarget: -20,
+      currentDay: 15,
+      daysInMonth: 28,
+      dailyData: [
+        { date: '2026-02-01', day: 1, actual: 2, target: 4 },
+        { date: '2026-02-02', day: 2, actual: 5, target: 7 },
+      ],
     },
-    leadsByPorte: { ME: 50, EPP: 30, MEI: 20 },
-    leadsByUf: { SP: 40, RJ: 25, MG: 20, PR: 15 },
+    availableCadences: [
+      { id: 'cad-1', name: 'Cadência Inbound' },
+      { id: 'cad-2', name: 'Cadência Outbound' },
+    ],
     ...overrides,
   };
 }
 
 describe('DashboardView', () => {
-  it('should show empty state when no leads and no imports', () => {
-    render(
-      <DashboardView
-        metrics={createMetrics({
-          totalLeads: 0,
-          leadsByStatus: {},
-          recentImports: [],
-          enrichmentStats: {
-            total: 0, enriched: 0, pending: 0, failed: 0, notFound: 0, successRate: 0,
-          },
-          leadsByPorte: {},
-          leadsByUf: {},
-        })}
-      />,
-    );
-    expect(screen.getByText('Comece importando seus leads')).toBeInTheDocument();
+  it('should render KPI card with total opportunities', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText(/Oportunidades em Fevereiro/)).toBeInTheDocument();
   });
 
-  it('should render total leads metric card', () => {
-    render(<DashboardView metrics={createMetrics()} />);
-    expect(screen.getByText('Total de Leads')).toBeInTheDocument();
+  it('should render target info when target > 0', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    expect(screen.getByText(/Meta de oportunidades/)).toBeInTheDocument();
     expect(screen.getByText('100')).toBeInTheDocument();
   });
 
-  it('should render qualified metric card', () => {
-    render(<DashboardView metrics={createMetrics()} />);
-    expect(screen.getByText('Qualificados')).toBeInTheDocument();
-    expect(screen.getByText('20')).toBeInTheDocument();
+  it('should render percent below indicator', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    expect(screen.getByText(/20% abaixo do previsto/)).toBeInTheDocument();
   });
 
-  it('should render enrichment metric cards', () => {
-    render(<DashboardView metrics={createMetrics()} />);
-    // "Enriquecidos" appears in metric card and enrichment card
-    expect(screen.getAllByText('Enriquecidos').length).toBeGreaterThanOrEqual(2);
+  it('should render percent above indicator when positive', () => {
+    const data = createData({
+      kpi: {
+        ...createData().kpi,
+        percentOfTarget: 15,
+      },
+    });
+    render(<DashboardView data={data} filters={defaultFilters} />);
+    expect(screen.getByText(/15% acima do previsto/)).toBeInTheDocument();
   });
 
-  it('should render recent imports', () => {
-    render(<DashboardView metrics={createMetrics()} />);
-    expect(screen.getByText('Importações Recentes')).toBeInTheDocument();
-    expect(screen.getByText('leads.csv')).toBeInTheDocument();
+  it('should render no target message when monthTarget is 0', () => {
+    const data = createData({
+      kpi: {
+        ...createData().kpi,
+        monthTarget: 0,
+        percentOfTarget: 0,
+      },
+    });
+    render(<DashboardView data={data} filters={defaultFilters} />);
+    expect(screen.getByText(/Nenhuma meta definida/)).toBeInTheDocument();
   });
 
-  it('should render enrichment card with success rate', () => {
-    render(<DashboardView metrics={createMetrics()} />);
-    expect(screen.getByText('Enriquecimento')).toBeInTheDocument();
-    expect(screen.getByText('60%')).toBeInTheDocument();
+  it('should render "Editar metas" button (disabled)', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    const btn = screen.getByText('Editar metas');
+    expect(btn).toBeInTheDocument();
+    expect(btn.closest('button')).toBeDisabled();
   });
 
-  it('should render porte distribution', () => {
-    render(<DashboardView metrics={createMetrics()} />);
-    expect(screen.getByText('Leads por Porte')).toBeInTheDocument();
-    // ME, EPP, MEI are all present in the distribution
-    expect(screen.getByText('EPP')).toBeInTheDocument();
+  it('should render chart section', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    expect(
+      screen.getByText('Oportunidades acumuladas vs Meta'),
+    ).toBeInTheDocument();
   });
 
-  it('should render UF distribution', () => {
-    render(<DashboardView metrics={createMetrics()} />);
-    expect(screen.getByText('Leads por Estado')).toBeInTheDocument();
-    expect(screen.getByText(/SP/)).toBeInTheDocument();
+  it('should render month selector with current month', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    expect(screen.getByText('Fevereiro 2026')).toBeInTheDocument();
   });
 
-  it('should render period filter', () => {
-    render(<DashboardView metrics={createMetrics()} />);
-    expect(screen.getByText('7 dias')).toBeInTheDocument();
-    expect(screen.getByText('30 dias')).toBeInTheDocument();
-    expect(screen.getByText('90 dias')).toBeInTheDocument();
+  it('should render cadence filter button', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    expect(screen.getByText('Cadências')).toBeInTheDocument();
+  });
+
+  it('should render user filter button when multiple members', () => {
+    render(<DashboardView data={createData()} filters={defaultFilters} />);
+    expect(screen.getByText('Vendedores')).toBeInTheDocument();
+  });
+
+  it('should render empty chart state when no data points', () => {
+    const data = createData({
+      kpi: {
+        ...createData().kpi,
+        dailyData: [],
+      },
+    });
+    render(<DashboardView data={data} filters={defaultFilters} />);
+    expect(
+      screen.getByText('Sem dados para exibir o gráfico'),
+    ).toBeInTheDocument();
+  });
+
+  it('should render insights charts when insights prop is provided', () => {
+    const insights: InsightsData = {
+      lossReasons: [{ reason: 'Sem orçamento', count: 5, percent: 100 }],
+      conversionByOrigin: [{ origin: 'Inbound', converted: 3, lost: 1 }],
+    };
+    const { container } = render(
+      <DashboardView
+        data={createData()}
+        filters={defaultFilters}
+        insights={insights}
+      />,
+    );
+    expect(
+      container.querySelector('[data-slot="insights-charts"]'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Motivos de Perda')).toBeInTheDocument();
+    expect(screen.getByText('Conversão por Cadência')).toBeInTheDocument();
+  });
+
+  it('should not render insights section when insights prop is absent', () => {
+    const { container } = render(
+      <DashboardView data={createData()} filters={defaultFilters} />,
+    );
+    expect(
+      container.querySelector('[data-slot="insights-charts"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('should render ranking cards when ranking prop is provided', () => {
+    const ranking: RankingData = {
+      leadsFinished: {
+        total: 10,
+        monthTarget: 20,
+        percentOfTarget: -25,
+        averagePerSdr: 5,
+        sdrBreakdown: [],
+      },
+      activitiesDone: {
+        total: 50,
+        monthTarget: 100,
+        percentOfTarget: -10,
+        averagePerSdr: 25,
+        sdrBreakdown: [],
+      },
+      conversionRate: {
+        total: 30,
+        monthTarget: 40,
+        percentOfTarget: -5,
+        averagePerSdr: 30,
+        sdrBreakdown: [],
+      },
+    };
+    const { container } = render(
+      <DashboardView
+        data={createData()}
+        filters={defaultFilters}
+        ranking={ranking}
+      />,
+    );
+    expect(
+      container.querySelector('[data-slot="ranking-cards"]'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Leads Finalizados')).toBeInTheDocument();
+    expect(screen.getByText('Atividades Realizadas')).toBeInTheDocument();
+    expect(screen.getByText('Taxa de Conversão')).toBeInTheDocument();
+  });
+
+  it('should not render ranking section when ranking prop is absent', () => {
+    const { container } = render(
+      <DashboardView data={createData()} filters={defaultFilters} />,
+    );
+    expect(
+      container.querySelector('[data-slot="ranking-cards"]'),
+    ).not.toBeInTheDocument();
   });
 });

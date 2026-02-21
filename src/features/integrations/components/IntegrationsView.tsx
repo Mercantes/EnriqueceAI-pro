@@ -1,14 +1,12 @@
 'use client';
 
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import {
-  Calendar,
   Check,
   Database,
   Loader2,
-  Mail,
-  MessageSquare,
   RefreshCw,
   Unplug,
   X,
@@ -30,7 +28,7 @@ import {
 import type { CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectCrm, getCrmAuthUrl, triggerCrmSync } from '../actions/manage-crm';
-import { disconnectCalendar, getCalendarAuthUrl } from '../actions/manage-calendar';
+import { disconnectCalendar } from '../actions/manage-calendar';
 
 interface IntegrationsViewProps {
   gmail: GmailConnectionSafe | null;
@@ -55,9 +53,9 @@ const CRM_LABELS: Record<string, string> = {
 export function IntegrationsView({ gmail, whatsapp, crm, calendar }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [showDisconnect, setShowDisconnect] = useState<'gmail' | 'crm' | 'calendar' | null>(null);
+  const [showDisconnect, setShowDisconnect] = useState<'google' | 'crm' | null>(null);
 
-  function handleConnectGmail() {
+  function handleConnectGoogle() {
     startTransition(async () => {
       const result = await getGmailAuthUrl();
       if (result.success) {
@@ -68,40 +66,24 @@ export function IntegrationsView({ gmail, whatsapp, crm, calendar }: Integration
     });
   }
 
-  function handleDisconnectGmail() {
+  function handleDisconnectGoogle() {
     startTransition(async () => {
-      const result = await disconnectGmail();
-      if (result.success) {
-        toast.success('Gmail desconectado');
-        setShowDisconnect(null);
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
+      const results = await Promise.allSettled([
+        gmail ? disconnectGmail() : Promise.resolve(null),
+        calendar ? disconnectCalendar() : Promise.resolve(null),
+      ]);
 
-  function handleConnectCalendar() {
-    startTransition(async () => {
-      const result = await getCalendarAuthUrl();
-      if (result.success) {
-        window.location.href = result.data.url;
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
+      const hasError = results.some(
+        (r) => r.status === 'fulfilled' && r.value && 'success' in r.value && !r.value.success,
+      );
 
-  function handleDisconnectCalendar() {
-    startTransition(async () => {
-      const result = await disconnectCalendar();
-      if (result.success) {
-        toast.success('Google Calendar desconectado');
-        setShowDisconnect(null);
-        router.refresh();
+      if (hasError) {
+        toast.error('Erro ao desconectar conta Google');
       } else {
-        toast.error(result.error);
+        toast.success('Google desconectado');
       }
+      setShowDisconnect(null);
+      router.refresh();
     });
   }
 
@@ -153,43 +135,60 @@ export function IntegrationsView({ gmail, whatsapp, crm, calendar }: Integration
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* Gmail Card */}
+        {/* Google Card (Gmail + Calendar) */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900">
-                  <Mail className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </div>
+                <Image src="/logos/google-logo.png" alt="Google" width={40} height={40} className="rounded-lg" />
                 <div>
-                  <CardTitle className="text-base">Gmail</CardTitle>
-                  <p className="text-xs text-[var(--muted-foreground)]">Envio de emails via Gmail</p>
+                  <CardTitle className="text-base">Google</CardTitle>
+                  <p className="text-xs text-[var(--muted-foreground)]">Email e Agenda</p>
                 </div>
               </div>
-              {gmail && (
-                <Badge variant="outline" className={statusConfig[gmail.status].className}>
-                  {gmail.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
-                  {gmail.status === 'error' && <X className="mr-1 h-3 w-3" />}
-                  {gmail.status === 'syncing' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                  {statusConfig[gmail.status].label}
+              {(gmail || calendar) && (
+                <Badge variant="outline" className={statusConfig[(gmail?.status === 'error' || calendar?.status === 'error') ? 'error' : 'connected'].className}>
+                  {(gmail?.status === 'error' || calendar?.status === 'error')
+                    ? <><X className="mr-1 h-3 w-3" />Erro</>
+                    : <><Check className="mr-1 h-3 w-3" />Conectado</>}
                 </Badge>
               )}
             </div>
           </CardHeader>
           <CardContent>
-            {gmail ? (
-              <div className="space-y-3">
-                <div className="rounded-md bg-[var(--muted)] p-3">
-                  <p className="text-sm font-medium">{gmail.email_address}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    Conectado em {new Date(gmail.created_at).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
+            {gmail || calendar ? (
+              <div className="space-y-4">
+                {/* Gmail details */}
+                {gmail && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-[var(--muted-foreground)]">Gmail</p>
+                    <div className="rounded-md bg-[var(--muted)] p-3">
+                      <p className="text-sm font-medium">{gmail.email_address}</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Conectado em {new Date(gmail.created_at).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Calendar details */}
+                {calendar && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-[var(--muted-foreground)]">Google Calendar</p>
+                    <div className="rounded-md bg-[var(--muted)] p-3">
+                      <p className="text-sm font-medium">{calendar.calendar_email}</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Conectado em {new Date(calendar.created_at).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"
                   className="text-red-600"
-                  onClick={() => setShowDisconnect('gmail')}
+                  onClick={() => setShowDisconnect('google')}
                 >
                   <Unplug className="mr-2 h-4 w-4" />
                   Desconectar
@@ -198,11 +197,10 @@ export function IntegrationsView({ gmail, whatsapp, crm, calendar }: Integration
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--muted-foreground)]">
-                  Conecte sua conta Gmail para enviar emails de cadência do seu próprio endereço.
+                  Conecte sua conta Google para enviar e ler emails de cadência, e agendar reuniões com leads via Google Calendar.
                 </p>
-                <Button onClick={handleConnectGmail} disabled={isPending}>
-                  <Mail className="mr-2 h-4 w-4" />
-                  {isPending ? 'Conectando...' : 'Conectar Gmail'}
+                <Button onClick={handleConnectGoogle} disabled={isPending}>
+                  {isPending ? 'Conectando...' : 'Conectar Google'}
                 </Button>
               </div>
             )}
@@ -214,9 +212,7 @@ export function IntegrationsView({ gmail, whatsapp, crm, calendar }: Integration
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900">
-                  <MessageSquare className="h-5 w-5 text-green-600 dark:text-green-400" />
-                </div>
+                <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={40} height={40} className="rounded-lg" />
                 <div>
                   <CardTitle className="text-base">WhatsApp Business</CardTitle>
                   <p className="text-xs text-[var(--muted-foreground)]">Envio via Meta Cloud API</p>
@@ -247,61 +243,6 @@ export function IntegrationsView({ gmail, whatsapp, crm, calendar }: Integration
                   Integração WhatsApp Business estará disponível em breve. Requer verificação Meta Business.
                 </p>
                 <Badge variant="secondary">Em breve</Badge>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Google Calendar Card */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900">
-                  <Calendar className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Google Calendar</CardTitle>
-                  <p className="text-xs text-[var(--muted-foreground)]">Agendar reuniões com leads</p>
-                </div>
-              </div>
-              {calendar && (
-                <Badge variant="outline" className={statusConfig[calendar.status].className}>
-                  {calendar.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
-                  {calendar.status === 'error' && <X className="mr-1 h-3 w-3" />}
-                  {statusConfig[calendar.status].label}
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {calendar ? (
-              <div className="space-y-3">
-                <div className="rounded-md bg-[var(--muted)] p-3">
-                  <p className="text-sm font-medium">{calendar.calendar_email}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    Conectado em {new Date(calendar.created_at).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600"
-                  onClick={() => setShowDisconnect('calendar')}
-                >
-                  <Unplug className="mr-2 h-4 w-4" />
-                  Desconectar
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Conecte seu Google Calendar para agendar reuniões com leads e gerar links do Google Meet.
-                </p>
-                <Button onClick={handleConnectCalendar} disabled={isPending}>
-                  <Calendar className="mr-2 h-4 w-4" />
-                  {isPending ? 'Conectando...' : 'Conectar Google Calendar'}
-                </Button>
               </div>
             )}
           </CardContent>
@@ -390,40 +331,20 @@ export function IntegrationsView({ gmail, whatsapp, crm, calendar }: Integration
         </Card>
       </div>
 
-      {/* Disconnect Gmail dialog */}
-      <Dialog open={showDisconnect === 'gmail'} onOpenChange={() => setShowDisconnect(null)}>
+      {/* Disconnect Google dialog */}
+      <Dialog open={showDisconnect === 'google'} onOpenChange={() => setShowDisconnect(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Desconectar Gmail</DialogTitle>
+            <DialogTitle>Desconectar Google</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja desconectar sua conta Gmail? Cadências com passos de email não poderão ser executadas.
+              Tem certeza que deseja desconectar sua conta Google? Cadências com passos de email não poderão ser executadas e não será possível agendar reuniões pela plataforma.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDisconnect(null)}>
               Cancelar
             </Button>
-            <Button variant="destructive" disabled={isPending} onClick={handleDisconnectGmail}>
-              {isPending ? 'Desconectando...' : 'Desconectar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Disconnect Calendar dialog */}
-      <Dialog open={showDisconnect === 'calendar'} onOpenChange={() => setShowDisconnect(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Desconectar Google Calendar</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja desconectar seu Google Calendar? Não será possível agendar reuniões pela plataforma.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDisconnect(null)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" disabled={isPending} onClick={handleDisconnectCalendar}>
+            <Button variant="destructive" disabled={isPending} onClick={handleDisconnectGoogle}>
               {isPending ? 'Desconectando...' : 'Desconectar'}
             </Button>
           </DialogFooter>

@@ -1,7 +1,7 @@
 export default function Home() {
   return (
     <main>
-      <h1>Flux Sales Engagement</h1>
+      <h1>Enriquece AI</h1>
     </main>
   );
 }

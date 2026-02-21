@@ -9,10 +9,9 @@ import { OrganizationProvider } from '@/features/auth/components/OrganizationPro
 import type { MemberWithOrganization, OrganizationMemberRow } from '@/features/auth/types';
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
-import { AppHeader } from '@/shared/components/AppHeader';
-import { AppSidebar } from '@/shared/components/AppSidebar';
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
 import { PageSkeleton } from '@/shared/components/PageSkeleton';
+import { TopBar } from '@/shared/components/TopBar';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { TooltipProvider } from '@/shared/components/ui/tooltip';
 
@@ -61,18 +60,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           initialMember={currentMember}
         >
           <NotificationProvider userId={user.id}>
-            <div className="flex h-screen">
-              <AppSidebar>
-                <div className="flex flex-1 flex-col overflow-hidden">
-                  <AppHeader />
-                  <main className="flex-1 overflow-auto p-6">
-                    <Breadcrumbs />
-                    <Suspense fallback={<PageSkeleton />}>
-                      {children}
-                    </Suspense>
-                  </main>
-                </div>
-              </AppSidebar>
+            <div className="flex h-screen flex-col">
+              <TopBar />
+              <main className="flex-1 overflow-auto p-6">
+                <Breadcrumbs />
+                <Suspense fallback={<PageSkeleton />}>
+                  {children}
+                </Suspense>
+              </main>
             </div>
             <Toaster />
           </NotificationProvider>

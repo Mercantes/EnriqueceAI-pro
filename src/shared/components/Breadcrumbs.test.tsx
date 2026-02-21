@@ -34,4 +34,22 @@ describe('Breadcrumbs', () => {
     const { container } = render(<Breadcrumbs />);
     expect(container).toMatchSnapshot();
   });
+
+  it('should render execution label', () => {
+    vi.mocked(usePathname).mockReturnValue('/execution/detail');
+    render(<Breadcrumbs />);
+    expect(screen.getByText('Execução')).toBeDefined();
+  });
+
+  it('should render calls label', () => {
+    vi.mocked(usePathname).mockReturnValue('/calls/active');
+    render(<Breadcrumbs />);
+    expect(screen.getByText('Ligações')).toBeDefined();
+  });
+
+  it('should render statistics label', () => {
+    vi.mocked(usePathname).mockReturnValue('/statistics/overview');
+    render(<Breadcrumbs />);
+    expect(screen.getByText('Estatísticas')).toBeDefined();
+  });
 });

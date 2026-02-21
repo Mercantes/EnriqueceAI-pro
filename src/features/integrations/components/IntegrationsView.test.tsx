@@ -8,6 +8,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+vi.mock('next/image', () => ({
+  default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} />,
+}));
+
 vi.mock('../actions/manage-gmail', () => ({
   getGmailAuthUrl: vi.fn(),
   disconnectGmail: vi.fn(),
@@ -67,9 +71,16 @@ describe('IntegrationsView', () => {
     expect(screen.getByText('Integrações')).toBeInTheDocument();
   });
 
-  it('should show Gmail card', () => {
+  it('should show unified Google card with description', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Gmail')).toBeInTheDocument();
+    expect(screen.getByText('Google')).toBeInTheDocument();
+    expect(screen.getByText('Email e Agenda')).toBeInTheDocument();
+  });
+
+  it('should show single "Conectar Google" button when not connected', () => {
+    render(<IntegrationsView {...defaultProps} />);
+    expect(screen.getByText('Conectar Google')).toBeInTheDocument();
+    expect(screen.getByText(/enviar e ler emails.*agendar reuniões/)).toBeInTheDocument();
   });
 
   it('should show WhatsApp card', () => {
@@ -82,32 +93,17 @@ describe('IntegrationsView', () => {
     expect(screen.getAllByText('HubSpot').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should show Google Calendar card', () => {
-    render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Google Calendar')).toBeInTheDocument();
-  });
-
-  it('should show connect button when Gmail not connected', () => {
-    render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Conectar Gmail')).toBeInTheDocument();
-  });
-
-  it('should show connect button when Calendar not connected', () => {
-    render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('Conectar Google Calendar')).toBeInTheDocument();
-  });
-
   it('should show email address when Gmail connected', () => {
     render(<IntegrationsView {...defaultProps} gmail={gmailConnected} />);
     expect(screen.getByText('user@gmail.com')).toBeInTheDocument();
   });
 
-  it('should show connected status for Gmail', () => {
+  it('should show connected status for Google', () => {
     render(<IntegrationsView {...defaultProps} gmail={gmailConnected} />);
     expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should show disconnect button when Gmail connected', () => {
+  it('should show disconnect button when Google connected', () => {
     render(<IntegrationsView {...defaultProps} gmail={gmailConnected} />);
     expect(screen.getAllByText('Desconectar').length).toBeGreaterThanOrEqual(1);
   });
@@ -122,7 +118,7 @@ describe('IntegrationsView', () => {
     expect(screen.getByText('Em breve')).toBeInTheDocument();
   });
 
-  it('should show error status for Gmail with error', () => {
+  it('should show error status for Google when Gmail has error', () => {
     render(
       <IntegrationsView
         {...defaultProps}
@@ -176,22 +172,27 @@ describe('IntegrationsView', () => {
     expect(screen.getByText('Nunca sincronizado')).toBeInTheDocument();
   });
 
-  it('should show calendar email when connected', () => {
+  it('should show calendar details inside Google card when connected', () => {
     render(<IntegrationsView {...defaultProps} calendar={calendarConnected} />);
+    expect(screen.getByText('Google Calendar')).toBeInTheDocument();
     expect(screen.getAllByText('user@gmail.com').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should show connected status for calendar', () => {
-    render(<IntegrationsView {...defaultProps} calendar={calendarConnected} />);
     expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should show disconnect button for calendar when connected', () => {
-    render(<IntegrationsView {...defaultProps} calendar={calendarConnected} />);
-    expect(screen.getAllByText('Desconectar').length).toBeGreaterThanOrEqual(1);
+  it('should show both Gmail and Calendar details when both connected', () => {
+    render(
+      <IntegrationsView
+        {...defaultProps}
+        gmail={gmailConnected}
+        calendar={calendarConnected}
+      />,
+    );
+    expect(screen.getByText('Gmail')).toBeInTheDocument();
+    expect(screen.getByText('Google Calendar')).toBeInTheDocument();
+    expect(screen.getAllByText('user@gmail.com').length).toBeGreaterThanOrEqual(2);
   });
 
-  it('should show error status for calendar with error', () => {
+  it('should show error status for Google when calendar has error', () => {
     render(
       <IntegrationsView
         {...defaultProps}

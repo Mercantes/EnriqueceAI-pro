@@ -26,6 +26,10 @@ const pathLabels: Record<string, string> = {
   integrations: 'Integrações',
   billing: 'Faturamento',
   import: 'Importar',
+  execution: 'Execução',
+  calls: 'Ligações',
+  statistics: 'Estatísticas',
+  history: 'Histórico',
 };
 
 export function Breadcrumbs() {

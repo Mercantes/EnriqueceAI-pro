@@ -78,7 +78,7 @@ export function OnboardingWizard() {
           <div className="space-y-6">
             <div className="text-center">
               <Building2 className="mx-auto h-10 w-10 text-[var(--primary)]" />
-              <h1 className="mt-4 text-2xl font-bold">Bem-vindo ao Flux!</h1>
+              <h1 className="mt-4 text-2xl font-bold">Bem-vindo ao Enriquece AI!</h1>
               <p className="mt-2 text-sm text-[var(--muted-foreground)]">
                 Primeiro, como se chama sua empresa?
               </p>

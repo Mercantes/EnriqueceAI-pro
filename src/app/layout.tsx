@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Flux Sales Engagement',
+  title: 'Enriquece AI',
   description: 'Plataforma de Sales Engagement para equipes de vendas B2B',
 };
 

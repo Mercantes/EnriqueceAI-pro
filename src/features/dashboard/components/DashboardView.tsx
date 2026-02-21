@@ -1,88 +1,84 @@
 'use client';
 
 import { Suspense } from 'react';
-import { CheckCircle2, Clock, Search, Users } from 'lucide-react';
 
+import { Activity, Settings, TrendingUp, Users } from 'lucide-react';
+
+import { Button } from '@/shared/components/ui/button';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
-import type { DashboardMetrics } from '../dashboard.contract';
-import { DistributionCard } from './DistributionCard';
-import { EmptyDashboard } from './EmptyDashboard';
-import { EnrichmentCard } from './EnrichmentCard';
-import { MetricCard } from './MetricCard';
-import { PeriodFilter } from './PeriodFilter';
-import { RecentImports } from './RecentImports';
+import type { DashboardData, DashboardFilters, InsightsData, RankingData } from '../types';
+import { ConversionByOriginChart } from './ConversionByOriginChart';
+import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilters';
+import { LossReasonsChart } from './LossReasonsChart';
+import { OpportunityChart } from './OpportunityChart';
+import { OpportunityKpiCard } from './OpportunityKpiCard';
+import { RankingCard } from './RankingCard';
 
 interface DashboardViewProps {
-  metrics: DashboardMetrics;
+  data: DashboardData;
+  filters: DashboardFilters;
+  ranking?: RankingData;
+  insights?: InsightsData;
 }
 
-const statusLabels: Record<string, string> = {
-  new: 'Novos',
-  contacted: 'Contatados',
-  qualified: 'Qualificados',
-  unqualified: 'Não Qualificados',
-  archived: 'Arquivados',
-};
-
-export function DashboardView({ metrics }: DashboardViewProps) {
-  if (metrics.totalLeads === 0 && metrics.recentImports.length === 0) {
-    return <EmptyDashboard />;
-  }
-
-  const newLeads = metrics.leadsByStatus['new'] ?? 0;
-  const qualified = metrics.leadsByStatus['qualified'] ?? 0;
-
-  // Translate status keys for display
-  const translatedStatus: Record<string, number> = {};
-  for (const [key, value] of Object.entries(metrics.leadsByStatus)) {
-    translatedStatus[statusLabels[key] ?? key] = value;
-  }
-
+export function DashboardView({ data, filters, ranking, insights }: DashboardViewProps) {
   return (
     <div className="space-y-6">
-      {/* Period filter */}
-      <div className="flex items-center justify-end">
-        <Suspense fallback={<Skeleton className="h-8 w-48" />}>
-          <PeriodFilter />
+      {/* Header: Filters + Edit goals button */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <Suspense fallback={<Skeleton className="h-8 w-64" />}>
+          <DashboardFiltersComponent
+            currentFilters={filters}
+            availableCadences={data.availableCadences}
+          />
         </Suspense>
+
+        <Button variant="outline" size="sm" className="gap-2" disabled>
+          <Settings className="h-3.5 w-3.5" />
+          Editar metas
+        </Button>
       </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title="Total de Leads"
-          value={metrics.totalLeads}
-          icon={Users}
-          description={`${newLeads} novo${newLeads !== 1 ? 's' : ''}`}
-        />
-        <MetricCard
-          title="Qualificados"
-          value={qualified}
-          icon={CheckCircle2}
-          description={`${metrics.totalLeads > 0 ? Math.round((qualified / metrics.totalLeads) * 100) : 0}% do total`}
-        />
-        <MetricCard
-          title="Enriquecidos"
-          value={metrics.enrichmentStats.enriched}
-          icon={Search}
-          description={`${metrics.enrichmentStats.successRate}% taxa de sucesso`}
-        />
-        <MetricCard
-          title="Pendentes"
-          value={metrics.enrichmentStats.pending}
-          icon={Clock}
-          description="aguardando enriquecimento"
+      {/* KPI + Chart */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <OpportunityKpiCard kpi={data.kpi} month={filters.month} />
+        <OpportunityChart
+          data={data.kpi.dailyData}
+          currentDay={data.kpi.currentDay}
         />
       </div>
 
-      {/* Detail cards grid */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <RecentImports imports={metrics.recentImports} />
-        <EnrichmentCard stats={metrics.enrichmentStats} />
-        <DistributionCard title="Leads por Porte" data={metrics.leadsByPorte} />
-        <DistributionCard title="Leads por Estado" data={metrics.leadsByUf} />
-      </div>
+      {/* Ranking Cards (Story 3.3) */}
+      {ranking && (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3" data-slot="ranking-cards">
+          <RankingCard
+            title="Leads Finalizados"
+            icon={Users}
+            data={ranking.leadsFinished}
+            secondaryLabel="prospectando"
+          />
+          <RankingCard
+            title="Atividades Realizadas"
+            icon={Activity}
+            data={ranking.activitiesDone}
+          />
+          <RankingCard
+            title="Taxa de Conversão"
+            icon={TrendingUp}
+            unit="%"
+            data={ranking.conversionRate}
+          />
+        </div>
+      )}
+
+      {/* Insights Charts (Story 3.4) */}
+      {insights && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2" data-slot="insights-charts">
+          <LossReasonsChart data={insights.lossReasons} />
+          <ConversionByOriginChart data={insights.conversionByOrigin} />
+        </div>
+      )}
     </div>
   );
 }

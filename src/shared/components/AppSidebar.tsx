@@ -123,9 +123,9 @@ function SidebarContent({
       {/* Logo */}
       <div className={cn('flex h-14 items-center border-b border-[var(--sidebar-border)] px-4', collapsed && 'justify-center px-2')}>
         {collapsed ? (
-          <span className="text-lg font-bold text-[var(--sidebar-primary)]">F</span>
+          <span className="text-lg font-bold text-[var(--sidebar-primary)]">E</span>
         ) : (
-          <span className="text-xl font-bold text-[var(--sidebar-primary)]">Flux</span>
+          <span className="text-xl font-bold text-[var(--sidebar-primary)]">Enriquece AI</span>
         )}
       </div>
 
@@ -154,7 +154,7 @@ function SidebarContent({
           </Button>
         )}
         {!collapsed && (
-          <p className="mt-2 text-center text-[10px] text-[var(--sidebar-foreground)]/50">Flux v0.1</p>
+          <p className="mt-2 text-center text-[10px] text-[var(--sidebar-foreground)]/50">Enriquece AI v0.1</p>
         )}
       </div>
     </div>

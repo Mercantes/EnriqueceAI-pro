@@ -73,8 +73,8 @@ export async function createCheckoutSession(planId: string): Promise<ActionResul
         price_data: {
           currency: 'brl',
           product_data: {
-            name: `Flux ${plan.name}`,
-            description: `Plano ${plan.name} — Flux Sales Engagement`,
+            name: `Enriquece AI ${plan.name}`,
+            description: `Plano ${plan.name} — Enriquece AI`,
           },
           unit_amount: plan.price_cents,
           recurring: { interval: 'month' },

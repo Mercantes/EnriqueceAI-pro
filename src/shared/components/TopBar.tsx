@@ -1,0 +1,170 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+import { ChevronDown, HelpCircle, Phone, User } from 'lucide-react';
+
+import { cn } from '@/lib/utils';
+import { UserMenu } from '@/features/auth/components/UserMenu';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
+
+import { Button } from '@/shared/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+
+import { MobileNav } from './MobileNav';
+import { ThemeToggle } from './ThemeToggle';
+
+export interface NavDropdownItem {
+  label: string;
+  href: string;
+}
+
+export interface NavSection {
+  label: string;
+  href?: string;
+  items?: NavDropdownItem[];
+  placeholder?: string;
+}
+
+export const navSections: NavSection[] = [
+  {
+    label: 'Dashboard',
+    href: '/dashboard',
+  },
+  {
+    label: 'Prospecção',
+    items: [
+      { label: 'Execução', href: '/atividades' },
+      { label: 'Atividades', href: '/atividades' },
+      { label: 'Cadências', href: '/cadences' },
+      { label: 'Leads', href: '/leads' },
+      { label: 'Ajustes', href: '/settings' },
+    ],
+  },
+  {
+    label: 'Ligações',
+    placeholder: 'Em breve',
+  },
+  {
+    label: 'Estatísticas',
+    placeholder: 'Em breve',
+  },
+];
+
+function NavDropdownMenu({ section }: { section: NavSection }) {
+  const pathname = usePathname();
+  const isActive = section.items?.some(
+    (item) => pathname === item.href || pathname.startsWith(item.href + '/'),
+  );
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className={cn(
+            'flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            isActive
+              ? 'text-primary'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {section.label}
+          <ChevronDown className="h-3 w-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {section.placeholder ? (
+          <DropdownMenuItem disabled>
+            <span className="text-muted-foreground">{section.placeholder}</span>
+          </DropdownMenuItem>
+        ) : (
+          section.items?.map((item) => (
+            <DropdownMenuItem key={item.label} asChild>
+              <Link
+                href={item.href}
+                className={cn(
+                  pathname === item.href && 'font-medium text-primary',
+                )}
+              >
+                {item.label}
+              </Link>
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function TopBar() {
+  const pathname = usePathname();
+
+  return (
+    <div className="border-b bg-background">
+      {/* Main bar */}
+      <div className="flex h-14 items-center gap-4 px-4">
+        {/* Mobile hamburger */}
+        <MobileNav />
+
+        {/* Logo */}
+        <Link href="/dashboard" className="flex items-center">
+          <span className="text-xl font-bold text-primary">Enriquece AI</span>
+        </Link>
+
+        {/* Desktop Navigation */}
+        <nav className="ml-6 hidden items-center gap-1 md:flex">
+          {navSections.map((section) =>
+            section.href ? (
+              <Link
+                key={section.label}
+                href={section.href}
+                className={cn(
+                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  pathname === section.href ||
+                    pathname.startsWith(section.href + '/')
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {section.label}
+              </Link>
+            ) : (
+              <NavDropdownMenu key={section.label} section={section} />
+            ),
+          )}
+        </nav>
+
+        {/* Right area */}
+        <div className="ml-auto flex items-center gap-1">
+          <ThemeToggle />
+          <Button variant="ghost" size="icon" aria-label="Ajuda">
+            <HelpCircle className="h-4 w-4" />
+          </Button>
+          <NotificationBell />
+          <UserMenu />
+        </div>
+      </div>
+
+      {/* Sub-bar */}
+      <div className="flex h-10 items-center gap-4 border-t bg-muted/30 px-4">
+        <Button variant="outline" size="sm" className="gap-2">
+          <Phone className="h-3.5 w-3.5" />
+          Ligar
+        </Button>
+        <Link
+          href="/settings"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <User className="h-3.5 w-3.5" />
+          Usuário
+        </Link>
+      </div>
+    </div>
+  );
+}

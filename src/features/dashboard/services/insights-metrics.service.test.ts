@@ -1,0 +1,270 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  fetchConversionByOrigin,
+  fetchInsightsData,
+  fetchLossReasons,
+} from './insights-metrics.service';
+
+// --- Chainable + thenable mock builder ---
+function createChainMock(finalResult: unknown = { data: null }) {
+  const chain: Record<string, unknown> = {};
+
+  chain.then = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve(finalResult).then(resolve);
+
+  for (const method of ['select', 'eq', 'is', 'in', 'not', 'gte', 'lt', 'order']) {
+    chain[method] = vi.fn(() => chain);
+  }
+
+  return chain;
+}
+
+function createMockSupabase(fromImpl: (table: string) => Record<string, unknown>) {
+  return { from: vi.fn(fromImpl) } as unknown;
+}
+
+const ORG = 'org-1';
+const baseFilters = { month: '2026-01', cadenceIds: [] as string[], userIds: [] as string[] };
+
+describe('fetchLossReasons', () => {
+  it('should return empty array when no enrollments with loss reasons', async () => {
+    const enrollmentChain = createChainMock({ data: [] });
+
+    const supabase = createMockSupabase(() => enrollmentChain);
+
+    const result = await fetchLossReasons(supabase as never, ORG, baseFilters);
+
+    expect(result).toEqual([]);
+  });
+
+  it('should group and count by loss reason', async () => {
+    const enrollmentChain = createChainMock({
+      data: [
+        { loss_reason_id: 'lr-1' },
+        { loss_reason_id: 'lr-1' },
+        { loss_reason_id: 'lr-2' },
+      ],
+    });
+    const reasonsChain = createChainMock({
+      data: [
+        { id: 'lr-1', name: 'Sem orçamento' },
+        { id: 'lr-2', name: 'Sem interesse' },
+      ],
+    });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'loss_reasons') return reasonsChain;
+      return createChainMock();
+    });
+
+    const result = await fetchLossReasons(supabase as never, ORG, baseFilters);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ reason: 'Sem orçamento', count: 2, percent: 67 });
+    expect(result[1]).toEqual({ reason: 'Sem interesse', count: 1, percent: 33 });
+  });
+
+  it('should sort by count descending', async () => {
+    const enrollmentChain = createChainMock({
+      data: [
+        { loss_reason_id: 'lr-a' },
+        { loss_reason_id: 'lr-b' },
+        { loss_reason_id: 'lr-b' },
+        { loss_reason_id: 'lr-b' },
+      ],
+    });
+    const reasonsChain = createChainMock({
+      data: [
+        { id: 'lr-a', name: 'Reason A' },
+        { id: 'lr-b', name: 'Reason B' },
+      ],
+    });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'loss_reasons') return reasonsChain;
+      return createChainMock();
+    });
+
+    const result = await fetchLossReasons(supabase as never, ORG, baseFilters);
+
+    expect(result[0]?.reason).toBe('Reason B');
+    expect(result[0]?.count).toBe(3);
+  });
+
+  it('should use "Desconhecido" for unknown reason ids', async () => {
+    const enrollmentChain = createChainMock({
+      data: [{ loss_reason_id: 'lr-unknown' }],
+    });
+    const reasonsChain = createChainMock({ data: [] });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'loss_reasons') return reasonsChain;
+      return createChainMock();
+    });
+
+    const result = await fetchLossReasons(supabase as never, ORG, baseFilters);
+
+    expect(result[0]?.reason).toBe('Desconhecido');
+  });
+});
+
+describe('fetchConversionByOrigin', () => {
+  it('should return empty array when no enrollments', async () => {
+    const enrollmentChain = createChainMock({ data: [] });
+
+    const supabase = createMockSupabase(() => enrollmentChain);
+
+    const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
+
+    expect(result).toEqual([]);
+  });
+
+  it('should group by cadence and count qualified vs lost', async () => {
+    const enrollmentChain = createChainMock({
+      data: [
+        { lead_id: 'l1', cadence_id: 'c1' },
+        { lead_id: 'l2', cadence_id: 'c1' },
+        { lead_id: 'l3', cadence_id: 'c2' },
+      ],
+    });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', status: 'qualified' },
+        { id: 'l2', status: 'unqualified' },
+        { id: 'l3', status: 'qualified' },
+      ],
+    });
+    const cadencesChain = createChainMock({
+      data: [
+        { id: 'c1', name: 'Inbound' },
+        { id: 'c2', name: 'Outbound' },
+      ],
+    });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'cadences') return cadencesChain;
+      return createChainMock();
+    });
+
+    const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
+
+    expect(result).toHaveLength(2);
+
+    const inbound = result.find((e) => e.origin === 'Inbound');
+    expect(inbound?.converted).toBe(1);
+    expect(inbound?.lost).toBe(1);
+
+    const outbound = result.find((e) => e.origin === 'Outbound');
+    expect(outbound?.converted).toBe(1);
+    expect(outbound?.lost).toBe(0);
+  });
+
+  it('should skip leads with non-terminal status (new, contacted)', async () => {
+    const enrollmentChain = createChainMock({
+      data: [
+        { lead_id: 'l1', cadence_id: 'c1' },
+        { lead_id: 'l2', cadence_id: 'c1' },
+      ],
+    });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', status: 'new' },
+        { id: 'l2', status: 'contacted' },
+      ],
+    });
+    const cadencesChain = createChainMock({
+      data: [{ id: 'c1', name: 'Cadence 1' }],
+    });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'cadences') return cadencesChain;
+      return createChainMock();
+    });
+
+    const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
+
+    // No terminal statuses, so no entries with converted/lost > 0
+    expect(result).toHaveLength(0);
+  });
+
+  it('should sort by total (converted + lost) descending', async () => {
+    const enrollmentChain = createChainMock({
+      data: [
+        { lead_id: 'l1', cadence_id: 'c1' },
+        { lead_id: 'l2', cadence_id: 'c2' },
+        { lead_id: 'l3', cadence_id: 'c2' },
+        { lead_id: 'l4', cadence_id: 'c2' },
+      ],
+    });
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', status: 'qualified' },
+        { id: 'l2', status: 'qualified' },
+        { id: 'l3', status: 'unqualified' },
+        { id: 'l4', status: 'archived' },
+      ],
+    });
+    const cadencesChain = createChainMock({
+      data: [
+        { id: 'c1', name: 'Small' },
+        { id: 'c2', name: 'Big' },
+      ],
+    });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'cadences') return cadencesChain;
+      return createChainMock();
+    });
+
+    const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
+
+    expect(result[0]?.origin).toBe('Big'); // 3 total
+    expect(result[1]?.origin).toBe('Small'); // 1 total
+  });
+
+  it('should use "Desconhecida" for unknown cadence ids', async () => {
+    const enrollmentChain = createChainMock({
+      data: [{ lead_id: 'l1', cadence_id: 'c-unknown' }],
+    });
+    const leadsChain = createChainMock({
+      data: [{ id: 'l1', status: 'qualified' }],
+    });
+    const cadencesChain = createChainMock({ data: [] });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'cadence_enrollments') return enrollmentChain;
+      if (table === 'leads') return leadsChain;
+      if (table === 'cadences') return cadencesChain;
+      return createChainMock();
+    });
+
+    const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
+
+    expect(result[0]?.origin).toBe('Desconhecida');
+  });
+});
+
+describe('fetchInsightsData', () => {
+  it('should return both lossReasons and conversionByOrigin', async () => {
+    const emptyChain = createChainMock({ data: [] });
+
+    const supabase = createMockSupabase(() => emptyChain);
+
+    const result = await fetchInsightsData(supabase as never, ORG, baseFilters);
+
+    expect(result).toHaveProperty('lossReasons');
+    expect(result).toHaveProperty('conversionByOrigin');
+    expect(result.lossReasons).toEqual([]);
+    expect(result.conversionByOrigin).toEqual([]);
+  });
+});
