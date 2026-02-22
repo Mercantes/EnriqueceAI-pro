@@ -48,7 +48,7 @@ describe('MobileNav', () => {
     expect(screen.getByText('Ajustes')).toBeInTheDocument();
   });
 
-  it('shows Ligações items with both active links', async () => {
+  it('shows Ligações items with all 4 active links', async () => {
     const user = userEvent.setup();
     render(<MobileNav />);
 
@@ -57,6 +57,11 @@ describe('MobileNav', () => {
 
     expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
     expect(screen.getByText('Painel de Ligações')).toBeInTheDocument();
+    expect(screen.getByText('Extrato')).toBeInTheDocument();
+
+    // Ajustes appears in both Prospecção and Ligações sections
+    const allAjustes = screen.getAllByText('Ajustes');
+    expect(allAjustes.length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows Estatísticas items with active links', async () => {

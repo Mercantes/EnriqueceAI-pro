@@ -1,0 +1,187 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireManager } from '@/lib/auth/require-manager';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+import type { CallDailyTargetRow, CallSettingsData, CallSettingsRow, PhoneBlacklistRow } from '../types';
+import { addPhoneBlacklistSchema, saveCallSettingsSchema } from '../schemas/call-settings.schemas';
+
+async function getOrgId() {
+  const user = await requireManager();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  return { orgId: member?.org_id ?? null, supabase };
+}
+
+function settingsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
+  return supabase.from('organization_call_settings' as never) as ReturnType<typeof supabase.from>;
+}
+
+function targetsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
+  return supabase.from('call_daily_targets' as never) as ReturnType<typeof supabase.from>;
+}
+
+function blacklistFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
+  return supabase.from('phone_blacklist' as never) as ReturnType<typeof supabase.from>;
+}
+
+export async function getCallSettings(): Promise<ActionResult<CallSettingsData>> {
+  const { orgId, supabase } = await getOrgId();
+  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+
+  const { data: settings } = (await settingsFrom(supabase)
+    .select('*')
+    .eq('org_id', orgId)
+    .single()) as { data: CallSettingsRow | null };
+
+  const { data: dailyTargets } = (await targetsFrom(supabase)
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: true })) as { data: CallDailyTargetRow[] | null };
+
+  const { data: blacklist } = (await blacklistFrom(supabase)
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: true })) as { data: PhoneBlacklistRow[] | null };
+
+  return {
+    success: true,
+    data: {
+      settings: settings ?? null,
+      dailyTargets: dailyTargets ?? [],
+      blacklist: blacklist ?? [],
+    },
+  };
+}
+
+export async function saveCallSettings(
+  raw: Record<string, unknown>,
+): Promise<ActionResult<{ saved: true }>> {
+  const { orgId, supabase } = await getOrgId();
+  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+
+  const parsed = saveCallSettingsSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
+  const input = parsed.data;
+
+  // Check if settings already exist
+  const { data: existing } = (await settingsFrom(supabase)
+    .select('id')
+    .eq('org_id', orgId)
+    .single()) as { data: { id: string } | null };
+
+  if (existing) {
+    const { error } = await settingsFrom(supabase)
+      .update({
+        calls_enabled: input.calls_enabled,
+        default_call_type: input.default_call_type,
+        significant_threshold_seconds: input.significant_threshold_seconds,
+        daily_call_target: input.daily_call_target,
+      })
+      .eq('org_id', orgId);
+
+    if (error) return { success: false, error: 'Erro ao salvar configurações' };
+  } else {
+    const { error } = await settingsFrom(supabase)
+      .insert({
+        org_id: orgId,
+        calls_enabled: input.calls_enabled,
+        default_call_type: input.default_call_type,
+        significant_threshold_seconds: input.significant_threshold_seconds,
+        daily_call_target: input.daily_call_target,
+      });
+
+    if (error) return { success: false, error: 'Erro ao criar configurações' };
+  }
+
+  return { success: true, data: { saved: true } };
+}
+
+export async function saveCallDailyTargets(
+  targets: Array<{ userId: string; dailyTarget: number | null }>,
+): Promise<ActionResult<{ saved: number }>> {
+  const { orgId, supabase } = await getOrgId();
+  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+
+  let saved = 0;
+
+  for (const target of targets) {
+    if (target.dailyTarget === null) {
+      // Remove individual override
+      await targetsFrom(supabase)
+        .delete()
+        .eq('org_id', orgId)
+        .eq('user_id', target.userId);
+    } else {
+      if (target.dailyTarget < 0) continue;
+
+      // Delete then insert (handle upsert on composite unique)
+      await targetsFrom(supabase)
+        .delete()
+        .eq('org_id', orgId)
+        .eq('user_id', target.userId);
+
+      const { error } = await targetsFrom(supabase)
+        .insert({
+          org_id: orgId,
+          user_id: target.userId,
+          daily_target: target.dailyTarget,
+        });
+
+      if (!error) saved++;
+    }
+  }
+
+  return { success: true, data: { saved } };
+}
+
+export async function addPhoneBlacklist(
+  raw: Record<string, unknown>,
+): Promise<ActionResult<PhoneBlacklistRow>> {
+  const { orgId, supabase } = await getOrgId();
+  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+
+  const parsed = addPhoneBlacklistSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
+  const input = parsed.data;
+  const trimmed = input.phone_pattern.trim();
+
+  const { data, error } = (await blacklistFrom(supabase)
+    .insert({
+      org_id: orgId,
+      phone_pattern: trimmed,
+      reason: input.reason?.trim() || null,
+    })
+    .select()
+    .single()) as { data: PhoneBlacklistRow | null; error: unknown };
+
+  if (error || !data) return { success: false, error: 'Erro ao adicionar telefone (pode já estar na lista)' };
+  return { success: true, data };
+}
+
+export async function deletePhoneBlacklist(id: string): Promise<ActionResult<{ deleted: true }>> {
+  const { orgId, supabase } = await getOrgId();
+  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+
+  const { error } = await blacklistFrom(supabase)
+    .delete()
+    .eq('id', id)
+    .eq('org_id', orgId);
+
+  if (error) return { success: false, error: 'Erro ao remover telefone' };
+  return { success: true, data: { deleted: true } };
+}

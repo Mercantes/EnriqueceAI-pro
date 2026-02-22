@@ -80,7 +80,7 @@ describe('TopBar', () => {
     expect(screen.getByText('Ajustes')).toBeInTheDocument();
   });
 
-  it('shows Ligações dropdown with both active links', async () => {
+  it('shows Ligações dropdown with all 4 active links', async () => {
     const user = userEvent.setup();
     render(<TopBar />);
 
@@ -88,8 +88,18 @@ describe('TopBar', () => {
 
     expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
     expect(screen.getByText('Painel de Ligações')).toBeInTheDocument();
-    expect(screen.getByText(/Extrato/)).toBeInTheDocument();
-    expect(screen.getByText(/Ajustes/)).toBeInTheDocument();
+
+    // Extrato and Ajustes are links to their routes (inside Ligações dropdown)
+    const extratoLink = screen.getByRole('menuitem', { name: 'Extrato' });
+    expect(extratoLink).toBeInTheDocument();
+    expect(extratoLink.closest('a')).toHaveAttribute('href', '/calls/extrato');
+
+    // Ajustes appears in both Prospecção and Ligações; find the one linking to /calls/ajustes
+    const allAjustes = screen.getAllByRole('menuitem', { name: 'Ajustes' });
+    const callAjustes = allAjustes.find(
+      (el) => el.closest('a')?.getAttribute('href') === '/calls/ajustes',
+    );
+    expect(callAjustes).toBeDefined();
   });
 
   it('exports navSections with 4 sections aligned to Meetime', () => {

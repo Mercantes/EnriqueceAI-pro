@@ -52,3 +52,39 @@ export interface CallInsert {
 export interface CallDetail extends CallRow {
   feedback: CallFeedbackRow[];
 }
+
+// Call Settings types matching database tables
+export interface CallSettingsRow {
+  id: string;
+  org_id: string;
+  calls_enabled: boolean;
+  default_call_type: CallType;
+  significant_threshold_seconds: number;
+  daily_call_target: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CallDailyTargetRow {
+  id: string;
+  org_id: string;
+  user_id: string;
+  daily_target: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhoneBlacklistRow {
+  id: string;
+  org_id: string;
+  phone_pattern: string;
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CallSettingsData {
+  settings: CallSettingsRow | null;
+  dailyTargets: CallDailyTargetRow[];
+  blacklist: PhoneBlacklistRow[];
+}
