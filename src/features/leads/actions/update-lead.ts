@@ -6,6 +6,8 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { recalcFitScoreForLead } from './recalc-fit-scores';
+
 export async function archiveLead(
   leadId: string,
 ): Promise<ActionResult<void>> {
@@ -76,6 +78,15 @@ export async function updateLead(
 
   if (error) {
     return { success: false, error: 'Erro ao atualizar lead' };
+  }
+
+  // Recalc fit score if relevant fields changed
+  const fitScoreFields = ['razao_social', 'nome_fantasia', 'email', 'telefone', 'notes'];
+  const hasRelevantChange = fitScoreFields.some((f) => f in safeUpdates);
+  if (hasRelevantChange) {
+    recalcFitScoreForLead(supabase, leadId, member.org_id).catch(() => {
+      // Fire-and-forget: don't block the update response
+    });
   }
 
   revalidatePath('/leads');

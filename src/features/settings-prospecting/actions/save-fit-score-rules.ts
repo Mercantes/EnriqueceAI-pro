@@ -4,6 +4,8 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireManager } from '@/lib/auth/require-manager';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { recalcFitScoresForOrg } from '@/features/leads/actions/recalc-fit-scores';
+
 import { fitScoreRulesArraySchema, type FitScoreRuleInput } from '../fit-score.schema';
 
 export async function saveFitScoreRules(
@@ -64,6 +66,11 @@ export async function saveFitScoreRules(
   if (insertError) {
     return { success: false, error: 'Erro ao salvar regras' };
   }
+
+  // Trigger batch recalc for all leads in org (fire-and-forget)
+  recalcFitScoresForOrg(orgId).catch(() => {
+    // Background task — don't block the response
+  });
 
   return { success: true, data: { saved: rows.length } };
 }
