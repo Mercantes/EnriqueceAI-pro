@@ -95,10 +95,13 @@ export function TimelineBuilder({ cadence }: TimelineBuilderProps) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Main area: Sidebar + Timeline */}
+      {/* Main area: Sidebar + Timeline (both inside DndContext) */}
       <div className="flex flex-1 gap-6 overflow-auto p-6">
-        {isEditable && <ActivityTypeSidebar />}
-        <CadenceTimeline days={days} onDaysChange={setDays} />
+        <CadenceTimeline
+          days={days}
+          onDaysChange={setDays}
+          sidebarSlot={isEditable ? <ActivityTypeSidebar /> : undefined}
+        />
       </div>
 
       {/* Bottom Bar */}

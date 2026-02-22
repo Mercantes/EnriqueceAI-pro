@@ -38,6 +38,7 @@ export interface DayData {
 interface CadenceTimelineProps {
   days: DayData[];
   onDaysChange: (days: DayData[]) => void;
+  sidebarSlot?: React.ReactNode;
 }
 
 // ── Helper: renumber steps globally ──────────────────────────────────────
@@ -196,7 +197,7 @@ function generateStepId(): string {
   return `step-${Date.now()}-${nextStepId++}`;
 }
 
-export function CadenceTimeline({ days, onDaysChange }: CadenceTimelineProps) {
+export function CadenceTimeline({ days, onDaysChange, sidebarSlot }: CadenceTimelineProps) {
   const [collapsedDays, setCollapsedDays] = useState<Record<number, boolean>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeDragData, setActiveDragData] = useState<{ channel: ChannelType; label: string } | null>(null);
@@ -380,6 +381,7 @@ export function CadenceTimeline({ days, onDaysChange }: CadenceTimelineProps) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
+      {sidebarSlot}
       <div className="flex-1 space-y-3" data-testid="cadence-timeline">
         {days.map((dayData, dayIndex) => (
           <DayContainer
