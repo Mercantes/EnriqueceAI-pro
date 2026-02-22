@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Pencil, RefreshCw, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -34,6 +34,7 @@ import {
 import { bulkArchiveLeads, bulkDeleteLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
 import type { LeadCadenceInfo, LeadRow } from '../types';
 import { formatCnpj } from '../utils/cnpj';
+import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
 import { LeadAvatar } from './LeadAvatar';
 import { LeadStatusBadge } from './LeadStatusBadge';
 
@@ -57,6 +58,7 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [deleteTarget, setDeleteTarget] = useState<string[] | null>(null);
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
 
   const currentSortBy = (searchParams.get('sort_by') ?? 'created_at') as SortColumn;
   const currentSortDir = searchParams.get('sort_dir') ?? 'desc';
@@ -211,6 +213,15 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowEnrollDialog(true)}
+              disabled={isPending}
+            >
+              <Zap className="mr-1 h-3.5 w-3.5" />
+              Cadência
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleArchive}
               disabled={isPending}
             >
@@ -360,6 +371,18 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Enroll in cadence dialog */}
+      <EnrollInCadenceDialog
+        open={showEnrollDialog}
+        onOpenChange={(open) => {
+          setShowEnrollDialog(open);
+          if (!open) {
+            setSelected(new Set());
+          }
+        }}
+        leadIds={Array.from(selected)}
+      />
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
-import { Save } from 'lucide-react';
+import { RotateCcw, Save, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -30,6 +30,11 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
     );
   }
 
+  function handleReset() {
+    setOrgDefault(initial.orgDefault);
+    setMemberGoals(initial.members);
+  }
+
   function handleSave() {
     startTransition(async () => {
       const result = await saveDailyGoals({
@@ -50,18 +55,22 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Atividades Diárias</h1>
-        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-          Configure a meta diária de atividades para a organização e para cada vendedor individualmente.
-        </p>
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+          <Trophy className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold">Objetivo Diário de Atividades</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Configure o objetivo diário de atividades para cada membro da equipe.
+          </p>
+        </div>
       </div>
 
       {/* Org default */}
       <div className="rounded-lg border border-[var(--border)] p-4">
-        <label className="block text-sm font-medium mb-2">
-          Meta padrão da organização
-        </label>
+        <label className="block text-sm font-medium mb-2">Padrão</label>
         <div className="flex items-center gap-3">
           <Input
             type="number"
@@ -71,11 +80,11 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
             className="w-24"
           />
           <span className="text-sm text-[var(--muted-foreground)]">
-            atividades por dia
+            atividades/dia
           </span>
         </div>
         <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-          Vendedores sem meta individual usarão este valor.
+          Membros sem meta individual usarão este valor como padrão.
         </p>
       </div>
 
@@ -86,7 +95,6 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
             <thead>
               <tr className="border-b bg-[var(--muted)]/50">
                 <th className="p-3 text-left text-sm font-medium">Vendedor</th>
-                <th className="p-3 text-left text-sm font-medium">Role</th>
                 <th className="p-3 text-left text-sm font-medium">Meta Individual</th>
               </tr>
             </thead>
@@ -94,9 +102,6 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
               {memberGoals.map((member) => (
                 <tr key={member.userId} className="border-b last:border-0">
                   <td className="p-3 text-sm">{member.name}</td>
-                  <td className="p-3 text-sm text-[var(--muted-foreground)]">
-                    {member.role === 'manager' ? 'Manager' : 'SDR'}
-                  </td>
                   <td className="p-3">
                     <Input
                       type="number"
@@ -120,10 +125,17 @@ export function DailyGoalsSettings({ initial }: DailyGoalsSettingsProps) {
         </p>
       )}
 
-      <Button onClick={handleSave} disabled={isPending}>
-        <Save className="mr-2 h-4 w-4" />
-        {isPending ? 'Salvando...' : 'Salvar Metas'}
-      </Button>
+      {/* Action buttons */}
+      <div className="flex items-center gap-3">
+        <Button onClick={handleSave} disabled={isPending}>
+          <Save className="mr-2 h-4 w-4" />
+          {isPending ? 'Salvando...' : 'Salvar'}
+        </Button>
+        <Button variant="outline" onClick={handleReset} disabled={isPending}>
+          <RotateCcw className="mr-2 h-4 w-4" />
+          Resetar
+        </Button>
+      </div>
     </div>
   );
 }

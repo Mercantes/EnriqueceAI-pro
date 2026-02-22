@@ -114,7 +114,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
       )}
 
       <div className="flex gap-6">
-        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} />
+        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} onEditRequest={() => setShowEditDialog(true)} />
         <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} />
       </div>
 
@@ -221,7 +221,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
       <EnrollInCadenceDialog
         open={showEnrollCadence}
         onOpenChange={setShowEnrollCadence}
-        leadId={lead.id}
+        leadIds={[lead.id]}
       />
     </div>
   );

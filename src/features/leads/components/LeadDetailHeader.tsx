@@ -29,7 +29,6 @@ import {
 
 import { updateLead } from '../actions/update-lead';
 import type { LeadRow } from '../types';
-import { LeadAvatar } from './LeadAvatar';
 
 interface LeadDetailHeaderProps {
   lead: LeadRow;
@@ -55,8 +54,10 @@ export function LeadDetailHeader({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const displayName = lead.nome_fantasia ?? lead.razao_social ?? '—';
-  const companyName = lead.razao_social ?? '';
+  const personName = lead.socios?.[0]?.nome ?? null;
+  const companyName = lead.nome_fantasia ?? lead.razao_social ?? null;
+  const primaryName = personName ?? companyName ?? '—';
+  const secondaryName = personName ? companyName : null;
 
   const handleStatusChange = useCallback((status: 'qualified' | 'unqualified') => {
     startTransition(async () => {
@@ -81,11 +82,10 @@ export function LeadDetailHeader({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <LeadAvatar name={displayName} size="lg" />
         <div>
-          <h1 className="text-xl font-bold">{displayName}</h1>
-          {lead.nome_fantasia && companyName && (
-            <p className="text-sm text-[var(--muted-foreground)]">{companyName}</p>
+          <h1 className="text-xl font-bold">{primaryName}</h1>
+          {secondaryName && (
+            <p className="text-sm text-[var(--muted-foreground)]">{secondaryName}</p>
           )}
         </div>
       </div>

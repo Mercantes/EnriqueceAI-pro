@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowLeft, LayoutList, Plus, Save, Sparkles, Trash2, UserPlus, Zap } from 'lucide-react';
+import { ArrowLeft, LayoutList, Plus, Save, Sparkles, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -33,7 +33,6 @@ import type { ChannelType, MessageTemplateRow } from '../types';
 import { activateCadence, addCadenceStep, removeCadenceStep, updateCadence } from '../actions/manage-cadences';
 import { createCadence } from '../actions/manage-cadences';
 import { channelConfig } from './ActivityTypeSidebar';
-import { EnrollLeadsDialog } from './EnrollLeadsDialog';
 import { EnrollmentsList } from './EnrollmentsList';
 
 interface CadenceBuilderProps {
@@ -50,7 +49,6 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }
   const [description, setDescription] = useState(cadence?.description ?? '');
   const [showAddStep, setShowAddStep] = useState(false);
   const [removeStepId, setRemoveStepId] = useState<string | null>(null);
-  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
 
   // New step form
   const [newChannel, setNewChannel] = useState<ChannelType>('email');
@@ -159,12 +157,6 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }
           <Button size="sm" variant="outline" onClick={() => router.push(`/cadences/${cadence.id}?view=timeline`)}>
             <LayoutList className="mr-2 h-4 w-4" />
             Timeline Builder
-          </Button>
-        )}
-        {cadence && cadence.status === 'active' && (
-          <Button size="sm" onClick={() => setShowEnrollDialog(true)}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Inscrever Leads
           </Button>
         )}
       </div>
@@ -366,15 +358,6 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Enroll leads dialog */}
-      {cadence && (
-        <EnrollLeadsDialog
-          open={showEnrollDialog}
-          onOpenChange={setShowEnrollDialog}
-          cadenceId={cadence.id}
-        />
-      )}
 
       {/* Remove step confirmation */}
       <Dialog open={!!removeStepId} onOpenChange={() => setRemoveStepId(null)}>

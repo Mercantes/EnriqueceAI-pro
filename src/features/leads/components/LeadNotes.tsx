@@ -14,9 +14,10 @@ import { updateLead } from '../actions/update-lead';
 interface LeadNotesProps {
   leadId: string;
   notes: string | null;
+  variant?: 'card' | 'inline';
 }
 
-export function LeadNotes({ leadId, notes }: LeadNotesProps) {
+export function LeadNotes({ leadId, notes, variant = 'card' }: LeadNotesProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [value, setValue] = useState(notes ?? '');
@@ -32,6 +33,29 @@ export function LeadNotes({ leadId, notes }: LeadNotesProps) {
         toast.error(result.error);
       }
     });
+  }
+
+  const inner = (
+    <>
+      <Textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Adicione notas sobre este lead..."
+        rows={4}
+        className="resize-y"
+      />
+      {isDirty && (
+        <div className="mt-2 flex justify-end">
+          <Button size="sm" onClick={handleSave} disabled={isPending}>
+            {isPending ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </div>
+      )}
+    </>
+  );
+
+  if (variant === 'inline') {
+    return <div className="space-y-1">{inner}</div>;
   }
 
   return (

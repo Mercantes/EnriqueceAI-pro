@@ -19,7 +19,7 @@ import { fetchActiveCadences } from '../actions/fetch-active-cadences';
 interface EnrollInCadenceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  leadId: string;
+  leadIds: string[];
 }
 
 interface ActiveCadence {
@@ -28,11 +28,14 @@ interface ActiveCadence {
   total_steps: number;
 }
 
-export function EnrollInCadenceDialog({ open, onOpenChange, leadId }: EnrollInCadenceDialogProps) {
+export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInCadenceDialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [cadences, setCadences] = useState<ActiveCadence[]>([]);
   const [loaded, setLoaded] = useState(false);
+
+  const count = leadIds.length;
+  const isBulk = count > 1;
 
   // Load cadences when dialog becomes visible
   if (open && !loaded && !isPending) {
@@ -55,10 +58,17 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadId }: EnrollInCa
 
   function handleEnroll(cadenceId: string) {
     startTransition(async () => {
-      const result = await enrollLeads(cadenceId, [leadId]);
+      const result = await enrollLeads(cadenceId, leadIds);
       if (result.success) {
         if (result.data.enrolled > 0) {
-          toast.success('Lead inscrito na cadência');
+          toast.success(
+            isBulk
+              ? `${result.data.enrolled} lead${result.data.enrolled > 1 ? 's' : ''} inscrito${result.data.enrolled > 1 ? 's' : ''} na cadência`
+              : 'Lead inscrito na cadência',
+          );
+          if (result.data.errors.length > 0) {
+            toast.warning(`${result.data.errors.length} erro(s) ao inscrever`);
+          }
         } else {
           toast.error(result.data.errors[0] ?? 'Erro ao inscrever');
         }
@@ -76,10 +86,12 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadId }: EnrollInCa
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5" />
-            Inscrever em Cadência
+            {isBulk ? `Atribuir ${count} leads a uma cadência` : 'Inscrever em Cadência'}
           </DialogTitle>
           <DialogDescription>
-            Selecione uma cadência ativa para inscrever este lead.
+            {isBulk
+              ? 'Selecione uma cadência ativa para inscrever os leads selecionados.'
+              : 'Selecione uma cadência ativa para inscrever este lead.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -103,9 +115,8 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadId }: EnrollInCa
                   onClick={() => handleEnroll(cadence.id)}
                 >
                   <div>
-                    <p className="text-sm font-medium">{cadence.name}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      {cadence.total_steps} passos
+                    <p className="text-sm font-medium">
+                      {cadence.name} ({cadence.total_steps} etapas)
                     </p>
                   </div>
                   <Zap className="h-4 w-4 text-[var(--muted-foreground)]" />
