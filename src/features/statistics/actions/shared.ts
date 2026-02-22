@@ -5,9 +5,6 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { OrgMember } from '../types/shared';
 
-// Re-export from centralized location for backwards compatibility
-export { getManagerOrgId } from '@/lib/auth/get-org-id';
-
 export async function fetchOrgMembers(): Promise<OrgMember[]> {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
