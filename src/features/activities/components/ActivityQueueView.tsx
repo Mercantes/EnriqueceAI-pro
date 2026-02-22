@@ -21,12 +21,14 @@ import {
 import { ActivityRow } from './ActivityRow';
 import { DailyGoalCard } from './DailyGoalCard';
 import { PendingCallsSection } from './PendingCallsSection';
+import { PowerDialerTab } from './PowerDialerTab';
 import { ProgressCard } from './ProgressCard';
 
 interface ActivityQueueViewProps {
   initialActivities: PendingActivity[];
   progress: DailyProgress;
   pendingCalls: PendingCallLead[];
+  showPowerDialer?: boolean;
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -70,7 +72,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
   });
 }
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, showPowerDialer = true }: ActivityQueueViewProps) {
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
@@ -148,24 +150,24 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls }:
         >
           Execução
         </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('dialer')}
-          className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
-            activeTab === 'dialer'
-              ? 'border-[var(--primary)] text-[var(--primary)]'
-              : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-          }`}
-        >
-          Power Dialer
-          <Badge variant="secondary" className="ml-2 text-xs">Em breve</Badge>
-        </button>
+        {showPowerDialer && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('dialer')}
+            className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+              activeTab === 'dialer'
+                ? 'border-[var(--primary)] text-[var(--primary)]'
+                : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+            }`}
+          >
+            Power Dialer
+            <Badge variant="secondary" className="ml-2 text-xs">Em breve</Badge>
+          </button>
+        )}
       </div>
 
-      {activeTab === 'dialer' ? (
-        <div className="flex items-center justify-center py-16 text-[var(--muted-foreground)]">
-          Power Dialer estará disponível em breve.
-        </div>
+      {activeTab === 'dialer' && showPowerDialer ? (
+        <PowerDialerTab />
       ) : (
         <>
           {/* Pending calls section */}
