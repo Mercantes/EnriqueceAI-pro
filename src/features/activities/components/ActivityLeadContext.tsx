@@ -121,7 +121,7 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps }
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1 border-b-2 px-2.5 pb-2 pt-1 text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1.5 border-b-2 px-3 pb-2 pt-1 text-xs font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.id
                   ? 'border-[var(--primary)] text-[var(--primary)]'
                   : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'

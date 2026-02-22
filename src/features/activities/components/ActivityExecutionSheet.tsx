@@ -134,7 +134,7 @@ export function ActivityExecutionSheet({
 
   return (
     <Sheet open={selectedIndex !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="sm:max-w-5xl w-full p-0 flex flex-col">
+      <SheetContent side="right" className="sm:max-w-full w-full p-0 flex flex-col">
         {/* Header with navigation */}
         <SheetHeader className="flex-row items-center justify-between border-b border-[var(--border)] px-6 py-4 space-y-0">
           <SheetTitle className="text-base font-semibold">
@@ -169,7 +169,7 @@ export function ActivityExecutionSheet({
         {activity && (
           <div className="flex flex-1 overflow-hidden">
             {/* Left — Lead Context with tabs */}
-            <div className="w-[320px] shrink-0 border-r border-[var(--border)] overflow-y-auto p-5">
+            <div className="w-[380px] shrink-0 border-r border-[var(--border)] overflow-y-auto p-5">
               <ActivityLeadContext
                 lead={activity.lead}
                 cadenceName={activity.cadenceName}
@@ -179,7 +179,7 @@ export function ActivityExecutionSheet({
             </div>
 
             {/* Right — Activity panel (adapts by type) */}
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className="flex-1 overflow-y-auto p-6">
               <ActivityExecutionSheetContent
                 key={activity.enrollmentId}
                 activity={activity}
