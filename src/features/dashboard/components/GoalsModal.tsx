@@ -115,7 +115,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0" showCloseButton={false}>
+      <DialogContent className="max-w-4xl gap-0 overflow-hidden p-0" showCloseButton={false}>
         {/* Banner header */}
         <div className="flex items-center justify-between bg-[var(--primary)] px-6 py-5">
           <h2 className="text-lg font-bold text-[var(--primary-foreground)]">
@@ -150,7 +150,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                   id="opportunity-target"
                   type="number"
                   min={0}
-                  className="w-32 text-right text-base"
+                  className="w-40 text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   value={opportunityTarget}
                   onChange={(e) => setOpportunityTarget(Number(e.target.value) || 0)}
                   aria-label="Meta de Oportunidades"
@@ -167,14 +167,14 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     Percentual dos leads finalizados no mês que a empresa espera transformar em oportunidades
                   </p>
                 </div>
-                <div className="relative w-32">
+                <div className="relative w-40">
                   <Input
                     id="conversion-target"
                     type="number"
                     min={0}
                     max={100}
                     step={0.1}
-                    className="pr-8 text-right text-base"
+                    className="pr-8 text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     value={conversionTarget}
                     onChange={(e) => setConversionTarget(Number(e.target.value) || 0)}
                     aria-label="Taxa de Conversão"
