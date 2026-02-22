@@ -25,7 +25,7 @@ export function ForgotPasswordForm() {
   );
 
   return (
-    <div className="w-full max-w-sm space-y-6">
+    <div className="mx-auto w-full max-w-sm space-y-6">
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-bold">Recuperar senha</h1>
         <p className="text-muted-foreground">
