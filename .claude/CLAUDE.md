@@ -33,10 +33,10 @@ pnpm format:check                 # Prettier check
 # Testing
 pnpm test                         # Vitest watch mode
 pnpm test:run                     # Vitest single run (CI)
-pnpm vitest run src/features/leads/schemas  # Run specific test file/dir
+pnpm exec vitest run path/to/test # Run specific test file/dir
 pnpm test:coverage                # Vitest with V8 coverage
 pnpm test:e2e                     # Playwright E2E tests
-pnpm test:e2e -- --ui             # Playwright with UI
+pnpm test:e2e:ui                  # Playwright with UI
 
 # Supabase (local)
 npx supabase start                # Start local Supabase
@@ -54,7 +54,7 @@ src/
 ├── app/                    # Next.js App Router
 │   ├── (app)/              # Authenticated routes (sidebar layout)
 │   ├── (auth)/             # Unauthenticated routes (centered card layout)
-│   ├── api/                # Webhooks, OAuth callbacks, cron, tracking
+│   ├── api/                # Webhooks, OAuth callbacks, cron, tracking, AI generation
 │   └── onboarding/         # Org setup wizard
 ├── features/               # Vertical slice feature modules
 │   ├── activities/         # SDR activity queue (Meetime-style)
@@ -62,11 +62,14 @@ src/
 │   ├── auth/               # Auth, org management, roles, onboarding
 │   ├── billing/            # Stripe checkout/portal, plan limits
 │   ├── cadences/           # Multi-channel outreach sequences
+│   ├── calls/              # Phone call tracking and management
 │   ├── dashboard/          # KPI metrics
 │   ├── integrations/       # CRM (HubSpot/Pipedrive/RD Station), Gmail, Calendar, WhatsApp
 │   ├── leads/              # CNPJ-based B2B leads, CSV import, enrichment
 │   ├── notifications/      # Realtime in-app notifications
 │   ├── reports/            # Cadence/SDR performance reports
+│   ├── settings-prospecting/ # Prospecting config (daily goals, loss reasons, fit score, blacklist, ABM)
+│   ├── statistics/         # Activity, conversion, calls, and team analytics
 │   └── templates/          # Email/WhatsApp message templates
 ├── shared/                 # Cross-feature UI components, schemas, types
 │   └── components/ui/      # shadcn/ui Radix-based primitives
@@ -76,12 +79,12 @@ src/
 
 ### Feature Module Convention
 
-Each feature follows this pattern:
+Each feature follows this pattern (not all features have every file):
 
 ```
 features/{name}/
 ├── index.ts                # Barrel export (public API)
-├── {name}.contract.ts      # TypeScript interface contracts
+├── {name}.contract.ts      # TypeScript interface contracts (when applicable)
 ├── types/index.ts          # Domain types
 ├── schemas/                # Zod validation schemas + colocated tests
 ├── actions/                # Server Actions ('use server')
@@ -98,15 +101,16 @@ All mutations use Next.js Server Actions (not API routes). Every action returns 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string; code?: string };
 ```
 
-Standard action structure: `requireAuth()` → Zod validation → Supabase query → return `ActionResult`. API routes are reserved for webhooks, OAuth callbacks, cron triggers, and tracking pixels.
+Standard action structure: `requireAuth()` → Zod validation → Supabase query → return `ActionResult`. API routes are reserved for webhooks, OAuth callbacks, cron triggers, tracking pixels, and AI generation endpoints.
 
-### Three Supabase Client Tiers
+### Supabase Client Tiers
 
 | Client | File | Usage |
 |--------|------|-------|
 | `createClient()` | `lib/supabase/client.ts` | Browser — cookie-based session |
 | `createServerSupabaseClient()` | `lib/supabase/server.ts` | RSCs, Server Actions, Route Handlers |
 | `createServiceRoleClient()` | `lib/supabase/service.ts` | Bypasses RLS — webhooks, cron, notifications |
+| `createAdminSupabaseClient()` | `lib/supabase/admin.ts` | Service role for reading `auth.users` data |
 
 ### Multi-Tenancy & Auth
 
@@ -140,21 +144,23 @@ vi.mock('@/lib/supabase/server', () => ({ createServerSupabaseClient: vi.fn() })
 
 ## Environment Variables
 
-Validated by Zod in `src/config/env.ts`. Key vars:
+Core vars validated by Zod in `src/config/env.ts`:
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)
 - `SUPABASE_SERVICE_ROLE_KEY` (for webhooks/cron)
 - `NEXT_PUBLIC_APP_URL` (defaults to `http://localhost:3000`)
 - `ANTHROPIC_API_KEY` (AI message generation)
-- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`
 - CRM OAuth pairs: `HUBSPOT_*`, `PIPEDRIVE_*`, `RDSTATION_*`, `GCAL_*`
 - `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`
+
+Additional vars used via `process.env` (not in Zod schema):
+- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`
 - `WHATSAPP_VERIFY_TOKEN` / `WHATSAPP_APP_SECRET`
 
 ## ESLint
 
 - Extends `eslint-config-next` + `eslint-config-prettier`
 - `no-console`: warn (allows `console.warn` and `console.error`)
-- Unused vars with `_` prefix are allowed
+- Unused vars with `_` prefix are allowed (rule severity: error)
 - Ignores: `.next/`, `node_modules/`, `supabase/functions/`, `.aios-core/`
 
 ## Database
@@ -244,30 +250,6 @@ docs/
 - Validate user responses
 - Provide helpful defaults
 
-## Best Practices
-
-### When implementing features:
-- Check existing patterns first
-- Reuse components and utilities
-- Follow naming conventions
-- Keep functions focused and testable
-
-### When working with agents:
-- Respect agent boundaries
-- Use appropriate agent for each task
-- Follow agent communication patterns
-- Maintain agent context
-
-### When handling errors:
-```javascript
-try {
-  // Operation
-} catch (error) {
-  console.error(`Error in ${operation}:`, error);
-  throw new Error(`Failed to ${operation}: ${error.message}`);
-}
-```
-
 ## Git & GitHub Integration
 
 ### Commit Conventions
@@ -306,20 +288,6 @@ await story.save();
 ```
 <!-- AIOS-MANAGED-END: aios-patterns -->
 
-## Environment Setup
-
-### Required Tools
-- Node.js 22+
-- pnpm 10+
-- Supabase CLI
-- GitHub CLI
-- Git
-
-### Configuration Files
-- `.aios-core/core-config.yaml` - Framework configuration
-- `.env` / `.env.local` - Environment variables
-- `supabase/config.toml` - Supabase local dev config
-
 <!-- AIOS-MANAGED-START: common-commands -->
 ## Common Commands
 
@@ -336,59 +304,11 @@ await story.save();
 - `npm run build` - Build project
 <!-- AIOS-MANAGED-END: common-commands -->
 
-## Debugging
+## Configuration Files
 
-### Enable Debug Mode
-```bash
-export AIOS_DEBUG=true
-```
-
-### View Agent Logs
-```bash
-tail -f .aios/logs/agent.log
-```
-
-### Trace Workflow Execution
-```bash
-npm run trace -- workflow-name
-```
-
-## Claude Code Specific Configuration
-
-### Performance Optimization
-- Prefer batched tool calls when possible for better performance
-- Use parallel execution for independent operations
-- Cache frequently accessed data in memory during sessions
-
-### Tool Usage Guidelines
-- Always use the Grep tool for searching, never `grep` or `rg` in bash
-- Use the Task tool for complex multi-step operations
-- Batch file reads/writes when processing multiple files
-- Prefer editing existing files over creating new ones
-
-### Session Management
-- Track story progress throughout the session
-- Update checkboxes immediately after completing tasks
-- Maintain context of the current story being worked on
-- Save important state before long-running operations
-
-### Error Recovery
-- Always provide recovery suggestions for failures
-- Include error context in messages to user
-- Suggest rollback procedures when appropriate
-- Document any manual fixes required
-
-### Testing Strategy
-- Run tests incrementally during development
-- Always verify lint and typecheck before marking complete
-- Test edge cases for each new feature
-- Document test scenarios in story files
-
-### Documentation
-- Update relevant docs when changing functionality
-- Include code examples in documentation
-- Keep README synchronized with actual behavior
-- Document breaking changes prominently
+- `.aios-core/core-config.yaml` - AIOS framework configuration
+- `.env` / `.env.local` - Environment variables
+- `supabase/config.toml` - Supabase local dev config
 
 ## Behavioral Rules
 
@@ -413,6 +333,3 @@ npm run trace -- workflow-name
 - Investigate root cause when error persists
 - Commit before moving to next task
 - Create handoff in `docs/sessions/YYYY-MM/` at end of session
-
----
-*Synkra AIOS Claude Code Configuration v3.0*

@@ -28,8 +28,13 @@ describe('lead schemas', () => {
   });
 
   describe('createLeadSchema', () => {
-    it('should accept valid input with only CNPJ', () => {
-      const result = createLeadSchema.safeParse({ cnpj: '11222333000181' });
+    const validUserId = '550e8400-e29b-41d4-a716-446655440000';
+
+    it('should accept valid input with only CNPJ and assigned_to', () => {
+      const result = createLeadSchema.safeParse({
+        cnpj: '11222333000181',
+        assigned_to: validUserId,
+      });
       expect(result.success).toBe(true);
     });
 
@@ -38,14 +43,47 @@ describe('lead schemas', () => {
         cnpj: '11.222.333/0001-81',
         razao_social: 'Test Company Ltda',
         nome_fantasia: 'TestCo',
+        email: 'contato@empresa.com',
+        telefone: '11999999999',
+        assigned_to: validUserId,
+        cadence_id: '660e8400-e29b-41d4-a716-446655440000',
+        enrollment_mode: 'paused',
       });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.cnpj).toBe('11222333000181');
+      if (result.success) {
+        expect(result.data.cnpj).toBe('11222333000181');
+        expect(result.data.enrollment_mode).toBe('paused');
+      }
     });
 
     it('should reject without CNPJ', () => {
-      const result = createLeadSchema.safeParse({});
+      const result = createLeadSchema.safeParse({ assigned_to: validUserId });
       expect(result.success).toBe(false);
+    });
+
+    it('should reject without assigned_to', () => {
+      const result = createLeadSchema.safeParse({ cnpj: '11222333000181' });
+      expect(result.success).toBe(false);
+    });
+
+    it('should default enrollment_mode to immediate', () => {
+      const result = createLeadSchema.safeParse({
+        cnpj: '11222333000181',
+        assigned_to: validUserId,
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.enrollment_mode).toBe('immediate');
+    });
+
+    it('should accept empty string for optional email and telefone', () => {
+      const result = createLeadSchema.safeParse({
+        cnpj: '11222333000181',
+        assigned_to: validUserId,
+        email: '',
+        telefone: '',
+        cadence_id: '',
+      });
+      expect(result.success).toBe(true);
     });
   });
 
@@ -55,7 +93,7 @@ describe('lead schemas', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.page).toBe(1);
-        expect(result.data.per_page).toBe(20);
+        expect(result.data.per_page).toBe(25);
       }
     });
 

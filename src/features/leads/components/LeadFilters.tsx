@@ -85,7 +85,7 @@ export function LeadFilters() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--muted-foreground)]" />
           <Input
-            placeholder="Buscar por razão social, nome fantasia ou CNPJ..."
+            placeholder="Buscar lead..."
             className="pl-8"
             defaultValue={currentSearch}
             onKeyDown={(e) => {

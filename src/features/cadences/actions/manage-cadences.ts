@@ -202,6 +202,7 @@ export async function removeCadenceStep(
 export async function enrollLeads(
   cadenceId: string,
   leadIds: string[],
+  initialStatus: 'active' | 'paused' = 'active',
 ): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
   const { orgId, userId, supabase } = await getAuthOrgId();
 
@@ -232,7 +233,7 @@ export async function enrollLeads(
         cadence_id: cadenceId,
         lead_id: leadId,
         current_step: 1,
-        status: 'active',
+        status: initialStatus,
         enrolled_by: userId,
       } as Record<string, unknown>);
 

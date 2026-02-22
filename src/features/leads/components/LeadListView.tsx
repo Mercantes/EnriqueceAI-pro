@@ -1,13 +1,15 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { FileUp, Users } from 'lucide-react';
+import { FileUp, Plus, Users } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { EmptyState } from '@/shared/components/EmptyState';
 
 import type { LeadListResult } from '../leads.contract';
+import type { LeadCadenceInfo } from '../types';
+import { CreateLeadDialog } from './CreateLeadDialog';
 import { LeadFilters } from './LeadFilters';
 import { LeadPagination } from './LeadPagination';
 import { LeadTable } from './LeadTable';
@@ -15,9 +17,12 @@ import { LeadTable } from './LeadTable';
 interface LeadListViewProps {
   result: LeadListResult;
   hasFilters: boolean;
+  cadenceInfo: Record<string, LeadCadenceInfo>;
+  currentUserId: string;
 }
 
-export function LeadListView({ result, hasFilters }: LeadListViewProps) {
+export function LeadListView({ result, hasFilters, cadenceInfo, currentUserId }: LeadListViewProps) {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const { data: leads, total, page, per_page } = result;
 
   // Empty state: no leads at all
@@ -38,16 +43,23 @@ export function LeadListView({ result, hasFilters }: LeadListViewProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Leads</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)]">
+            <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
             {total} lead{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/leads/import">
-            <FileUp className="mr-2 h-4 w-4" />
-            Importar CSV
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline">
+            <Link href="/leads/import">
+              <FileUp className="mr-2 h-4 w-4" />
+              Listas de importação
+            </Link>
+          </Button>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Adicionar
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -61,13 +73,15 @@ export function LeadListView({ result, hasFilters }: LeadListViewProps) {
           Nenhum lead encontrado com os filtros aplicados.
         </div>
       ) : (
-        <LeadTable leads={leads} />
+        <LeadTable leads={leads} cadenceInfo={cadenceInfo} />
       )}
 
       {/* Pagination */}
       <Suspense>
         <LeadPagination total={total} page={page} perPage={per_page} />
       </Suspense>
+
+      <CreateLeadDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} currentUserId={currentUserId} />
     </div>
   );
 }

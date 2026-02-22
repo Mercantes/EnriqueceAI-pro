@@ -122,7 +122,7 @@ describe('fetchLeads', () => {
       expect(result.data.data).toHaveLength(2);
       expect(result.data.total).toBe(2);
       expect(result.data.page).toBe(1);
-      expect(result.data.per_page).toBe(20);
+      expect(result.data.per_page).toBe(25);
     }
   });
 

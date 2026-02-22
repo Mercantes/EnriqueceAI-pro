@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { EmptyState } from '@/shared/components/EmptyState';
 
 import { fetchLeads } from '@/features/leads/actions/fetch-leads';
+import { fetchLeadsCadenceInfo } from '@/features/leads/actions/fetch-leads-cadence-info';
 import { LeadListView } from '@/features/leads/components/LeadListView';
 
 interface LeadsPageProps {
@@ -12,7 +13,7 @@ interface LeadsPageProps {
 }
 
 export default async function LeadsPage({ searchParams }: LeadsPageProps) {
-  await requireAuth();
+  const user = await requireAuth();
 
   const params = await searchParams;
 
@@ -25,6 +26,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   if (params.uf) filters.uf = params.uf;
   if (params.search) filters.search = params.search;
   if (params.page) filters.page = params.page;
+  if (params.per_page) filters.per_page = params.per_page;
   if (params.sort_by) filters.sort_by = params.sort_by;
   if (params.sort_dir) filters.sort_dir = params.sort_dir;
 
@@ -42,5 +44,17 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
     );
   }
 
-  return <LeadListView result={result.data} hasFilters={hasFilters} />;
+  // Fetch cadence info in parallel for all returned leads
+  const leadIds = result.data.data.map((l) => l.id);
+  const cadenceResult = await fetchLeadsCadenceInfo(leadIds);
+  const cadenceInfo = cadenceResult.success ? cadenceResult.data : {};
+
+  return (
+    <LeadListView
+      result={result.data}
+      hasFilters={hasFilters}
+      cadenceInfo={cadenceInfo}
+      currentUserId={user.id}
+    />
+  );
 }

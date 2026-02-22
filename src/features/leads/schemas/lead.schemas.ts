@@ -30,6 +30,11 @@ export const createLeadSchema = z.object({
   cnpj: cnpjSchema,
   razao_social: z.string().min(1).optional(),
   nome_fantasia: z.string().min(1).optional(),
+  email: z.string().email('Email inválido').optional().or(z.literal('')),
+  telefone: z.string().min(1).optional().or(z.literal('')),
+  assigned_to: z.string().uuid('Responsável inválido'),
+  cadence_id: z.string().uuid('Cadência inválida').optional().or(z.literal('')),
+  enrollment_mode: z.enum(['immediate', 'paused']).default('immediate'),
 });
 
 export const leadFiltersSchema = z.object({
@@ -42,7 +47,7 @@ export const leadFiltersSchema = z.object({
   sort_by: z.enum(['created_at', 'fit_score']).default('created_at'),
   sort_dir: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().positive().default(1),
-  per_page: z.coerce.number().int().positive().max(100).default(20),
+  per_page: z.coerce.number().int().positive().max(100).default(25),
 });
 
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
