@@ -7,7 +7,7 @@ export default function AuthLayout({
 }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted">
-      <div className="w-full max-w-md px-4 py-8">
+      <div className="w-full max-w-md rounded-2xl border bg-background px-8 py-10 shadow-sm">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={56} height={56} className="rounded-full" />
           <h2 className="text-3xl font-bold tracking-tight">Enriquece AI</h2>
