@@ -115,7 +115,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0" showCloseButton={false}>
+      <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0" showCloseButton={false}>
         {/* Banner header */}
         <div className="flex items-center justify-between bg-[var(--primary)] px-6 py-5">
           <h2 className="text-lg font-bold text-[var(--primary-foreground)]">
