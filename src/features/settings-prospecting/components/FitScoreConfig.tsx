@@ -91,7 +91,7 @@ export function FitScoreConfig({ initial }: FitScoreConfigProps) {
           id: r.id,
           points: r.points,
           field: r.field,
-          operator: r.operator,
+          operator: r.operator as 'contains' | 'equals' | 'not_empty' | 'starts_with',
           value: r.operator === 'not_empty' ? null : (r.value ?? null),
         })),
       );
