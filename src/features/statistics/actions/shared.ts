@@ -5,6 +5,22 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { OrgMember } from '../types/shared';
 
+export async function getManagerOrgId(): Promise<{ orgId: string }> {
+  const user = await requireManager();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) throw new Error('Organização não encontrada');
+
+  return { orgId: member.org_id };
+}
+
 export async function fetchOrgMembers(): Promise<OrgMember[]> {
   const user = await requireManager();
   const supabase = await createServerSupabaseClient();
