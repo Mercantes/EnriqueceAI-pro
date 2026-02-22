@@ -25,7 +25,7 @@ COMMENT ON TABLE daily_activity_goals IS 'Daily activity targets. user_id NULL =
 -- updated_at trigger
 CREATE TRIGGER set_daily_activity_goals_updated_at
   BEFORE UPDATE ON daily_activity_goals
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- RLS
 ALTER TABLE daily_activity_goals ENABLE ROW LEVEL SECURITY;

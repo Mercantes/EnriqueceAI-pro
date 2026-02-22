@@ -1,3 +1,170 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**Flux** is a B2B Sales Engagement platform for Brazilian sales teams. It manages leads (identified by CNPJ), multi-channel outreach cadences (email + WhatsApp), AI-powered message generation, CRM integrations, and billing via Stripe.
+
+## Tech Stack
+
+- **Framework:** Next.js 16+ (App Router, React 19)
+- **Language:** TypeScript (strict mode, `noUncheckedIndexedAccess` enabled — array indexing returns `T | undefined`)
+- **BaaS:** Supabase (Auth, PostgreSQL 17, Realtime, Edge Functions)
+- **Styling:** Tailwind CSS v4 + shadcn/ui (Radix primitives)
+- **Testing:** Vitest + Testing Library + Playwright (E2E)
+- **Package Manager:** pnpm (required, v10+)
+- **Node:** >= 22.0.0
+- **AI:** Claude Sonnet via direct Anthropic API calls
+- **Monitoring:** Sentry (client + server + edge)
+
+## Commands
+
+```bash
+# Development
+pnpm dev                          # Start Next.js dev server
+pnpm build                        # Production build
+pnpm typecheck                    # TypeScript type checking (tsc --noEmit)
+pnpm lint                         # ESLint (src/ only)
+pnpm lint:fix                     # ESLint autofix
+pnpm format                       # Prettier format
+pnpm format:check                 # Prettier check
+
+# Testing
+pnpm test                         # Vitest watch mode
+pnpm test:run                     # Vitest single run (CI)
+pnpm vitest run src/features/leads/schemas  # Run specific test file/dir
+pnpm test:coverage                # Vitest with V8 coverage
+pnpm test:e2e                     # Playwright E2E tests
+pnpm test:e2e -- --ui             # Playwright with UI
+
+# Supabase (local)
+npx supabase start                # Start local Supabase
+npx supabase stop                 # Stop local Supabase
+npx supabase db reset             # Reset DB + run all migrations + seed
+npx supabase migration new <name> # Create new migration file
+```
+
+## Architecture
+
+### Source Structure
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (app)/              # Authenticated routes (sidebar layout)
+│   ├── (auth)/             # Unauthenticated routes (centered card layout)
+│   ├── api/                # Webhooks, OAuth callbacks, cron, tracking
+│   └── onboarding/         # Org setup wizard
+├── features/               # Vertical slice feature modules
+│   ├── activities/         # SDR activity queue (Meetime-style)
+│   ├── ai/                 # Claude Sonnet message generation
+│   ├── auth/               # Auth, org management, roles, onboarding
+│   ├── billing/            # Stripe checkout/portal, plan limits
+│   ├── cadences/           # Multi-channel outreach sequences
+│   ├── dashboard/          # KPI metrics
+│   ├── integrations/       # CRM (HubSpot/Pipedrive/RD Station), Gmail, Calendar, WhatsApp
+│   ├── leads/              # CNPJ-based B2B leads, CSV import, enrichment
+│   ├── notifications/      # Realtime in-app notifications
+│   ├── reports/            # Cadence/SDR performance reports
+│   └── templates/          # Email/WhatsApp message templates
+├── shared/                 # Cross-feature UI components, schemas, types
+│   └── components/ui/      # shadcn/ui Radix-based primitives
+├── lib/                    # Infrastructure (supabase clients, auth guards, security)
+└── config/                 # Zod-validated env schema
+```
+
+### Feature Module Convention
+
+Each feature follows this pattern:
+
+```
+features/{name}/
+├── index.ts                # Barrel export (public API)
+├── {name}.contract.ts      # TypeScript interface contracts
+├── types/index.ts          # Domain types
+├── schemas/                # Zod validation schemas + colocated tests
+├── actions/                # Server Actions ('use server')
+├── services/               # Business logic
+├── components/             # React components
+└── hooks/                  # Client-side React hooks
+```
+
+### Server Actions Pattern
+
+All mutations use Next.js Server Actions (not API routes). Every action returns `ActionResult<T>`:
+
+```typescript
+type ActionResult<T> = { success: true; data: T } | { success: false; error: string; code?: string };
+```
+
+Standard action structure: `requireAuth()` → Zod validation → Supabase query → return `ActionResult`. API routes are reserved for webhooks, OAuth callbacks, cron triggers, and tracking pixels.
+
+### Three Supabase Client Tiers
+
+| Client | File | Usage |
+|--------|------|-------|
+| `createClient()` | `lib/supabase/client.ts` | Browser — cookie-based session |
+| `createServerSupabaseClient()` | `lib/supabase/server.ts` | RSCs, Server Actions, Route Handlers |
+| `createServiceRoleClient()` | `lib/supabase/service.ts` | Bypasses RLS — webhooks, cron, notifications |
+
+### Multi-Tenancy & Auth
+
+- **Tenant isolation via RLS**: Every table has org-scoped policies. `user_org_id()` and `is_manager()` are the PostgreSQL RLS primitives.
+- **Two roles**: `manager` and `sdr`. Manager-only pages use `requireManager()` guard.
+- **Middleware** (`src/middleware.ts`): CSRF origin check, session refresh, auth redirects, onboarding gate.
+- **Auth guards**: `requireAuth()` and `requireManager()` in `lib/auth/`.
+
+### Realtime
+
+`OrganizationProvider` and `NotificationProvider` subscribe to Supabase `postgres_changes` for live updates. Used in the `(app)` layout.
+
+### Path Aliases
+
+- `@/*` → `./src/*`
+- `@tests/*` → `./tests/*`
+
+## Testing
+
+- **Unit tests**: Colocated with source in `src/features/**/*.test.{ts,tsx}`
+- **Test infra**: `tests/setup.ts` (jest-dom matchers), `tests/mocks/supabase.ts` (vi.fn() mocks), `tests/mocks/server.ts` (MSW)
+- **RLS integration tests**: `tests/integration/rls-policies.test.ts` — auto-skipped when Supabase isn't running
+- **E2E tests**: `e2e/*.spec.ts` — Playwright
+
+### Supabase Mocking Pattern
+
+```typescript
+vi.mock('@/lib/supabase/server', () => ({ createServerSupabaseClient: vi.fn() }));
+// Then in tests: vi.mocked(createServerSupabaseClient).mockResolvedValue(mockSupabase);
+```
+
+## Environment Variables
+
+Validated by Zod in `src/config/env.ts`. Key vars:
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)
+- `SUPABASE_SERVICE_ROLE_KEY` (for webhooks/cron)
+- `NEXT_PUBLIC_APP_URL` (defaults to `http://localhost:3000`)
+- `ANTHROPIC_API_KEY` (AI message generation)
+- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`
+- CRM OAuth pairs: `HUBSPOT_*`, `PIPEDRIVE_*`, `RDSTATION_*`, `GCAL_*`
+- `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`
+- `WHATSAPP_VERIFY_TOKEN` / `WHATSAPP_APP_SECRET`
+
+## ESLint
+
+- Extends `eslint-config-next` + `eslint-config-prettier`
+- `no-console`: warn (allows `console.warn` and `console.error`)
+- Unused vars with `_` prefix are allowed
+- Ignores: `.next/`, `node_modules/`, `supabase/functions/`, `.aios-core/`
+
+## Database
+
+Migrations in `supabase/migrations/`. Rollbacks in `supabase/rollbacks/`. Edge functions in `supabase/functions/` (Deno runtime — excluded from TypeScript compilation).
+
+Key tables: `organizations`, `organization_members`, `leads`, `cadences`, `cadence_steps`, `cadence_enrollments`, `interactions`, `message_templates`, `subscriptions`, `plans`, `ai_usage`, `whatsapp_credits`, `notifications`.
+
+---
+
 # Synkra AIOS Development Rules for Claude Code
 
 You are working with Synkra AIOS, an AI-Orchestrated System for Full Stack Development.
@@ -32,18 +199,15 @@ When an agent is active:
 4. **Follow criteria** - Implement exactly what the acceptance criteria specify
 
 ### Code Standards
-- Write clean, self-documenting code
 - Follow existing patterns in the codebase
-- Include comprehensive error handling
-- Add unit tests for all new functionality
-- Use TypeScript/JavaScript best practices
+- Use the feature module convention (contract → types → schemas → actions → services → components)
+- Use TypeScript strict mode — handle `T | undefined` from indexed access
 
 ### Testing Requirements
 - Run all tests before marking tasks complete
-- Ensure linting passes: `npm run lint`
-- Verify type checking: `npm run typecheck`
-- Add tests for new features
-- Test edge cases and error scenarios
+- Ensure linting passes: `pnpm lint`
+- Verify type checking: `pnpm typecheck`
+- Add tests for new features (colocated in the feature's `schemas/` or alongside actions)
 
 <!-- AIOS-MANAGED-START: framework-structure -->
 ## AIOS Framework Structure
@@ -87,7 +251,6 @@ docs/
 - Reuse components and utilities
 - Follow naming conventions
 - Keep functions focused and testable
-- Document complex logic
 
 ### When working with agents:
 - Respect agent boundaries
@@ -101,7 +264,6 @@ try {
   // Operation
 } catch (error) {
   console.error(`Error in ${operation}:`, error);
-  // Provide helpful error message
   throw new Error(`Failed to ${operation}: ${error.message}`);
 }
 ```
@@ -147,15 +309,16 @@ await story.save();
 ## Environment Setup
 
 ### Required Tools
-- Node.js 18+
+- Node.js 22+
+- pnpm 10+
+- Supabase CLI
 - GitHub CLI
 - Git
-- Your preferred package manager (npm/yarn/pnpm)
 
 ### Configuration Files
-- `.aios/config.yaml` - Framework configuration
-- `.env` - Environment variables
-- `aios.config.js` - Project-specific settings
+- `.aios-core/core-config.yaml` - Framework configuration
+- `.env` / `.env.local` - Environment variables
+- `supabase/config.toml` - Supabase local dev config
 
 <!-- AIOS-MANAGED-START: common-commands -->
 ## Common Commands
@@ -227,5 +390,29 @@ npm run trace -- workflow-name
 - Keep README synchronized with actual behavior
 - Document breaking changes prominently
 
+## Behavioral Rules
+
+### NEVER
+- Implement without showing options first (always 1, 2, 3 format)
+- Delete/remove content without asking first
+- Delete anything created in the last 7 days without explicit approval
+- Change something that was already working
+- Pretend work is done when it isn't
+- Process batch without validating one first
+- Add features that weren't requested
+- Use mock data when real data exists in database
+- Explain/justify when receiving criticism (just fix)
+- Trust AI/subagent output without verification
+- Create from scratch when similar exists in squads/
+
+### ALWAYS
+- Present options as "1. X, 2. Y, 3. Z" format
+- Use AskUserQuestion tool for clarifications
+- Check squads/ and existing components before creating new
+- Read COMPLETE schema before proposing database changes
+- Investigate root cause when error persists
+- Commit before moving to next task
+- Create handoff in `docs/sessions/YYYY-MM/` at end of session
+
 ---
-*Synkra AIOS Claude Code Configuration v2.0*
+*Synkra AIOS Claude Code Configuration v3.0*

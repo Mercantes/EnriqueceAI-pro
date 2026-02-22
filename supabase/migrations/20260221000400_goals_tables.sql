@@ -49,8 +49,8 @@ CREATE POLICY "goals_per_user_org_access" ON goals_per_user
 -- 5. Updated_at trigger (reuse existing pattern)
 CREATE TRIGGER set_goals_updated_at
   BEFORE UPDATE ON goals
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 CREATE TRIGGER set_goals_per_user_updated_at
   BEFORE UPDATE ON goals_per_user
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();

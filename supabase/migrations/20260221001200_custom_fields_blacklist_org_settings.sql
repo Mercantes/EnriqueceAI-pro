@@ -32,7 +32,7 @@ CREATE POLICY custom_fields_insert ON custom_fields
   FOR INSERT WITH CHECK (
     org_id IN (
       SELECT org_id FROM organization_members
-      WHERE user_id = auth.uid() AND status = 'active' AND role IN ('owner', 'manager')
+      WHERE user_id = auth.uid() AND status = 'active' AND role = 'manager'
     )
   );
 
@@ -40,7 +40,7 @@ CREATE POLICY custom_fields_update ON custom_fields
   FOR UPDATE USING (
     org_id IN (
       SELECT org_id FROM organization_members
-      WHERE user_id = auth.uid() AND status = 'active' AND role IN ('owner', 'manager')
+      WHERE user_id = auth.uid() AND status = 'active' AND role = 'manager'
     )
   );
 
@@ -48,7 +48,7 @@ CREATE POLICY custom_fields_delete ON custom_fields
   FOR DELETE USING (
     org_id IN (
       SELECT org_id FROM organization_members
-      WHERE user_id = auth.uid() AND status = 'active' AND role IN ('owner', 'manager')
+      WHERE user_id = auth.uid() AND status = 'active' AND role = 'manager'
     )
   );
 
@@ -81,7 +81,7 @@ CREATE POLICY email_blacklist_insert ON email_blacklist
   FOR INSERT WITH CHECK (
     org_id IN (
       SELECT org_id FROM organization_members
-      WHERE user_id = auth.uid() AND status = 'active' AND role IN ('owner', 'manager')
+      WHERE user_id = auth.uid() AND status = 'active' AND role = 'manager'
     )
   );
 
@@ -89,7 +89,7 @@ CREATE POLICY email_blacklist_delete ON email_blacklist
   FOR DELETE USING (
     org_id IN (
       SELECT org_id FROM organization_members
-      WHERE user_id = auth.uid() AND status = 'active' AND role IN ('owner', 'manager')
+      WHERE user_id = auth.uid() AND status = 'active' AND role = 'manager'
     )
   );
 
