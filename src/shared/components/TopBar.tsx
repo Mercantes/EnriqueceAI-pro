@@ -42,7 +42,7 @@ export const navSections: NavSection[] = [
     label: 'Prospecção',
     items: [
       { label: 'Execução', href: '/atividades' },
-      { label: 'Atividades', href: '/atividades' },
+      { label: 'Atividades', href: '/activities' },
       { label: 'Cadências', href: '/cadences' },
       { label: 'Leads', href: '/leads' },
       { label: 'Ajustes', href: '/settings' },
@@ -50,11 +50,14 @@ export const navSections: NavSection[] = [
   },
   {
     label: 'Ligações',
-    placeholder: 'Em breve',
+    items: [{ label: 'Lista', href: '/calls' }],
   },
   {
     label: 'Estatísticas',
-    placeholder: 'Em breve',
+    items: [
+      { label: 'Insights', href: '/statistics' },
+      { label: 'Relatórios', href: '/reports' },
+    ],
   },
 ];
 
