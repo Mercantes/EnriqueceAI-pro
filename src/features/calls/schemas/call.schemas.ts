@@ -1,0 +1,44 @@
+import { z } from 'zod';
+
+export const callStatusValues = ['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'] as const;
+export const callTypeValues = ['inbound', 'outbound', 'manual'] as const;
+
+export const callStatusSchema = z.enum(callStatusValues);
+export const callTypeSchema = z.enum(callTypeValues);
+
+export const createCallSchema = z.object({
+  origin: z.string().min(1, 'Origem é obrigatória'),
+  destination: z.string().min(1, 'Destino é obrigatório'),
+  started_at: z.string().optional(),
+  duration_seconds: z.coerce.number().int().min(0).default(0),
+  status: callStatusSchema.default('not_connected'),
+  type: callTypeSchema.default('outbound'),
+  notes: z.string().optional(),
+  lead_id: z.string().uuid().optional(),
+});
+
+export const updateCallStatusSchema = z.object({
+  id: z.string().uuid(),
+  status: callStatusSchema,
+});
+
+export const callFiltersSchema = z.object({
+  search: z.string().optional(),
+  status: callStatusSchema.optional(),
+  user_id: z.string().uuid().optional(),
+  period: z.enum(['today', 'week', 'month', 'all']).default('all'),
+  favorites_only: z.coerce.boolean().default(false),
+  important_only: z.coerce.boolean().default(false),
+  page: z.coerce.number().int().positive().default(1),
+  per_page: z.coerce.number().int().positive().max(100).default(20),
+});
+
+export const addFeedbackSchema = z.object({
+  call_id: z.string().uuid(),
+  content: z.string().min(1, 'Conteúdo é obrigatório'),
+});
+
+export type CreateCallInput = z.infer<typeof createCallSchema>;
+export type UpdateCallStatusInput = z.infer<typeof updateCallStatusSchema>;
+export type CallFilters = z.infer<typeof callFiltersSchema>;
+export type AddFeedbackInput = z.infer<typeof addFeedbackSchema>;

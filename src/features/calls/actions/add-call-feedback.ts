@@ -1,0 +1,36 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireAuth } from '@/lib/auth/require-auth';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+import type { CallFeedbackRow } from '../types';
+import { addFeedbackSchema } from '../schemas/call.schemas';
+
+export async function addCallFeedback(
+  rawInput: Record<string, unknown>,
+): Promise<ActionResult<CallFeedbackRow>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const parsed = addFeedbackSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
+  }
+
+  const { data, error } = (await (supabase
+    .from('call_feedback' as never) as ReturnType<typeof supabase.from>)
+    .insert({
+      call_id: parsed.data.call_id,
+      user_id: user.id,
+      content: parsed.data.content,
+    })
+    .select()
+    .single()) as { data: CallFeedbackRow | null; error: { message: string } | null };
+
+  if (error || !data) {
+    return { success: false, error: 'Erro ao adicionar feedback' };
+  }
+
+  return { success: true, data };
+}

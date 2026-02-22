@@ -1,0 +1,288 @@
+'use client';
+
+import { useCallback, useState, useTransition } from 'react';
+import { Clock, DollarSign, Mic, Phone, Send, User } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/shared/components/ui/sheet';
+import { Separator } from '@/shared/components/ui/separator';
+import { Textarea } from '@/shared/components/ui/textarea';
+
+import type { CallDetail, CallFeedbackRow, CallStatus } from '../types';
+import { callStatusValues } from '../schemas/call.schemas';
+import { addCallFeedback } from '../actions/add-call-feedback';
+import { updateCallStatus } from '../actions/update-call-status';
+import { CallStatusIcon } from './CallStatusIcon';
+
+const statusLabels: Record<string, string> = {
+  significant: 'Significativa',
+  not_significant: 'Não Significativa',
+  no_contact: 'Sem Contato',
+  busy: 'Ocupado',
+  not_connected: 'Não Conectada',
+};
+
+const typeLabels: Record<string, string> = {
+  inbound: 'Recebida',
+  outbound: 'Realizada',
+  manual: 'Manual',
+};
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+interface CallDetailModalProps {
+  call: CallDetail | null;
+  open: boolean;
+  onClose: () => void;
+  onUpdated?: () => void;
+}
+
+export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailModalProps) {
+  const [feedbackContent, setFeedbackContent] = useState('');
+  const [feedbackList, setFeedbackList] = useState<CallFeedbackRow[]>([]);
+  const [currentStatus, setCurrentStatus] = useState<CallStatus | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  // Sync state when call changes
+  const activeCall = call;
+  const displayFeedback = feedbackList.length > 0 ? feedbackList : (activeCall?.feedback ?? []);
+  const displayStatus = currentStatus ?? activeCall?.status ?? 'not_connected';
+
+  const handleStatusChange = useCallback(
+    (newStatus: string) => {
+      if (!activeCall) return;
+      setCurrentStatus(newStatus as CallStatus);
+      startTransition(async () => {
+        const result = await updateCallStatus({
+          id: activeCall.id,
+          status: newStatus,
+        });
+        if (result.success) {
+          toast.success('Status atualizado');
+          onUpdated?.();
+        } else {
+          toast.error(result.error);
+          setCurrentStatus(null);
+        }
+      });
+    },
+    [activeCall, onUpdated],
+  );
+
+  const handleAddFeedback = useCallback(() => {
+    if (!activeCall || !feedbackContent.trim()) return;
+    startTransition(async () => {
+      const result = await addCallFeedback({
+        call_id: activeCall.id,
+        content: feedbackContent.trim(),
+      });
+      if (result.success) {
+        setFeedbackList((prev) => {
+          const base = prev.length > 0 ? prev : (activeCall.feedback ?? []);
+          return [...base, result.data];
+        });
+        setFeedbackContent('');
+        toast.success('Feedback adicionado');
+        onUpdated?.();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [activeCall, feedbackContent, onUpdated]);
+
+  const handleOpenChange = useCallback(
+    (isOpen: boolean) => {
+      if (!isOpen) {
+        setFeedbackContent('');
+        setFeedbackList([]);
+        setCurrentStatus(null);
+        onClose();
+      }
+    },
+    [onClose],
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent side="right" className="sm:max-w-lg w-full p-0 flex flex-col">
+        <SheetHeader className="border-b px-6 py-4 space-y-0">
+          <SheetTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            Detalhes da Ligação
+          </SheetTitle>
+        </SheetHeader>
+
+        {activeCall && (
+          <div className="flex-1 overflow-y-auto">
+            {/* Audio Player Placeholder */}
+            <div className="border-b px-6 py-4">
+              <div className="flex items-center gap-3 rounded-lg bg-[var(--muted)] p-4">
+                <Mic className="h-5 w-5 text-[var(--muted-foreground)]" />
+                <div className="flex-1">
+                  <div className="h-2 rounded-full bg-[var(--border)]">
+                    <div className="h-2 w-0 rounded-full bg-[var(--primary)]" />
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                    Gravação não disponível — integração VoIP futura
+                  </p>
+                </div>
+                <span className="text-sm tabular-nums text-[var(--muted-foreground)]">
+                  {formatDuration(activeCall.duration_seconds)}
+                </span>
+              </div>
+            </div>
+
+            {/* Metadata */}
+            <div className="border-b px-6 py-4 space-y-3">
+              {/* Status dropdown */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Status</span>
+                <Select value={displayStatus} onValueChange={handleStatusChange}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {callStatusValues.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        <span className="flex items-center gap-2">
+                          <CallStatusIcon status={s} />
+                          {statusLabels[s]}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Separator />
+
+              {/* Details grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
+                  <p className="text-sm font-medium">{activeCall.origin}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--muted-foreground)]">Destino</p>
+                  <p className="text-sm font-medium">{activeCall.destination}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--muted-foreground)]">Data</p>
+                  <p className="text-sm">{formatDate(activeCall.started_at)}</p>
+                </div>
+                <div className="flex items-start gap-1">
+                  <Clock className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                  <div>
+                    <p className="text-xs text-[var(--muted-foreground)]">Duração</p>
+                    <p className="text-sm tabular-nums">{formatDuration(activeCall.duration_seconds)}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--muted-foreground)]">Tipo</p>
+                  <Badge variant="outline">{typeLabels[activeCall.type] ?? activeCall.type}</Badge>
+                </div>
+                {activeCall.cost != null && (
+                  <div className="flex items-start gap-1">
+                    <DollarSign className="mt-0.5 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                    <div>
+                      <p className="text-xs text-[var(--muted-foreground)]">Custo</p>
+                      <p className="text-sm">R$ {activeCall.cost.toFixed(2)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Notes */}
+              {activeCall.notes && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-[var(--muted-foreground)] mb-1">Anotações</p>
+                    <p className="text-sm whitespace-pre-wrap">{activeCall.notes}</p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Feedback section */}
+            <div className="px-6 py-4 space-y-3">
+              <h3 className="text-sm font-semibold">Feedback</h3>
+
+              {/* Existing feedback */}
+              {displayFeedback.length > 0 ? (
+                <div className="space-y-3">
+                  {displayFeedback.map((fb) => (
+                    <div
+                      key={fb.id}
+                      className="flex gap-3 rounded-lg border border-[var(--border)] p-3"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--muted)]">
+                        <User className="h-4 w-4 text-[var(--muted-foreground)]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          {formatDate(fb.created_at)}
+                        </p>
+                        <p className="mt-1 text-sm whitespace-pre-wrap">{fb.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Nenhum feedback adicionado.
+                </p>
+              )}
+
+              {/* Add feedback */}
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="Adicionar feedback..."
+                  value={feedbackContent}
+                  onChange={(e) => setFeedbackContent(e.target.value)}
+                  className="min-h-[60px]"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleAddFeedback}
+                  disabled={isPending || !feedbackContent.trim()}
+                  className="shrink-0 self-end"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
