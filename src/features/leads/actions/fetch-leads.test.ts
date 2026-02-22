@@ -370,7 +370,7 @@ describe('fetchLeads', () => {
 
     await fetchLeads({});
 
-    expect(leadsChain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(leadsChain.order).toHaveBeenCalledWith('created_at', { ascending: false, nullsFirst: false });
   });
 
   it('should filter leads by org_id and exclude soft-deleted records', async () => {

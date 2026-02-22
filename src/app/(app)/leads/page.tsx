@@ -25,6 +25,8 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   if (params.uf) filters.uf = params.uf;
   if (params.search) filters.search = params.search;
   if (params.page) filters.page = params.page;
+  if (params.sort_by) filters.sort_by = params.sort_by;
+  if (params.sort_dir) filters.sort_dir = params.sort_dir;
 
   const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.search);
 

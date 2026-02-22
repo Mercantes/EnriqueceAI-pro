@@ -52,6 +52,7 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
     ],
     faturamento_estimado: 500000,
     notes: null,
+    fit_score: null,
     enriched_at: '2026-02-10T10:00:00Z',
     created_by: null,
     import_id: null,

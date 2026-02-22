@@ -54,7 +54,7 @@ describe('recalcFitScoreForLead', () => {
 
     // Should not throw
     await recalcFitScoreForLead(
-      supabase as Awaited<ReturnType<typeof createServerSupabaseClient>>,
+      supabase as unknown as Awaited<ReturnType<typeof createServerSupabaseClient>>,
       'lead-1',
       'org-1',
     );

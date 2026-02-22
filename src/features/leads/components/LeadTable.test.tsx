@@ -4,12 +4,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LeadRow } from '../types';
 import { LeadTable } from './LeadTable';
 
+const mockPush = vi.fn();
+
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
     refresh: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Mock server actions
@@ -37,6 +40,7 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
     socios: null,
     faturamento_estimado: null,
     notes: null,
+    fit_score: null,
     enriched_at: null,
     created_by: null,
     import_id: null,
@@ -81,18 +85,24 @@ describe('LeadTable', () => {
 
     render(<LeadTable leads={leads} />);
 
-    // Multiple dashes in the row (porte, cnae, cidade, etc if null)
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThan(0);
   });
 
-  it('should display status badges', () => {
-    const leads = [createMockLead({ status: 'new', enrichment_status: 'enriched' })];
+  it('should display Meetime-style status badge', () => {
+    const leads = [createMockLead({ status: 'new' })];
 
     render(<LeadTable leads={leads} />);
 
-    expect(screen.getByText('Novo')).toBeInTheDocument();
-    expect(screen.getByText('Enriquecido')).toBeInTheDocument();
+    expect(screen.getByText('ESPERANDO INÍCIO')).toBeInTheDocument();
+  });
+
+  it('should display ATIVO badge for contacted leads', () => {
+    const leads = [createMockLead({ status: 'contacted' })];
+
+    render(<LeadTable leads={leads} />);
+
+    expect(screen.getByText('ATIVO')).toBeInTheDocument();
   });
 
   it('should render checkboxes for selection', () => {
@@ -134,5 +144,47 @@ describe('LeadTable', () => {
     render(<LeadTable leads={leads} />);
 
     expect(screen.getByText('15/02/2026')).toBeInTheDocument();
+  });
+
+  it('should render score circle for leads with fit_score', () => {
+    const leads = [createMockLead({ fit_score: 8 })];
+
+    render(<LeadTable leads={leads} />);
+
+    expect(screen.getByText('8')).toBeInTheDocument();
+  });
+
+  it('should render dash in score circle for leads without fit_score', () => {
+    const leads = [createMockLead({ fit_score: null })];
+
+    render(<LeadTable leads={leads} />);
+
+    // Score circle shows — for null
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBeGreaterThan(0);
+  });
+
+  it('should render sortable Score column header', () => {
+    const leads = [createMockLead()];
+
+    render(<LeadTable leads={leads} />);
+
+    expect(screen.getByText('Score')).toBeInTheDocument();
+  });
+
+  it('should render Responsável column header', () => {
+    const leads = [createMockLead()];
+
+    render(<LeadTable leads={leads} />);
+
+    expect(screen.getByText('Responsável')).toBeInTheDocument();
+  });
+
+  it('should render action menu button', () => {
+    const leads = [createMockLead()];
+
+    render(<LeadTable leads={leads} />);
+
+    expect(screen.getByText('Ações')).toBeInTheDocument();
   });
 });

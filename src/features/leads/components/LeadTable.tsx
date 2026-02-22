@@ -1,12 +1,19 @@
 'use client';
 
 import { useCallback, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { Archive, Download, RefreshCw } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Pencil, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -19,16 +26,29 @@ import {
 import { bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
 import type { LeadRow } from '../types';
 import { formatCnpj } from '../utils/cnpj';
-import { EnrichmentStatusBadge, LeadStatusBadge } from './LeadStatusBadge';
+import { LeadStatusBadge } from './LeadStatusBadge';
+import { LeadScoreCircle } from './LeadScoreCircle';
 
 interface LeadTableProps {
   leads: LeadRow[];
 }
 
+type SortColumn = 'created_at' | 'fit_score';
+
+function SortIcon({ column, currentSort, currentDir }: { column: SortColumn; currentSort: SortColumn; currentDir: string }) {
+  if (currentSort !== column) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 opacity-40" />;
+  if (currentDir === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5" />;
+  return <ArrowDown className="ml-1 h-3.5 w-3.5" />;
+}
+
 export function LeadTable({ leads }: LeadTableProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+
+  const currentSortBy = (searchParams.get('sort_by') ?? 'created_at') as SortColumn;
+  const currentSortDir = searchParams.get('sort_dir') ?? 'desc';
 
   const allSelected = leads.length > 0 && selected.size === leads.length;
   const someSelected = selected.size > 0 && selected.size < leads.length;
@@ -52,6 +72,18 @@ export function LeadTable({ leads }: LeadTableProps) {
       return next;
     });
   }, []);
+
+  const handleSort = useCallback((column: SortColumn) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (currentSortBy === column) {
+      params.set('sort_dir', currentSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      params.set('sort_by', column);
+      params.set('sort_dir', 'desc');
+    }
+    params.delete('page');
+    router.push(`/leads?${params.toString()}`);
+  }, [router, searchParams, currentSortBy, currentSortDir]);
 
   const handleArchive = useCallback(() => {
     const ids = Array.from(selected);
@@ -86,7 +118,6 @@ export function LeadTable({ leads }: LeadTableProps) {
     startTransition(async () => {
       const result = await exportLeadsCsv(ids);
       if (result.success) {
-        // Trigger download
         const blob = new Blob([result.data.csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -100,6 +131,30 @@ export function LeadTable({ leads }: LeadTableProps) {
       }
     });
   }, [selected]);
+
+  const handleSingleEnrich = useCallback((id: string) => {
+    startTransition(async () => {
+      const result = await bulkEnrichLeads([id]);
+      if (result.success) {
+        toast.success('Enriquecimento iniciado');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [router]);
+
+  const handleSingleArchive = useCallback((id: string) => {
+    startTransition(async () => {
+      const result = await bulkArchiveLeads([id]);
+      if (result.success) {
+        toast.success('Lead arquivado');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [router]);
 
   const navigateToLead = useCallback(
     (id: string) => {
@@ -159,14 +214,33 @@ export function LeadTable({ leads }: LeadTableProps) {
                   aria-label="Selecionar todos"
                 />
               </TableHead>
+              <TableHead className="w-[50px]">
+                <button
+                  type="button"
+                  className="flex items-center font-medium hover:text-[var(--foreground)]"
+                  onClick={() => handleSort('fit_score')}
+                >
+                  Score
+                  <SortIcon column="fit_score" currentSort={currentSortBy} currentDir={currentSortDir} />
+                </button>
+              </TableHead>
               <TableHead>Empresa</TableHead>
               <TableHead>CNPJ</TableHead>
-              <TableHead>Porte</TableHead>
-              <TableHead>CNAE</TableHead>
-              <TableHead>Cidade/UF</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Enriquecimento</TableHead>
-              <TableHead>Importado em</TableHead>
+              <TableHead>Responsável</TableHead>
+              <TableHead>Porte</TableHead>
+              <TableHead>Cidade/UF</TableHead>
+              <TableHead>
+                <button
+                  type="button"
+                  className="flex items-center font-medium hover:text-[var(--foreground)]"
+                  onClick={() => handleSort('created_at')}
+                >
+                  Importado em
+                  <SortIcon column="created_at" currentSort={currentSortBy} currentDir={currentSortDir} />
+                </button>
+              </TableHead>
+              <TableHead className="w-[40px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -185,6 +259,9 @@ export function LeadTable({ leads }: LeadTableProps) {
                       aria-label={`Selecionar ${lead.nome_fantasia ?? lead.cnpj}`}
                     />
                   </TableCell>
+                  <TableCell onClick={() => navigateToLead(lead.id)}>
+                    <LeadScoreCircle score={lead.fit_score} />
+                  </TableCell>
                   <TableCell
                     className="font-medium"
                     onClick={() => navigateToLead(lead.id)}
@@ -202,10 +279,13 @@ export function LeadTable({ leads }: LeadTableProps) {
                     {formatCnpj(lead.cnpj)}
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
-                    {lead.porte ?? '—'}
+                    <LeadStatusBadge status={lead.status} variant="meetime" />
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
-                    {lead.cnae ?? '—'}
+                    <span className="text-sm text-[var(--muted-foreground)]">—</span>
+                  </TableCell>
+                  <TableCell onClick={() => navigateToLead(lead.id)}>
+                    {lead.porte ?? '—'}
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     {lead.endereco
@@ -213,13 +293,32 @@ export function LeadTable({ leads }: LeadTableProps) {
                       : '—'}
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
-                    <LeadStatusBadge status={lead.status} />
-                  </TableCell>
-                  <TableCell onClick={() => navigateToLead(lead.id)}>
-                    <EnrichmentStatusBadge status={lead.enrichment_status} />
-                  </TableCell>
-                  <TableCell onClick={() => navigateToLead(lead.id)}>
                     {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Ações</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => navigateToLead(lead.id)}>
+                          <Pencil className="mr-2 h-3.5 w-3.5" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleSingleEnrich(lead.id)}>
+                          <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                          Enriquecer
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleSingleArchive(lead.id)}>
+                          <Archive className="mr-2 h-3.5 w-3.5" />
+                          Arquivar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );

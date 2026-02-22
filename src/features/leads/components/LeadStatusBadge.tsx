@@ -12,6 +12,15 @@ const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
   archived: { label: 'Arquivado', className: 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-400' },
 };
 
+// Meetime-style engagement labels
+const meetimeConfig: Record<LeadStatus, { label: string; className: string }> = {
+  new: { label: 'ESPERANDO INÍCIO', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' },
+  contacted: { label: 'ATIVO', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
+  qualified: { label: 'ATIVO', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
+  unqualified: { label: 'DESCARTADO', className: 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400' },
+  archived: { label: 'ARQUIVADO', className: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' },
+};
+
 const enrichmentConfig: Record<EnrichmentStatus, { label: string; className: string }> = {
   pending: { label: 'Pendente', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
   enriching: { label: 'Enriquecendo', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
@@ -20,8 +29,8 @@ const enrichmentConfig: Record<EnrichmentStatus, { label: string; className: str
   not_found: { label: 'Não Encontrado', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' },
 };
 
-export function LeadStatusBadge({ status }: { status: LeadStatus }) {
-  const config = statusConfig[status];
+export function LeadStatusBadge({ status, variant = 'default' }: { status: LeadStatus; variant?: 'default' | 'meetime' }) {
+  const config = variant === 'meetime' ? meetimeConfig[status] : statusConfig[status];
   return (
     <Badge variant="outline" className={config.className}>
       {config.label}

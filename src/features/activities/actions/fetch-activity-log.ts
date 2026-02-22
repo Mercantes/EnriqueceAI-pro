@@ -1,0 +1,159 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireAuth } from '@/lib/auth/require-auth';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+import type { CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
+
+import type { ActivityLead, PendingActivity } from '../types';
+
+interface EnrollmentRow {
+  id: string;
+  cadence_id: string;
+  lead_id: string;
+  current_step: number;
+  status: string;
+  next_step_due: string | null;
+  lead: ActivityLead;
+  cadence: { id: string; name: string; total_steps: number; created_by: string | null };
+}
+
+export interface ActivityLogResult {
+  activities: PendingActivity[];
+  total: number;
+}
+
+/**
+ * Fetch ALL activities for the activity log view (not just due/pending).
+ * This includes all active enrollments regardless of when they're due.
+ */
+export async function fetchActivityLog(
+  rawFilters: Record<string, unknown>,
+): Promise<ActionResult<ActivityLogResult>> {
+  await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const channel = typeof rawFilters.channel === 'string' ? rawFilters.channel : undefined;
+  const status = typeof rawFilters.status === 'string' ? rawFilters.status : undefined;
+  const search = typeof rawFilters.search === 'string' ? rawFilters.search : undefined;
+
+  // Fetch active enrollments (all — not filtered by next_step_due)
+  let query = (supabase
+    .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads(*), cadence:cadences(id, name, total_steps, created_by)', { count: 'exact' })
+    .eq('status', 'active')
+    .not('next_step_due', 'is', null)
+    .order('next_step_due', { ascending: true })
+    .limit(200);
+
+  const { data: enrollments, count, error: enrollError } = (await query) as {
+    data: EnrollmentRow[] | null;
+    count: number | null;
+    error: { message: string } | null;
+  };
+
+  if (enrollError) {
+    console.error('[activity-log] Failed to fetch enrollments:', enrollError.message);
+    return { success: false, error: 'Erro ao buscar atividades' };
+  }
+
+  if (!enrollments || enrollments.length === 0) {
+    return { success: true, data: { activities: [], total: 0 } };
+  }
+
+  // Batch-fetch steps + templates
+  const cadenceIds = [...new Set(enrollments.map((e) => e.cadence_id))];
+
+  const { data: steps } = (await (supabase
+    .from('cadence_steps') as ReturnType<typeof supabase.from>)
+    .select('*')
+    .in('cadence_id', cadenceIds)) as { data: CadenceStepRow[] | null };
+
+  const templateIds = (steps ?? [])
+    .map((s) => s.template_id)
+    .filter((id): id is string => id != null);
+
+  let templates: MessageTemplateRow[] = [];
+  if (templateIds.length > 0) {
+    const { data: tplData } = (await (supabase
+      .from('message_templates') as ReturnType<typeof supabase.from>)
+      .select('*')
+      .in('id', templateIds)) as { data: MessageTemplateRow[] | null };
+    templates = tplData ?? [];
+  }
+
+  // Build lookup maps
+  const stepMap = new Map<string, CadenceStepRow[]>();
+  for (const s of steps ?? []) {
+    const list = stepMap.get(s.cadence_id) ?? [];
+    list.push(s);
+    stepMap.set(s.cadence_id, list);
+  }
+
+  const templateMap = new Map<string, MessageTemplateRow>();
+  for (const t of templates) {
+    templateMap.set(t.id, t);
+  }
+
+  // Map to PendingActivity[] and apply client-side filters
+  const activities: PendingActivity[] = [];
+
+  for (const enrollment of enrollments) {
+    if (!enrollment.lead || !enrollment.cadence || !enrollment.next_step_due) continue;
+
+    const cadenceSteps = stepMap.get(enrollment.cadence_id) ?? [];
+    const currentStep = cadenceSteps.find((s) => s.step_order === enrollment.current_step);
+
+    if (!currentStep) continue;
+
+    // Channel filter
+    if (channel && channel !== 'all' && currentStep.channel !== channel) continue;
+
+    // Status filter (overdue = > 1h, due = <= 1h)
+    if (status) {
+      const diffH = (Date.now() - new Date(enrollment.next_step_due).getTime()) / 3600000;
+      if (status === 'overdue' && diffH < 1) continue;
+      if (status === 'due' && diffH >= 1) continue;
+    }
+
+    const template = currentStep.template_id ? templateMap.get(currentStep.template_id) : null;
+
+    const activity: PendingActivity = {
+      enrollmentId: enrollment.id,
+      cadenceId: enrollment.cadence_id,
+      cadenceName: enrollment.cadence.name,
+      cadenceCreatedBy: enrollment.cadence.created_by,
+      stepId: currentStep.id,
+      stepOrder: currentStep.step_order,
+      totalSteps: enrollment.cadence.total_steps,
+      channel: currentStep.channel,
+      templateId: currentStep.template_id,
+      templateSubject: template?.subject ?? null,
+      templateBody: template?.body ?? null,
+      aiPersonalization: currentStep.ai_personalization,
+      nextStepDue: enrollment.next_step_due,
+      lead: enrollment.lead,
+    };
+
+    // Search filter
+    if (search) {
+      const q = search.toLowerCase();
+      const leadName = (activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj).toLowerCase();
+      const cadence = activity.cadenceName.toLowerCase();
+      const leadEmail = (activity.lead.email ?? '').toLowerCase();
+      const leadPhone = (activity.lead.telefone ?? '').toLowerCase();
+      if (!leadName.includes(q) && !cadence.includes(q) && !leadEmail.includes(q) && !leadPhone.includes(q)) continue;
+    }
+
+    activities.push(activity);
+  }
+
+  return {
+    success: true,
+    data: {
+      activities,
+      total: count ?? 0,
+    },
+  };
+}

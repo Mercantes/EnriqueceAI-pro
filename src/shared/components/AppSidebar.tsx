@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Menu,
+  Play,
   Plug,
   Settings,
   Users,
@@ -46,7 +47,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Leads', href: '/leads', icon: Users },
-  { label: 'Atividades', href: '/atividades', icon: ListChecks },
+  { label: 'Execução', href: '/atividades', icon: Play },
+  { label: 'Atividades', href: '/activities', icon: ListChecks },
   { label: 'Cadências', href: '/cadences', icon: Zap },
   { label: 'Templates', href: '/templates', icon: FileText },
   { label: 'Relatórios', href: '/reports', icon: BarChart3 },

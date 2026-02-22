@@ -40,6 +40,7 @@ export interface LeadRow {
   socios: LeadSocio[] | null;
   faturamento_estimado: number | null;
   notes: string | null;
+  fit_score: number | null;
   enriched_at: string | null;
   created_by: string | null;
   import_id: string | null;

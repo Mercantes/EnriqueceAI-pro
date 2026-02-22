@@ -68,7 +68,10 @@ export async function fetchLeads(
   }
 
   // Order and paginate
-  query = query.order('created_at', { ascending: false }).range(from, to);
+  const ascending = filters.sort_dir === 'asc';
+  query = query
+    .order(filters.sort_by, { ascending, nullsFirst: false })
+    .range(from, to);
 
   const { data, count, error } = (await query) as {
     data: Record<string, unknown>[] | null;

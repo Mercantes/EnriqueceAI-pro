@@ -14,8 +14,25 @@ describe('LeadStatusBadge', () => {
   ];
 
   statuses.forEach(({ status, label }) => {
-    it(`should render "${label}" for status "${status}"`, () => {
+    it(`should render "${label}" for status "${status}" (default variant)`, () => {
       render(<LeadStatusBadge status={status} />);
+      expect(screen.getByText(label)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('LeadStatusBadge (meetime variant)', () => {
+  const meetimeStatuses: Array<{ status: LeadStatus; label: string }> = [
+    { status: 'new', label: 'ESPERANDO INÍCIO' },
+    { status: 'contacted', label: 'ATIVO' },
+    { status: 'qualified', label: 'ATIVO' },
+    { status: 'unqualified', label: 'DESCARTADO' },
+    { status: 'archived', label: 'ARQUIVADO' },
+  ];
+
+  meetimeStatuses.forEach(({ status, label }) => {
+    it(`should render "${label}" for status "${status}" (meetime variant)`, () => {
+      render(<LeadStatusBadge status={status} variant="meetime" />);
       expect(screen.getByText(label)).toBeInTheDocument();
     });
   });
