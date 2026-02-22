@@ -23,7 +23,8 @@ import { ThemeToggle } from './ThemeToggle';
 
 export interface NavDropdownItem {
   label: string;
-  href: string;
+  href?: string;
+  placeholder?: string;
 }
 
 export interface NavSection {
@@ -50,13 +51,18 @@ export const navSections: NavSection[] = [
   },
   {
     label: 'Ligações',
-    items: [{ label: 'Lista', href: '/calls' }],
+    items: [
+      { label: 'Painel de Ligações', placeholder: 'Em breve' },
+      { label: 'Lista de Ligações', href: '/calls' },
+    ],
   },
   {
-    label: 'Estatísticas',
+    label: 'Estatística',
     items: [
-      { label: 'Insights', href: '/statistics' },
-      { label: 'Relatórios', href: '/reports' },
+      { label: 'Atividades', placeholder: 'Em breve' },
+      { label: 'Conversão', placeholder: 'Em breve' },
+      { label: 'Ligações', placeholder: 'Em breve' },
+      { label: 'Equipe', placeholder: 'Em breve' },
     ],
   },
 ];
@@ -64,7 +70,7 @@ export const navSections: NavSection[] = [
 function NavDropdownMenu({ section }: { section: NavSection }) {
   const pathname = usePathname();
   const isActive = section.items?.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + '/'),
+    (item) => item.href && (pathname === item.href || pathname.startsWith(item.href + '/')),
   );
 
   return (
@@ -83,15 +89,17 @@ function NavDropdownMenu({ section }: { section: NavSection }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {section.placeholder ? (
-          <DropdownMenuItem disabled>
-            <span className="text-muted-foreground">{section.placeholder}</span>
-          </DropdownMenuItem>
-        ) : (
-          section.items?.map((item) => (
+        {section.items?.map((item) =>
+          item.placeholder ? (
+            <DropdownMenuItem key={item.label} disabled>
+              <span className="text-muted-foreground">
+                {item.label} — {item.placeholder}
+              </span>
+            </DropdownMenuItem>
+          ) : (
             <DropdownMenuItem key={item.label} asChild>
               <Link
-                href={item.href}
+                href={item.href!}
                 className={cn(
                   pathname === item.href && 'font-medium text-primary',
                 )}
@@ -99,7 +107,7 @@ function NavDropdownMenu({ section }: { section: NavSection }) {
                 {item.label}
               </Link>
             </DropdownMenuItem>
-          ))
+          ),
         )}
       </DropdownMenuContent>
     </DropdownMenu>

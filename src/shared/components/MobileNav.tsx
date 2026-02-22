@@ -32,7 +32,7 @@ function MobileNavSection({
   onNavigate: () => void;
 }) {
   const isChildActive = section.items?.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + '/'),
+    (item) => item.href && (pathname === item.href || pathname.startsWith(item.href + '/')),
   );
   const [expanded, setExpanded] = useState(isChildActive ?? false);
 
@@ -57,15 +57,18 @@ function MobileNavSection({
       </button>
       {expanded && (
         <div className="ml-3 flex flex-col border-l pl-3">
-          {section.placeholder ? (
-            <span className="px-3 py-2 text-sm text-muted-foreground">
-              {section.placeholder}
-            </span>
-          ) : (
-            section.items?.map((item) => (
+          {section.items?.map((item) =>
+            item.placeholder ? (
+              <span
+                key={item.label}
+                className="rounded-md px-3 py-1.5 text-sm text-muted-foreground"
+              >
+                {item.label} — {item.placeholder}
+              </span>
+            ) : (
               <Link
                 key={item.label}
-                href={item.href}
+                href={item.href!}
                 onClick={onNavigate}
                 className={cn(
                   'rounded-md px-3 py-1.5 text-sm transition-colors',
@@ -76,7 +79,7 @@ function MobileNavSection({
               >
                 {item.label}
               </Link>
-            ))
+            ),
           )}
         </div>
       )}
