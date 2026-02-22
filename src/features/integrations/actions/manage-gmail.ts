@@ -20,6 +20,8 @@ export async function getGmailAuthUrl(): Promise<ActionResult<{ url: string }>> 
   const scopes = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/calendar.freebusy',
     'https://www.googleapis.com/auth/userinfo.email',
   ];
 
@@ -120,6 +122,22 @@ export async function handleGmailCallback(
     return { success: false, error: 'Erro ao salvar conexão Gmail' };
   }
 
+  // Also save calendar connection (same tokens, unified OAuth)
+  await (supabase
+    .from('calendar_connections') as ReturnType<typeof supabase.from>)
+    .upsert(
+      {
+        org_id: member.org_id,
+        user_id: user.id,
+        access_token_encrypted: tokens.access_token,
+        refresh_token_encrypted: tokens.refresh_token ?? '',
+        token_expires_at: expiresAt,
+        calendar_email: userInfo.email,
+        status: 'connected',
+      } as Record<string, unknown>,
+      { onConflict: 'org_id,user_id' },
+    );
+
   return { success: true, data: data! };
 }
 
@@ -147,6 +165,13 @@ export async function disconnectGmail(): Promise<ActionResult<{ disconnected: bo
   if (error) {
     return { success: false, error: 'Erro ao desconectar Gmail' };
   }
+
+  // Also disconnect calendar (unified OAuth)
+  await (supabase
+    .from('calendar_connections') as ReturnType<typeof supabase.from>)
+    .delete()
+    .eq('org_id', member.org_id)
+    .eq('user_id', user.id);
 
   return { success: true, data: { disconnected: true } };
 }
@@ -206,6 +231,15 @@ export async function refreshGmailToken(
       status: 'connected',
     } as Record<string, unknown>)
     .eq('id', connectionId);
+
+  // Also refresh calendar token (unified OAuth)
+  await (supabase.from('calendar_connections') as ReturnType<typeof supabase.from>)
+    .update({
+      access_token_encrypted: tokens.access_token,
+      token_expires_at: expiresAt,
+      status: 'connected',
+    } as Record<string, unknown>)
+    .eq('user_id', user.id);
 
   return { success: true, data: { refreshed: true } };
 }

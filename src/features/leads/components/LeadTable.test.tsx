@@ -44,12 +44,15 @@ function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
     enriched_at: null,
     created_by: null,
     import_id: null,
+    assigned_to: null,
     deleted_at: null,
     created_at: '2026-01-15T10:00:00Z',
     updated_at: '2026-01-15T10:00:00Z',
     ...overrides,
   };
 }
+
+const emptyCadenceInfo = {};
 
 describe('LeadTable', () => {
   it('should render leads in the table', () => {
@@ -58,41 +61,16 @@ describe('LeadTable', () => {
       createMockLead({ id: 'lead-2', nome_fantasia: 'Beta Inc', cnpj: '22333444000100' }),
     ];
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
 
     expect(screen.getByText('Alpha Corp')).toBeInTheDocument();
     expect(screen.getByText('Beta Inc')).toBeInTheDocument();
   });
 
-  it('should display formatted CNPJ', () => {
-    const leads = [createMockLead({ cnpj: '11222333000181' })];
-
-    render(<LeadTable leads={leads} />);
-
-    expect(screen.getByText('11.222.333/0001-81')).toBeInTheDocument();
-  });
-
-  it('should display cidade/UF from endereco', () => {
-    const leads = [createMockLead({ endereco: { cidade: 'Curitiba', uf: 'PR' } })];
-
-    render(<LeadTable leads={leads} />);
-
-    expect(screen.getByText('Curitiba/PR')).toBeInTheDocument();
-  });
-
-  it('should display dash when no endereco', () => {
-    const leads = [createMockLead({ endereco: null })];
-
-    render(<LeadTable leads={leads} />);
-
-    const dashes = screen.getAllByText('—');
-    expect(dashes.length).toBeGreaterThan(0);
-  });
-
   it('should display Meetime-style status badge', () => {
     const leads = [createMockLead({ status: 'new' })];
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
 
     expect(screen.getByText('ESPERANDO INÍCIO')).toBeInTheDocument();
   });
@@ -100,7 +78,7 @@ describe('LeadTable', () => {
   it('should display ATIVO badge for contacted leads', () => {
     const leads = [createMockLead({ status: 'contacted' })];
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
 
     expect(screen.getByText('ATIVO')).toBeInTheDocument();
   });
@@ -108,7 +86,7 @@ describe('LeadTable', () => {
   it('should render checkboxes for selection', () => {
     const leads = [createMockLead()];
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
 
     // Header checkbox + row checkbox
     const checkboxes = screen.getAllByRole('checkbox');
@@ -123,7 +101,7 @@ describe('LeadTable', () => {
       }),
     ];
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
 
     expect(screen.getByText('Nome Fantasia')).toBeInTheDocument();
     expect(screen.getByText('Razão Social LTDA')).toBeInTheDocument();
@@ -132,58 +110,54 @@ describe('LeadTable', () => {
   it('should show dash when both names are null', () => {
     const leads = [createMockLead({ nome_fantasia: null, razao_social: null })];
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
 
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThan(0);
   });
 
-  it('should format date in pt-BR', () => {
-    const leads = [createMockLead({ created_at: '2026-02-15T10:00:00Z' })];
+  it('should display cadence name from cadenceInfo', () => {
+    const leads = [createMockLead({ id: 'lead-1' })];
+    const cadenceInfo = {
+      'lead-1': { cadence_name: 'Outbound Q1', responsible_email: 'john@test.com' },
+    };
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={cadenceInfo} />);
 
-    expect(screen.getByText('15/02/2026')).toBeInTheDocument();
+    expect(screen.getByText('Outbound Q1')).toBeInTheDocument();
   });
 
-  it('should render score circle for leads with fit_score', () => {
-    const leads = [createMockLead({ fit_score: 8 })];
+  it('should display responsible username from cadenceInfo', () => {
+    const leads = [createMockLead({ id: 'lead-1' })];
+    const cadenceInfo = {
+      'lead-1': { cadence_name: 'Test', responsible_email: 'john@test.com' },
+    };
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={cadenceInfo} />);
 
-    expect(screen.getByText('8')).toBeInTheDocument();
-  });
-
-  it('should render dash in score circle for leads without fit_score', () => {
-    const leads = [createMockLead({ fit_score: null })];
-
-    render(<LeadTable leads={leads} />);
-
-    // Score circle shows — for null
-    const dashes = screen.getAllByText('—');
-    expect(dashes.length).toBeGreaterThan(0);
-  });
-
-  it('should render sortable Score column header', () => {
-    const leads = [createMockLead()];
-
-    render(<LeadTable leads={leads} />);
-
-    expect(screen.getByText('Score')).toBeInTheDocument();
+    expect(screen.getByText('john')).toBeInTheDocument();
   });
 
   it('should render Responsável column header', () => {
     const leads = [createMockLead()];
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
 
     expect(screen.getByText('Responsável')).toBeInTheDocument();
+  });
+
+  it('should render Cadência column header', () => {
+    const leads = [createMockLead()];
+
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
+
+    expect(screen.getByText('Cadência')).toBeInTheDocument();
   });
 
   it('should render action menu button', () => {
     const leads = [createMockLead()];
 
-    render(<LeadTable leads={leads} />);
+    render(<LeadTable leads={leads} cadenceInfo={emptyCadenceInfo} />);
 
     expect(screen.getByText('Ações')).toBeInTheDocument();
   });

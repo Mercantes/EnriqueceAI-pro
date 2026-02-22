@@ -24,6 +24,9 @@ export interface EnrichmentData {
     nome: string;
     qualificacao?: string;
     cpf_masked?: string;
+    cpf?: string;
+    participacao?: number;
+    capital_social?: number;
   }>;
   faturamento_estimado?: number;
 }
@@ -111,27 +114,28 @@ export class CnpjWsProvider implements EnrichmentProvider {
 }
 
 /**
- * Lemit provider — premium, contact data (emails, phones, revenue).
- * Requires API key.
+ * Lemit provider — premium enrichment via CNPJ endpoint.
+ * Returns company data + partners with full CPF.
+ * Endpoint: {apiUrl}/consulta/empresa/{cnpj}
  */
 export class LemitProvider implements EnrichmentProvider {
   name = 'lemit';
-  private apiKey: string;
-  private baseUrl: string;
+  private apiUrl: string;
+  private token: string;
 
-  constructor(apiKey: string, baseUrl = 'https://api.lemit.com.br/v1') {
-    this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
+  constructor(apiUrl: string, token: string) {
+    this.apiUrl = apiUrl;
+    this.token = token;
   }
 
   async enrich(cnpj: string): Promise<EnrichmentResult> {
     try {
-      const response = await fetch(`${this.baseUrl}/company/${cnpj}`, {
+      const response = await fetch(`${this.apiUrl}/consulta/empresa/${cnpj}`, {
         headers: {
           Accept: 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.token}`,
         },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (response.status === 429) {
@@ -158,16 +162,51 @@ export class LemitProvider implements EnrichmentProvider {
   }
 
   private mapResponse(raw: Record<string, unknown>): EnrichmentData {
+    const empresa = (raw.empresa ?? raw) as Record<string, unknown>;
+    const socios = empresa.socios as Array<Record<string, unknown>> | undefined;
+    const enderecoRaw = empresa.endereco as Record<string, unknown> | undefined;
+    const emails = empresa.emails as Array<Record<string, unknown>> | undefined;
+    const celulares = empresa.celulares as Array<Record<string, unknown>> | undefined;
+    const cnaeRaw = empresa.cnae as Record<string, unknown> | undefined;
+
+    // Pick best phone: first celular sorted by ranking
+    let telefone: string | undefined;
+    if (celulares && celulares.length > 0) {
+      const best = celulares.sort(
+        (a, b) => ((a.ranking as number) ?? 99) - ((b.ranking as number) ?? 99),
+      )[0]!;
+      const ddd = best.ddd as number;
+      const numero = best.numero as string;
+      telefone = `(${ddd}) ${numero}`;
+    }
+
     return {
-      razao_social: raw.razao_social as string | undefined,
-      nome_fantasia: raw.nome_fantasia as string | undefined,
-      email: raw.email as string | undefined,
-      telefone: raw.telefone as string | undefined,
-      faturamento_estimado: raw.faturamento_estimado as number | undefined,
-      socios: (raw.socios as Array<Record<string, unknown>>)?.map((s) => ({
+      razao_social: empresa.razao_social as string | undefined,
+      nome_fantasia: empresa.nome_fantasia as string | undefined,
+      endereco: enderecoRaw
+        ? {
+            logradouro: enderecoRaw.logradouro as string | undefined,
+            numero: enderecoRaw.numero as string | undefined,
+            complemento: enderecoRaw.complemento as string | undefined,
+            bairro: enderecoRaw.bairro as string | undefined,
+            cidade: enderecoRaw.cidade as string | undefined,
+            uf: enderecoRaw.uf as string | undefined,
+            cep: enderecoRaw.cep as string | undefined,
+          }
+        : undefined,
+      porte: empresa.tipo as string | undefined,
+      cnae: cnaeRaw?.numero as string | undefined,
+      situacao_cadastral: empresa.situacao as string | undefined,
+      email: emails && emails.length > 0 ? (emails[0]!.email as string) : undefined,
+      telefone,
+      faturamento_estimado: empresa.faturamento_estimado as number | undefined,
+      socios: socios?.map((s) => ({
         nome: s.nome as string,
         qualificacao: s.qualificacao as string | undefined,
         cpf_masked: s.cpf_masked as string | undefined,
+        cpf: s.cpf as string | undefined,
+        participacao: s.participacao as number | undefined,
+        capital_social: s.capital_social as number | undefined,
       })),
     };
   }

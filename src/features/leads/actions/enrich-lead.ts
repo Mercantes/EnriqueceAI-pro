@@ -6,8 +6,9 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-import { CnpjWsProvider } from '../services/enrichment-provider';
-import { enrichLead } from '../services/enrichment.service';
+import { CnpjWsProvider, LemitProvider } from '../services/enrichment-provider';
+import { enrichLead, enrichLeadFull } from '../services/enrichment.service';
+import { LemitCpfProvider } from '../services/lemit-cpf-provider';
 
 export async function enrichLeadAction(leadId: string): Promise<ActionResult<void>> {
   const user = await requireAuth();
@@ -35,15 +36,31 @@ export async function enrichLeadAction(leadId: string): Promise<ActionResult<voi
     return { success: false, error: 'Lead não encontrado' };
   }
 
-  // Use CNPJ.ws as default provider (free tier)
-  const provider = new CnpjWsProvider();
+  const lemitApiUrl = process.env.LEMIT_API_URL;
+  const lemitApiToken = process.env.LEMIT_API_TOKEN;
 
-  const result = await enrichLead({
-    leadId: lead.id,
-    cnpj: lead.cnpj,
-    provider,
-    supabase,
-  });
+  let result;
+  if (lemitApiUrl && lemitApiToken) {
+    // Lemit 2-step enrichment: CNPJ → CPF per partner
+    const cnpjProvider = new LemitProvider(lemitApiUrl, lemitApiToken);
+    const cpfProvider = new LemitCpfProvider(lemitApiUrl, lemitApiToken);
+    result = await enrichLeadFull({
+      leadId: lead.id,
+      cnpj: lead.cnpj,
+      cnpjProvider,
+      cpfProvider,
+      supabase,
+    });
+  } else {
+    // Fallback: CNPJ.ws (free tier, basic data)
+    const provider = new CnpjWsProvider();
+    result = await enrichLead({
+      leadId: lead.id,
+      cnpj: lead.cnpj,
+      provider,
+      supabase,
+    });
+  }
 
   revalidatePath('/leads');
   revalidatePath(`/leads/${leadId}`);

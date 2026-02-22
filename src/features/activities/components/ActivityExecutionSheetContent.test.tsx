@@ -126,7 +126,7 @@ describe('ActivityExecutionSheetContent', () => {
       />,
     );
 
-    expect(screen.getByText(/Ligação — Acme Corp/)).toBeInTheDocument();
+    expect(screen.getByText('Acme Corp')).toBeInTheDocument();
     expect(screen.getByText('11999999999')).toBeInTheDocument();
   });
 

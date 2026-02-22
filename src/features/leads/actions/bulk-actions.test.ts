@@ -18,11 +18,17 @@ vi.mock('next/cache', () => ({
 vi.mock('../services/enrichment-provider', () => {
   return {
     CnpjWsProvider: class MockCnpjWsProvider {},
+    LemitProvider: class MockLemitProvider {},
   };
 });
 
 vi.mock('../services/enrichment.service', () => ({
   enrichLead: vi.fn(),
+  enrichLeadFull: vi.fn(),
+}));
+
+vi.mock('../services/lemit-cpf-provider', () => ({
+  LemitCpfProvider: class MockLemitCpfProvider {},
 }));
 
 import { revalidatePath } from 'next/cache';

@@ -16,6 +16,8 @@ const envSchema = z.object({
   GCAL_CLIENT_SECRET: z.string().min(1).optional(),
   SENTRY_DSN: z.string().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
+  LEMIT_API_URL: z.string().url().optional(),
+  LEMIT_API_TOKEN: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

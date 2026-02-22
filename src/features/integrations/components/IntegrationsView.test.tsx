@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
 import { IntegrationsView } from './IntegrationsView';
 
 vi.mock('next/navigation', () => ({
@@ -17,16 +17,6 @@ vi.mock('../actions/manage-gmail', () => ({
   disconnectGmail: vi.fn(),
 }));
 
-vi.mock('../actions/manage-crm', () => ({
-  getCrmAuthUrl: vi.fn(),
-  disconnectCrm: vi.fn(),
-  triggerCrmSync: vi.fn(),
-}));
-
-vi.mock('../actions/manage-calendar', () => ({
-  getCalendarAuthUrl: vi.fn(),
-  disconnectCalendar: vi.fn(),
-}));
 
 const gmailConnected: GmailConnectionSafe = {
   id: 'gmail-1',
@@ -43,16 +33,6 @@ const whatsappConnected: WhatsAppConnectionSafe = {
   status: 'connected',
   created_at: '2026-02-15T10:00:00Z',
   updated_at: '2026-02-15T10:00:00Z',
-};
-
-const crmConnected: CrmConnectionSafe = {
-  id: 'crm-1',
-  crm_provider: 'hubspot',
-  field_mapping: { leads: { nome_fantasia: 'company', email: 'email' } },
-  status: 'connected',
-  last_sync_at: '2026-02-19T10:00:00Z',
-  created_at: '2026-02-15T10:00:00Z',
-  updated_at: '2026-02-19T10:00:00Z',
 };
 
 const calendarConnected: CalendarConnectionSafe = {
@@ -96,11 +76,6 @@ describe('IntegrationsView', () => {
     expect(screen.getByText('WhatsApp Business')).toBeInTheDocument();
   });
 
-  it('should show HubSpot card', () => {
-    render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getAllByText('HubSpot').length).toBeGreaterThanOrEqual(1);
-  });
-
   it('should show email address when Gmail connected', () => {
     render(<IntegrationsView {...defaultProps} gmail={gmailConnected} />);
     expect(screen.getByText('user@gmail.com')).toBeInTheDocument();
@@ -136,58 +111,13 @@ describe('IntegrationsView', () => {
     expect(screen.getByText('Erro')).toBeInTheDocument();
   });
 
-  it('should show CRM provider options when CRM not connected', () => {
-    render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getAllByText('HubSpot').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Pipedrive')).toBeInTheDocument();
-    expect(screen.getByText('RD Station')).toBeInTheDocument();
-  });
-
-  it('should show HubSpot details when CRM connected', () => {
-    render(<IntegrationsView {...defaultProps} crm={crmConnected} />);
-    expect(screen.getAllByText('HubSpot').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/Último sync/)).toBeInTheDocument();
-  });
-
-  it('should show sync button when CRM connected', () => {
-    render(<IntegrationsView {...defaultProps} crm={crmConnected} />);
-    expect(screen.getByText('Sincronizar')).toBeInTheDocument();
-  });
-
-  it('should show syncing state when CRM is syncing', () => {
-    render(
-      <IntegrationsView
-        {...defaultProps}
-        crm={{ ...crmConnected, status: 'syncing' }}
-      />,
-    );
-    expect(screen.getByText('Sincronizando')).toBeInTheDocument();
-    expect(screen.getByText('Sincronizando...')).toBeInTheDocument();
-  });
-
-  it('should show disconnect button for CRM', () => {
-    render(<IntegrationsView {...defaultProps} crm={crmConnected} />);
-    expect(screen.getAllByText('Desconectar').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should show "Nunca sincronizado" when CRM has no last_sync_at', () => {
-    render(
-      <IntegrationsView
-        {...defaultProps}
-        crm={{ ...crmConnected, last_sync_at: null }}
-      />,
-    );
-    expect(screen.getByText('Nunca sincronizado')).toBeInTheDocument();
-  });
-
-  it('should show calendar details inside Google card when connected', () => {
+  it('should show connected status when only calendar connected', () => {
     render(<IntegrationsView {...defaultProps} calendar={calendarConnected} />);
-    expect(screen.getByText('Google Calendar')).toBeInTheDocument();
-    expect(screen.getAllByText('user@gmail.com').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('user@gmail.com')).toBeInTheDocument();
     expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should show both Gmail and Calendar details when both connected', () => {
+  it('should show single email when both Gmail and Calendar connected', () => {
     render(
       <IntegrationsView
         {...defaultProps}
@@ -195,9 +125,8 @@ describe('IntegrationsView', () => {
         calendar={calendarConnected}
       />,
     );
-    expect(screen.getByText('Gmail')).toBeInTheDocument();
-    expect(screen.getByText('Google Calendar')).toBeInTheDocument();
-    expect(screen.getAllByText('user@gmail.com').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('user@gmail.com')).toBeInTheDocument();
+    expect(screen.getAllByText('Conectado').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should show error status for Google when calendar has error', () => {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/statistics/actions/shared', () => ({
+vi.mock('@/lib/auth/get-org-id', () => ({
   getManagerOrgId: vi.fn().mockResolvedValue({ orgId: 'org-1', userId: 'user-1' }),
 }));
 

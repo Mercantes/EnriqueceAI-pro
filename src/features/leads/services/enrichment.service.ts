@@ -5,6 +5,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { EnrichmentData, EnrichmentProvider, EnrichmentResult } from './enrichment-provider';
+import type { LemitCpfProvider } from './lemit-cpf-provider';
+import type { LeadSocio } from '../types';
 
 interface EnrichLeadOptions {
   leadId: string;
@@ -112,6 +114,98 @@ async function updateLeadWithEnrichment(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Full 2-step enrichment: CNPJ (company data + partners with CPF) → CPF (contact data per partner).
+ * Step 1: enrichLead() with LemitProvider → company data + socios with full CPF
+ * Step 2: For each socio with CPF → LemitCpfProvider.enrich(cpf) → emails, phones, address
+ */
+export async function enrichLeadFull({
+  leadId,
+  cnpj,
+  cnpjProvider,
+  cpfProvider,
+  supabase,
+  maxRetries = 3,
+}: {
+  leadId: string;
+  cnpj: string;
+  cnpjProvider: EnrichmentProvider;
+  cpfProvider: LemitCpfProvider;
+  supabase: SupabaseClient;
+  maxRetries?: number;
+}): Promise<EnrichmentResult> {
+  // Step 1: Enrich with CNPJ (company + partners)
+  const cnpjResult = await enrichLead({
+    leadId,
+    cnpj,
+    provider: cnpjProvider,
+    supabase,
+    maxRetries,
+  });
+
+  if (!cnpjResult.success || !cnpjResult.data?.socios) {
+    return cnpjResult;
+  }
+
+  // Step 2: Enrich each partner's CPF
+  await enrichSocios(supabase, leadId, cnpjResult.data.socios, cpfProvider);
+
+  return cnpjResult;
+}
+
+/**
+ * Enriches each partner (socio) that has a full CPF via the Lemit CPF endpoint.
+ * Updates the lead's socios JSONB in the database with contact data.
+ */
+async function enrichSocios(
+  supabase: SupabaseClient,
+  leadId: string,
+  socios: NonNullable<EnrichmentData['socios']>,
+  cpfProvider: LemitCpfProvider,
+): Promise<void> {
+  const enrichedSocios: LeadSocio[] = [];
+
+  for (let i = 0; i < socios.length; i++) {
+    const socio = socios[i]!;
+    const enrichedSocio: LeadSocio = {
+      nome: socio.nome,
+      qualificacao: socio.qualificacao,
+      cpf_masked: socio.cpf_masked,
+      cpf: socio.cpf,
+      participacao: socio.participacao,
+      capital_social: socio.capital_social,
+    };
+
+    if (socio.cpf) {
+      // Rate limit: 1s delay between CPF calls (skip before first)
+      if (i > 0) {
+        await sleep(1000);
+      }
+
+      try {
+        const cpfResult = await cpfProvider.enrich(socio.cpf);
+        if (cpfResult.success && cpfResult.data) {
+          enrichedSocio.emails = cpfResult.data.emails;
+          enrichedSocio.celulares = cpfResult.data.celulares;
+          enrichedSocio.endereco = cpfResult.data.endereco;
+          enrichedSocio.cpf_enrichment_status = 'enriched';
+        } else {
+          enrichedSocio.cpf_enrichment_status = 'failed';
+        }
+      } catch {
+        enrichedSocio.cpf_enrichment_status = 'failed';
+      }
+    }
+
+    enrichedSocios.push(enrichedSocio);
+  }
+
+  // Update lead socios in database
+  await (supabase.from('leads') as ReturnType<typeof supabase.from>)
+    .update({ socios: enrichedSocios } as Record<string, unknown>)
+    .eq('id', leadId);
 }
 
 /**

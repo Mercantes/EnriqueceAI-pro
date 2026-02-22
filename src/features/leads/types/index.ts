@@ -20,6 +20,14 @@ export interface LeadSocio {
   nome: string;
   qualificacao?: string;
   cpf_masked?: string;
+  cpf?: string;
+  participacao?: number;
+  capital_social?: number;
+  // CPF enrichment data (step 2)
+  emails?: Array<{ email: string; ranking: number }>;
+  celulares?: Array<{ ddd: number; numero: string; whatsapp: boolean; ranking: number }>;
+  endereco?: { endereco: string; bairro: string; cidade: string; uf: string; cep: string };
+  cpf_enrichment_status?: 'pending' | 'enriched' | 'failed';
 }
 
 // Lead row matching database table
@@ -43,6 +51,7 @@ export interface LeadRow {
   fit_score: number | null;
   enriched_at: string | null;
   created_by: string | null;
+  assigned_to: string | null;
   import_id: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -85,6 +94,12 @@ export interface EnrichmentAttemptRow {
   created_at: string;
 }
 
+// Cadence info for list view
+export interface LeadCadenceInfo {
+  cadence_name: string | null;
+  responsible_email: string | null;
+}
+
 // Insert types (without auto-generated fields)
 export interface LeadInsert {
   org_id: string;
@@ -101,6 +116,7 @@ export interface LeadInsert {
   telefone?: string | null;
   socios?: LeadSocio[] | null;
   faturamento_estimado?: number | null;
+  assigned_to?: string | null;
   created_by?: string | null;
   import_id?: string | null;
 }
