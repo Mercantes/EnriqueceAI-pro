@@ -1,0 +1,282 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+// ──────────────────────────────────────────────────────────────
+// Types
+// ──────────────────────────────────────────────────────────────
+
+export interface LossReasonStat {
+  reasonId: string;
+  reasonName: string;
+  count: number;
+  percentage: number;
+}
+
+export interface ConversionByOriginStat {
+  origin: string;
+  qualified: number;
+  unqualified: number;
+  total: number;
+  conversionRate: number;
+}
+
+export interface ResponseTimeByCadence {
+  cadenceId: string;
+  cadenceName: string;
+  leadsApproached: number;
+  withinThreshold: number;
+  withinThresholdPct: number;
+}
+
+export interface ResponseTimeData {
+  thresholdMinutes: number;
+  overallPct: number;
+  overallCount: number;
+  totalLeads: number;
+  byCadence: ResponseTimeByCadence[];
+}
+
+export interface StatisticsData {
+  lossReasons: LossReasonStat[];
+  conversionByOrigin: ConversionByOriginStat[];
+  responseTime: ResponseTimeData;
+}
+
+export interface StatisticsFilters {
+  periodStart: string;
+  periodEnd: string;
+  userIds?: string[];
+  thresholdMinutes?: number;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Queries
+// ──────────────────────────────────────────────────────────────
+
+export async function fetchLossReasonStats(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: StatisticsFilters,
+): Promise<LossReasonStat[]> {
+  // Get loss reasons for the org
+  const { data: reasons } = await (supabase.from('loss_reasons') as ReturnType<typeof supabase.from>)
+    .select('id, name')
+    .eq('org_id', orgId) as { data: { id: string; name: string }[] | null };
+
+  if (!reasons || reasons.length === 0) return [];
+
+  // Get enrollments with loss_reason_id in period
+  let query = (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+    .select('loss_reason_id, enrolled_by, cadence_id')
+    .not('loss_reason_id', 'is', null)
+    .gte('updated_at', filters.periodStart)
+    .lte('updated_at', filters.periodEnd);
+
+  if (filters.userIds && filters.userIds.length > 0) {
+    query = query.in('enrolled_by', filters.userIds);
+  }
+
+  const { data: enrollments } = await query as {
+    data: { loss_reason_id: string; enrolled_by: string | null; cadence_id: string }[] | null;
+  };
+
+  if (!enrollments || enrollments.length === 0) return [];
+
+  const total = enrollments.length;
+  const countMap = new Map<string, number>();
+
+  for (const e of enrollments) {
+    countMap.set(e.loss_reason_id, (countMap.get(e.loss_reason_id) ?? 0) + 1);
+  }
+
+  return reasons
+    .map((r) => {
+      const count = countMap.get(r.id) ?? 0;
+      return {
+        reasonId: r.id,
+        reasonName: r.name,
+        count,
+        percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+      };
+    })
+    .filter((r) => r.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+export async function fetchConversionByOrigin(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: StatisticsFilters,
+): Promise<ConversionByOriginStat[]> {
+  let query = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+    .select('id, status, created_by')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .gte('created_at', filters.periodStart)
+    .lte('created_at', filters.periodEnd);
+
+  if (filters.userIds && filters.userIds.length > 0) {
+    query = query.in('created_by', filters.userIds);
+  }
+
+  const { data: leads } = await query as {
+    data: { id: string; status: string; created_by: string | null }[] | null;
+  };
+
+  if (!leads || leads.length === 0) return [];
+
+  // Group by created_by as "origin" (user who created)
+  // For now, origin = created_by user ID (we label it in the UI)
+  const originMap = new Map<string, { qualified: number; unqualified: number }>();
+
+  for (const lead of leads) {
+    const origin = lead.created_by ?? 'unknown';
+    const current = originMap.get(origin) ?? { qualified: 0, unqualified: 0 };
+
+    if (lead.status === 'qualified') {
+      current.qualified++;
+    } else if (lead.status === 'unqualified' || lead.status === 'archived') {
+      current.unqualified++;
+    }
+
+    originMap.set(origin, current);
+  }
+
+  return Array.from(originMap.entries()).map(([origin, stats]) => {
+    const total = stats.qualified + stats.unqualified;
+    return {
+      origin,
+      qualified: stats.qualified,
+      unqualified: stats.unqualified,
+      total,
+      conversionRate: total > 0 ? Math.round((stats.qualified / total) * 100) : 0,
+    };
+  });
+}
+
+export async function fetchResponseTimeData(
+  supabase: SupabaseClient,
+  orgId: string,
+  filters: StatisticsFilters,
+): Promise<ResponseTimeData> {
+  const thresholdMinutes = filters.thresholdMinutes ?? 60;
+
+  // Get leads created in period
+  let leadsQuery = (supabase.from('leads') as ReturnType<typeof supabase.from>)
+    .select('id, created_at')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .gte('created_at', filters.periodStart)
+    .lte('created_at', filters.periodEnd);
+
+  if (filters.userIds && filters.userIds.length > 0) {
+    leadsQuery = leadsQuery.in('created_by', filters.userIds);
+  }
+
+  const { data: leads } = await leadsQuery as {
+    data: { id: string; created_at: string }[] | null;
+  };
+
+  if (!leads || leads.length === 0) {
+    return {
+      thresholdMinutes,
+      overallPct: 0,
+      overallCount: 0,
+      totalLeads: 0,
+      byCadence: [],
+    };
+  }
+
+  const leadIds = leads.map((l) => l.id);
+
+  // Get first interaction per lead
+  const { data: interactions } = await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+    .select('lead_id, cadence_id, created_at')
+    .eq('org_id', orgId)
+    .in('lead_id', leadIds)
+    .in('type', ['sent', 'delivered'])
+    .order('created_at', { ascending: true }) as {
+    data: { lead_id: string; cadence_id: string | null; created_at: string }[] | null;
+  };
+
+  if (!interactions || interactions.length === 0) {
+    return {
+      thresholdMinutes,
+      overallPct: 0,
+      overallCount: 0,
+      totalLeads: leads.length,
+      byCadence: [],
+    };
+  }
+
+  // Build map: lead_id -> created_at
+  const leadCreatedMap = new Map<string, string>();
+  for (const l of leads) {
+    leadCreatedMap.set(l.id, l.created_at);
+  }
+
+  // First interaction per lead
+  const firstInteractionMap = new Map<string, { cadence_id: string | null; created_at: string }>();
+  for (const i of interactions) {
+    if (!firstInteractionMap.has(i.lead_id)) {
+      firstInteractionMap.set(i.lead_id, { cadence_id: i.cadence_id, created_at: i.created_at });
+    }
+  }
+
+  // Calculate response times
+  let withinThresholdTotal = 0;
+  const cadenceStats = new Map<string, { leadsApproached: number; withinThreshold: number }>();
+
+  for (const [leadId, firstInt] of firstInteractionMap) {
+    const leadCreated = leadCreatedMap.get(leadId);
+    if (!leadCreated) continue;
+
+    const diffMs = new Date(firstInt.created_at).getTime() - new Date(leadCreated).getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+    const isWithin = diffMinutes <= thresholdMinutes;
+
+    if (isWithin) withinThresholdTotal++;
+
+    const cadenceId = firstInt.cadence_id ?? 'no-cadence';
+    const current = cadenceStats.get(cadenceId) ?? { leadsApproached: 0, withinThreshold: 0 };
+    current.leadsApproached++;
+    if (isWithin) current.withinThreshold++;
+    cadenceStats.set(cadenceId, current);
+  }
+
+  // Get cadence names
+  const cadenceIds = Array.from(cadenceStats.keys()).filter((id) => id !== 'no-cadence');
+  let cadenceNames = new Map<string, string>();
+
+  if (cadenceIds.length > 0) {
+    const { data: cadences } = await (supabase.from('cadences') as ReturnType<typeof supabase.from>)
+      .select('id, name')
+      .in('id', cadenceIds) as { data: { id: string; name: string }[] | null };
+
+    if (cadences) {
+      cadenceNames = new Map(cadences.map((c) => [c.id, c.name]));
+    }
+  }
+
+  const byCadence: ResponseTimeByCadence[] = Array.from(cadenceStats.entries()).map(
+    ([cadenceId, stats]) => ({
+      cadenceId,
+      cadenceName: cadenceId === 'no-cadence' ? 'Sem cadência' : (cadenceNames.get(cadenceId) ?? 'Cadência removida'),
+      leadsApproached: stats.leadsApproached,
+      withinThreshold: stats.withinThreshold,
+      withinThresholdPct:
+        stats.leadsApproached > 0
+          ? Math.round((stats.withinThreshold / stats.leadsApproached) * 100)
+          : 0,
+    }),
+  );
+
+  const totalApproached = firstInteractionMap.size;
+
+  return {
+    thresholdMinutes,
+    overallPct: totalApproached > 0 ? Math.round((withinThresholdTotal / totalApproached) * 100) : 0,
+    overallCount: withinThresholdTotal,
+    totalLeads: leads.length,
+    byCadence: byCadence.sort((a, b) => b.leadsApproached - a.leadsApproached),
+  };
+}

@@ -15,6 +15,7 @@ import {
   ListChecks,
   Menu,
   Phone,
+  PieChart,
   Play,
   Plug,
   Settings,
@@ -54,6 +55,7 @@ const navItems: NavItem[] = [
   { label: 'Cadências', href: '/cadences', icon: Zap },
   { label: 'Templates', href: '/templates', icon: FileText },
   { label: 'Relatórios', href: '/reports', icon: BarChart3 },
+  { label: 'Estatísticas', href: '/statistics', icon: PieChart, managerOnly: true },
   { label: 'Integrações', href: '/settings/integrations', icon: Plug, managerOnly: true },
   { label: 'Configurações', href: '/settings', icon: Settings },
 ];
