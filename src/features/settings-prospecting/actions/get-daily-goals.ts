@@ -41,8 +41,8 @@ export async function getDailyGoals(): Promise<ActionResult<DailyGoalsData>> {
   const orgId = currentMember.org_id;
 
   // Get all daily goals for this org
-  const { data: goals } = (await (supabase
-    .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+  const { data: goals } = (await supabase
+    .from('daily_activity_goals')
     .select('id, user_id, target')
     .eq('org_id', orgId)) as { data: DailyGoalRow[] | null };
 

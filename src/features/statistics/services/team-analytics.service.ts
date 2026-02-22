@@ -89,8 +89,8 @@ export async function fetchTeamAnalyticsData(
   const leads = rawLeads ?? [];
 
   // Fetch goals
-  const { data: goalRows } = (await (supabase
-    .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+  const { data: goalRows } = (await supabase
+    .from('daily_activity_goals')
     .select('user_id, target')
     .eq('org_id', orgId)) as { data: { user_id: string | null; target: number }[] | null };
 

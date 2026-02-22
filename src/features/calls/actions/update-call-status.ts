@@ -17,8 +17,8 @@ export async function updateCallStatus(
     return { success: false, error: 'Dados inválidos' };
   }
 
-  const { error } = await (supabase
-    .from('calls' as never) as ReturnType<typeof supabase.from>)
+  const { error } = await supabase
+    .from('calls')
     .update({ status: parsed.data.status, updated_at: new Date().toISOString() })
     .eq('id', parsed.data.id);
 

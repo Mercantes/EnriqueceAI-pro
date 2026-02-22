@@ -2,7 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { getManagerOrgId } from '@/features/statistics/actions/shared';
+import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { getPeriodDates } from '@/features/statistics/types/shared';
 
 import { fetchExtratoData } from '../services/extrato.service';

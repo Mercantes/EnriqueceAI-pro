@@ -1,29 +1,60 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       ai_usage: {
         Row: {
+          daily_limit: number
+          generation_count: number
           id: string
           org_id: string
           usage_date: string
-          generation_count: number
-          daily_limit: number
         }
         Insert: {
+          daily_limit: number
+          generation_count?: number
           id?: string
           org_id: string
           usage_date?: string
-          generation_count?: number
-          daily_limit: number
         }
         Update: {
+          daily_limit?: number
+          generation_count?: number
           id?: string
           org_id?: string
           usage_date?: string
-          generation_count?: number
-          daily_limit?: number
         }
         Relationships: [
           {
@@ -37,39 +68,42 @@ export type Database = {
       }
       cadence_enrollments: {
         Row: {
-          id: string
           cadence_id: string
-          lead_id: string
-          current_step: number
-          status: Database["public"]["Enums"]["enrollment_status"]
-          next_step_due: string | null
-          enrolled_by: string | null
-          enrolled_at: string
           completed_at: string | null
+          current_step: number
+          enrolled_at: string
+          enrolled_by: string | null
+          id: string
+          lead_id: string
+          loss_reason_id: string | null
+          next_step_due: string | null
+          status: Database["public"]["Enums"]["enrollment_status"]
           updated_at: string
         }
         Insert: {
-          id?: string
           cadence_id: string
-          lead_id: string
-          current_step?: number
-          status?: Database["public"]["Enums"]["enrollment_status"]
-          next_step_due?: string | null
-          enrolled_by?: string | null
-          enrolled_at?: string
           completed_at?: string | null
+          current_step?: number
+          enrolled_at?: string
+          enrolled_by?: string | null
+          id?: string
+          lead_id: string
+          loss_reason_id?: string | null
+          next_step_due?: string | null
+          status?: Database["public"]["Enums"]["enrollment_status"]
           updated_at?: string
         }
         Update: {
-          id?: string
           cadence_id?: string
-          lead_id?: string
-          current_step?: number
-          status?: Database["public"]["Enums"]["enrollment_status"]
-          next_step_due?: string | null
-          enrolled_by?: string | null
-          enrolled_at?: string
           completed_at?: string | null
+          current_step?: number
+          enrolled_at?: string
+          enrolled_by?: string | null
+          id?: string
+          lead_id?: string
+          loss_reason_id?: string | null
+          next_step_due?: string | null
+          status?: Database["public"]["Enums"]["enrollment_status"]
           updated_at?: string
         }
         Relationships: [
@@ -88,47 +122,47 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cadence_enrollments_enrolled_by_fkey"
-            columns: ["enrolled_by"]
+            foreignKeyName: "cadence_enrollments_loss_reason_id_fkey"
+            columns: ["loss_reason_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "loss_reasons"
             referencedColumns: ["id"]
           },
         ]
       }
       cadence_steps: {
         Row: {
-          id: string
+          ai_personalization: boolean
           cadence_id: string
-          step_order: number
           channel: Database["public"]["Enums"]["channel_type"]
-          template_id: string | null
+          created_at: string
           delay_days: number
           delay_hours: number
-          ai_personalization: boolean
-          created_at: string
+          id: string
+          step_order: number
+          template_id: string | null
         }
         Insert: {
-          id?: string
+          ai_personalization?: boolean
           cadence_id: string
-          step_order: number
           channel: Database["public"]["Enums"]["channel_type"]
-          template_id?: string | null
+          created_at?: string
           delay_days?: number
           delay_hours?: number
-          ai_personalization?: boolean
-          created_at?: string
+          id?: string
+          step_order: number
+          template_id?: string | null
         }
         Update: {
-          id?: string
+          ai_personalization?: boolean
           cadence_id?: string
-          step_order?: number
           channel?: Database["public"]["Enums"]["channel_type"]
-          template_id?: string | null
+          created_at?: string
           delay_days?: number
           delay_hours?: number
-          ai_personalization?: boolean
-          created_at?: string
+          id?: string
+          step_order?: number
+          template_id?: string | null
         }
         Relationships: [
           {
@@ -149,39 +183,48 @@ export type Database = {
       }
       cadences: {
         Row: {
-          id: string
-          org_id: string
-          name: string
-          description: string | null
-          status: Database["public"]["Enums"]["cadence_status"]
-          total_steps: number
+          created_at: string
           created_by: string | null
           deleted_at: string | null
-          created_at: string
+          description: string | null
+          id: string
+          name: string
+          org_id: string
+          origin: string
+          priority: string
+          status: Database["public"]["Enums"]["cadence_status"]
+          total_steps: number
+          type: string
           updated_at: string
         }
         Insert: {
-          id?: string
-          org_id: string
-          name: string
-          description?: string | null
-          status?: Database["public"]["Enums"]["cadence_status"]
-          total_steps?: number
+          created_at?: string
           created_by?: string | null
           deleted_at?: string | null
-          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          org_id: string
+          origin?: string
+          priority?: string
+          status?: Database["public"]["Enums"]["cadence_status"]
+          total_steps?: number
+          type?: string
           updated_at?: string
         }
         Update: {
-          id?: string
-          org_id?: string
-          name?: string
-          description?: string | null
-          status?: Database["public"]["Enums"]["cadence_status"]
-          total_steps?: number
+          created_at?: string
           created_by?: string | null
           deleted_at?: string | null
-          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+          origin?: string
+          priority?: string
+          status?: Database["public"]["Enums"]["cadence_status"]
+          total_steps?: number
+          type?: string
           updated_at?: string
         }
         Relationships: [
@@ -192,51 +235,44 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "cadences_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       calendar_connections: {
         Row: {
+          access_token_encrypted: string
+          calendar_email: string
+          created_at: string
           id: string
           org_id: string
-          user_id: string
-          access_token_encrypted: string
           refresh_token_encrypted: string
-          token_expires_at: string
-          calendar_email: string
           status: Database["public"]["Enums"]["connection_status"]
-          created_at: string
+          token_expires_at: string
           updated_at: string
+          user_id: string
         }
         Insert: {
+          access_token_encrypted: string
+          calendar_email: string
+          created_at?: string
           id?: string
           org_id: string
-          user_id: string
-          access_token_encrypted: string
           refresh_token_encrypted: string
-          token_expires_at: string
-          calendar_email: string
           status?: Database["public"]["Enums"]["connection_status"]
-          created_at?: string
+          token_expires_at: string
           updated_at?: string
+          user_id: string
         }
         Update: {
+          access_token_encrypted?: string
+          calendar_email?: string
+          created_at?: string
           id?: string
           org_id?: string
-          user_id?: string
-          access_token_encrypted?: string
           refresh_token_encrypted?: string
-          token_expires_at?: string
-          calendar_email?: string
           status?: Database["public"]["Enums"]["connection_status"]
-          created_at?: string
+          token_expires_at?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
@@ -246,47 +282,179 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      call_daily_targets: {
+        Row: {
+          created_at: string
+          daily_target: number
+          id: string
+          org_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_target?: number
+          id?: string
+          org_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_target?: number
+          id?: string
+          org_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "calendar_connections_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "call_daily_targets_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_feedback: {
+        Row: {
+          call_id: string
+          content: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          call_id: string
+          content: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          call_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_feedback_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calls: {
+        Row: {
+          cost: number | null
+          created_at: string
+          destination: string
+          duration_seconds: number
+          id: string
+          is_important: boolean
+          lead_id: string | null
+          notes: string | null
+          org_id: string
+          origin: string
+          recording_url: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["call_status"]
+          type: Database["public"]["Enums"]["call_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string
+          destination: string
+          duration_seconds?: number
+          id?: string
+          is_important?: boolean
+          lead_id?: string | null
+          notes?: string | null
+          org_id: string
+          origin: string
+          recording_url?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["call_status"]
+          type?: Database["public"]["Enums"]["call_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string
+          destination?: string
+          duration_seconds?: number
+          id?: string
+          is_important?: boolean
+          lead_id?: string | null
+          notes?: string | null
+          org_id?: string
+          origin?: string
+          recording_url?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["call_status"]
+          type?: Database["public"]["Enums"]["call_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
       }
       crm_connections: {
         Row: {
-          id: string
-          org_id: string
-          crm_provider: Database["public"]["Enums"]["crm_type"]
-          credentials_encrypted: Json
-          field_mapping: Json | null
-          status: Database["public"]["Enums"]["connection_status"]
-          last_sync_at: string | null
           created_at: string
+          credentials_encrypted: Json
+          crm_provider: Database["public"]["Enums"]["crm_type"]
+          field_mapping: Json | null
+          id: string
+          last_sync_at: string | null
+          org_id: string
+          status: Database["public"]["Enums"]["connection_status"]
           updated_at: string
         }
         Insert: {
-          id?: string
-          org_id: string
-          crm_provider: Database["public"]["Enums"]["crm_type"]
-          credentials_encrypted: Json
-          field_mapping?: Json | null
-          status?: Database["public"]["Enums"]["connection_status"]
-          last_sync_at?: string | null
           created_at?: string
+          credentials_encrypted: Json
+          crm_provider: Database["public"]["Enums"]["crm_type"]
+          field_mapping?: Json | null
+          id?: string
+          last_sync_at?: string | null
+          org_id: string
+          status?: Database["public"]["Enums"]["connection_status"]
           updated_at?: string
         }
         Update: {
-          id?: string
-          org_id?: string
-          crm_provider?: Database["public"]["Enums"]["crm_type"]
-          credentials_encrypted?: Json
-          field_mapping?: Json | null
-          status?: Database["public"]["Enums"]["connection_status"]
-          last_sync_at?: string | null
           created_at?: string
+          credentials_encrypted?: Json
+          crm_provider?: Database["public"]["Enums"]["crm_type"]
+          field_mapping?: Json | null
+          id?: string
+          last_sync_at?: string | null
+          org_id?: string
+          status?: Database["public"]["Enums"]["connection_status"]
           updated_at?: string
         }
         Relationships: [
@@ -301,34 +469,34 @@ export type Database = {
       }
       crm_sync_log: {
         Row: {
-          id: string
           connection_id: string
+          created_at: string
           direction: Database["public"]["Enums"]["sync_direction"]
-          records_synced: number
-          errors: number
           duration_ms: number | null
           error_details: Json | null
-          created_at: string
+          errors: number
+          id: string
+          records_synced: number
         }
         Insert: {
-          id?: string
           connection_id: string
+          created_at?: string
           direction: Database["public"]["Enums"]["sync_direction"]
-          records_synced?: number
-          errors?: number
           duration_ms?: number | null
           error_details?: Json | null
-          created_at?: string
+          errors?: number
+          id?: string
+          records_synced?: number
         }
         Update: {
-          id?: string
           connection_id?: string
+          created_at?: string
           direction?: Database["public"]["Enums"]["sync_direction"]
-          records_synced?: number
-          errors?: number
           duration_ms?: number | null
           error_details?: Json | null
-          created_at?: string
+          errors?: number
+          id?: string
+          records_synced?: number
         }
         Relationships: [
           {
@@ -340,36 +508,138 @@ export type Database = {
           },
         ]
       }
+      custom_fields: {
+        Row: {
+          created_at: string
+          field_name: string
+          field_type: string
+          id: string
+          options: Json | null
+          org_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          field_name: string
+          field_type: string
+          id?: string
+          options?: Json | null
+          org_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          field_name?: string
+          field_type?: string
+          id?: string
+          options?: Json | null
+          org_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_fields_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_activity_goals: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          target: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          target?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          target?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_activity_goals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_blacklist: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          org_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          org_id: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_blacklist_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enrichment_attempts: {
         Row: {
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
           id: string
           lead_id: string
           provider: string
-          status: Database["public"]["Enums"]["enrichment_status"]
           response_data: Json | null
-          error_message: string | null
-          duration_ms: number | null
-          created_at: string
+          status: Database["public"]["Enums"]["enrichment_status"]
         }
         Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
           id?: string
           lead_id: string
           provider: string
-          status: Database["public"]["Enums"]["enrichment_status"]
           response_data?: Json | null
-          error_message?: string | null
-          duration_ms?: number | null
-          created_at?: string
+          status: Database["public"]["Enums"]["enrichment_status"]
         }
         Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
           id?: string
           lead_id?: string
           provider?: string
-          status?: Database["public"]["Enums"]["enrichment_status"]
           response_data?: Json | null
-          error_message?: string | null
-          duration_ms?: number | null
-          created_at?: string
+          status?: Database["public"]["Enums"]["enrichment_status"]
         }
         Relationships: [
           {
@@ -381,42 +651,83 @@ export type Database = {
           },
         ]
       }
-      gmail_connections: {
+      fit_score_rules: {
         Row: {
-          id: string
-          org_id: string
-          user_id: string
-          access_token_encrypted: string
-          refresh_token_encrypted: string
-          token_expires_at: string
-          email_address: string
-          status: Database["public"]["Enums"]["connection_status"]
           created_at: string
-          updated_at: string
+          field: string
+          id: string
+          operator: string
+          org_id: string
+          points: number
+          sort_order: number
+          value: string | null
         }
         Insert: {
-          id?: string
-          org_id: string
-          user_id: string
-          access_token_encrypted: string
-          refresh_token_encrypted: string
-          token_expires_at: string
-          email_address: string
-          status?: Database["public"]["Enums"]["connection_status"]
           created_at?: string
-          updated_at?: string
+          field: string
+          id?: string
+          operator: string
+          org_id: string
+          points: number
+          sort_order?: number
+          value?: string | null
         }
         Update: {
+          created_at?: string
+          field?: string
+          id?: string
+          operator?: string
+          org_id?: string
+          points?: number
+          sort_order?: number
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fit_score_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gmail_connections: {
+        Row: {
+          access_token_encrypted: string
+          created_at: string
+          email_address: string
+          id: string
+          org_id: string
+          refresh_token_encrypted: string
+          status: Database["public"]["Enums"]["connection_status"]
+          token_expires_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          created_at?: string
+          email_address: string
+          id?: string
+          org_id: string
+          refresh_token_encrypted: string
+          status?: Database["public"]["Enums"]["connection_status"]
+          token_expires_at: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          created_at?: string
+          email_address?: string
           id?: string
           org_id?: string
-          user_id?: string
-          access_token_encrypted?: string
           refresh_token_encrypted?: string
-          token_expires_at?: string
-          email_address?: string
           status?: Database["public"]["Enums"]["connection_status"]
-          created_at?: string
+          token_expires_at?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
@@ -426,67 +737,148 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      goals: {
+        Row: {
+          activities_target: number
+          conversion_target: number
+          created_at: string
+          created_by: string
+          id: string
+          month: string
+          opportunity_target: number
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          activities_target?: number
+          conversion_target?: number
+          created_at?: string
+          created_by: string
+          id?: string
+          month: string
+          opportunity_target?: number
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          activities_target?: number
+          conversion_target?: number
+          created_at?: string
+          created_by?: string
+          id?: string
+          month?: string
+          opportunity_target?: number
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "gmail_connections_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "goals_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals_per_user: {
+        Row: {
+          activities_target: number
+          conversion_target: number
+          created_at: string
+          id: string
+          month: string
+          opportunity_target: number
+          org_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activities_target?: number
+          conversion_target?: number
+          created_at?: string
+          id?: string
+          month: string
+          opportunity_target?: number
+          org_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activities_target?: number
+          conversion_target?: number
+          created_at?: string
+          id?: string
+          month?: string
+          opportunity_target?: number
+          org_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_per_user_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
       }
       interactions: {
         Row: {
-          id: string
-          org_id: string
-          lead_id: string
-          cadence_id: string | null
-          step_id: string | null
-          channel: Database["public"]["Enums"]["channel_type"]
-          type: Database["public"]["Enums"]["interaction_type"]
-          message_content: string | null
-          external_id: string | null
-          metadata: Json | null
           ai_generated: boolean
-          original_template_id: string | null
+          cadence_id: string | null
+          channel: Database["public"]["Enums"]["channel_type"]
           created_at: string
+          external_id: string | null
+          id: string
+          lead_id: string
+          message_content: string | null
+          metadata: Json | null
+          org_id: string
+          original_template_id: string | null
+          step_id: string | null
+          type: Database["public"]["Enums"]["interaction_type"]
         }
         Insert: {
-          id?: string
-          org_id: string
-          lead_id: string
-          cadence_id?: string | null
-          step_id?: string | null
-          channel: Database["public"]["Enums"]["channel_type"]
-          type: Database["public"]["Enums"]["interaction_type"]
-          message_content?: string | null
-          external_id?: string | null
-          metadata?: Json | null
           ai_generated?: boolean
-          original_template_id?: string | null
+          cadence_id?: string | null
+          channel: Database["public"]["Enums"]["channel_type"]
           created_at?: string
+          external_id?: string | null
+          id?: string
+          lead_id: string
+          message_content?: string | null
+          metadata?: Json | null
+          org_id: string
+          original_template_id?: string | null
+          step_id?: string | null
+          type: Database["public"]["Enums"]["interaction_type"]
         }
         Update: {
-          id?: string
-          org_id?: string
-          lead_id?: string
-          cadence_id?: string | null
-          step_id?: string | null
-          channel?: Database["public"]["Enums"]["channel_type"]
-          type?: Database["public"]["Enums"]["interaction_type"]
-          message_content?: string | null
-          external_id?: string | null
-          metadata?: Json | null
           ai_generated?: boolean
-          original_template_id?: string | null
+          cadence_id?: string | null
+          channel?: Database["public"]["Enums"]["channel_type"]
           created_at?: string
+          external_id?: string | null
+          id?: string
+          lead_id?: string
+          message_content?: string | null
+          metadata?: Json | null
+          org_id?: string
+          original_template_id?: string | null
+          step_id?: string | null
+          type?: Database["public"]["Enums"]["interaction_type"]
         }
         Relationships: [
           {
-            foreignKeyName: "interactions_org_id_fkey"
-            columns: ["org_id"]
+            foreignKeyName: "interactions_cadence_id_fkey"
+            columns: ["cadence_id"]
             isOneToOne: false
-            referencedRelation: "organizations"
+            referencedRelation: "cadences"
             referencedColumns: ["id"]
           },
           {
@@ -497,17 +889,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "interactions_cadence_id_fkey"
-            columns: ["cadence_id"]
+            foreignKeyName: "interactions_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
-            referencedRelation: "cadences"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "interactions_step_id_fkey"
-            columns: ["step_id"]
-            isOneToOne: false
-            referencedRelation: "cadence_steps"
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -517,32 +902,39 @@ export type Database = {
             referencedRelation: "message_templates"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "interactions_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "cadence_steps"
+            referencedColumns: ["id"]
+          },
         ]
       }
       lead_import_errors: {
         Row: {
+          cnpj: string | null
+          created_at: string
+          error_message: string
           id: string
           import_id: string
           row_number: number
-          cnpj: string | null
-          error_message: string
-          created_at: string
         }
         Insert: {
+          cnpj?: string | null
+          created_at?: string
+          error_message: string
           id?: string
           import_id: string
           row_number: number
-          cnpj?: string | null
-          error_message: string
-          created_at?: string
         }
         Update: {
+          cnpj?: string | null
+          created_at?: string
+          error_message?: string
           id?: string
           import_id?: string
           row_number?: number
-          cnpj?: string | null
-          error_message?: string
-          created_at?: string
         }
         Relationships: [
           {
@@ -556,40 +948,40 @@ export type Database = {
       }
       lead_imports: {
         Row: {
+          created_at: string
+          created_by: string | null
+          error_count: number
+          file_name: string
           id: string
           org_id: string
-          file_name: string
-          total_rows: number
           processed_rows: number
-          success_count: number
-          error_count: number
           status: Database["public"]["Enums"]["import_status"]
-          created_by: string | null
-          created_at: string
+          success_count: number
+          total_rows: number
         }
         Insert: {
+          created_at?: string
+          created_by?: string | null
+          error_count?: number
+          file_name: string
           id?: string
           org_id: string
-          file_name: string
-          total_rows?: number
           processed_rows?: number
-          success_count?: number
-          error_count?: number
           status?: Database["public"]["Enums"]["import_status"]
-          created_by?: string | null
-          created_at?: string
+          success_count?: number
+          total_rows?: number
         }
         Update: {
+          created_at?: string
+          created_by?: string | null
+          error_count?: number
+          file_name?: string
           id?: string
           org_id?: string
-          file_name?: string
-          total_rows?: number
           processed_rows?: number
-          success_count?: number
-          error_count?: number
           status?: Database["public"]["Enums"]["import_status"]
-          created_by?: string | null
-          created_at?: string
+          success_count?: number
+          total_rows?: number
         }
         Relationships: [
           {
@@ -599,103 +991,85 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "lead_imports_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       leads: {
         Row: {
-          id: string
-          org_id: string
-          cnpj: string
-          status: Database["public"]["Enums"]["lead_status"]
-          enrichment_status: Database["public"]["Enums"]["enrichment_status"]
-          razao_social: string | null
-          nome_fantasia: string | null
-          endereco: Json | null
-          porte: string | null
           cnae: string | null
-          situacao_cadastral: string | null
-          email: string | null
-          telefone: string | null
-          socios: Json | null
-          faturamento_estimado: number | null
-          notes: string | null
-          enriched_at: string | null
-          created_by: string | null
-          import_id: string | null
-          deleted_at: string | null
+          cnpj: string
           created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          email: string | null
+          endereco: Json | null
+          enriched_at: string | null
+          enrichment_status: Database["public"]["Enums"]["enrichment_status"]
+          faturamento_estimado: number | null
+          fit_score: number | null
+          id: string
+          import_id: string | null
+          nome_fantasia: string | null
+          notes: string | null
+          org_id: string
+          porte: string | null
+          razao_social: string | null
+          situacao_cadastral: string | null
+          socios: Json | null
+          status: Database["public"]["Enums"]["lead_status"]
+          telefone: string | null
           updated_at: string
         }
         Insert: {
-          id?: string
-          org_id: string
-          cnpj: string
-          status?: Database["public"]["Enums"]["lead_status"]
-          enrichment_status?: Database["public"]["Enums"]["enrichment_status"]
-          razao_social?: string | null
-          nome_fantasia?: string | null
-          endereco?: Json | null
-          porte?: string | null
           cnae?: string | null
-          situacao_cadastral?: string | null
-          email?: string | null
-          telefone?: string | null
-          socios?: Json | null
-          faturamento_estimado?: number | null
-          notes?: string | null
-          enriched_at?: string | null
-          created_by?: string | null
-          import_id?: string | null
-          deleted_at?: string | null
+          cnpj: string
           created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          email?: string | null
+          endereco?: Json | null
+          enriched_at?: string | null
+          enrichment_status?: Database["public"]["Enums"]["enrichment_status"]
+          faturamento_estimado?: number | null
+          fit_score?: number | null
+          id?: string
+          import_id?: string | null
+          nome_fantasia?: string | null
+          notes?: string | null
+          org_id: string
+          porte?: string | null
+          razao_social?: string | null
+          situacao_cadastral?: string | null
+          socios?: Json | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          telefone?: string | null
           updated_at?: string
         }
         Update: {
-          id?: string
-          org_id?: string
-          cnpj?: string
-          status?: Database["public"]["Enums"]["lead_status"]
-          enrichment_status?: Database["public"]["Enums"]["enrichment_status"]
-          razao_social?: string | null
-          nome_fantasia?: string | null
-          endereco?: Json | null
-          porte?: string | null
           cnae?: string | null
-          situacao_cadastral?: string | null
-          email?: string | null
-          telefone?: string | null
-          socios?: Json | null
-          faturamento_estimado?: number | null
-          notes?: string | null
-          enriched_at?: string | null
-          created_by?: string | null
-          import_id?: string | null
-          deleted_at?: string | null
+          cnpj?: string
           created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          email?: string | null
+          endereco?: Json | null
+          enriched_at?: string | null
+          enrichment_status?: Database["public"]["Enums"]["enrichment_status"]
+          faturamento_estimado?: number | null
+          fit_score?: number | null
+          id?: string
+          import_id?: string | null
+          nome_fantasia?: string | null
+          notes?: string | null
+          org_id?: string
+          porte?: string | null
+          razao_social?: string | null
+          situacao_cadastral?: string | null
+          socios?: Json | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          telefone?: string | null
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "leads_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "leads_import_id_fkey"
             columns: ["import_id"]
@@ -703,47 +1077,89 @@ export type Database = {
             referencedRelation: "lead_imports"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "leads_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loss_reasons: {
+        Row: {
+          created_at: string
+          id: string
+          is_system: boolean
+          name: string
+          org_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          name: string
+          org_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          name?: string
+          org_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loss_reasons_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       message_templates: {
         Row: {
-          id: string
-          org_id: string
-          name: string
-          channel: Database["public"]["Enums"]["channel_type"]
-          subject: string | null
           body: string
-          variables_used: string[]
-          is_system: boolean
-          created_by: string | null
+          channel: Database["public"]["Enums"]["channel_type"]
           created_at: string
+          created_by: string | null
+          id: string
+          is_system: boolean
+          name: string
+          org_id: string
+          subject: string | null
           updated_at: string
+          variables_used: string[] | null
         }
         Insert: {
-          id?: string
-          org_id: string
-          name: string
-          channel: Database["public"]["Enums"]["channel_type"]
-          subject?: string | null
           body: string
-          variables_used?: string[]
-          is_system?: boolean
-          created_by?: string | null
+          channel: Database["public"]["Enums"]["channel_type"]
           created_at?: string
+          created_by?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          org_id: string
+          subject?: string | null
           updated_at?: string
+          variables_used?: string[] | null
         }
         Update: {
-          id?: string
-          org_id?: string
-          name?: string
-          channel?: Database["public"]["Enums"]["channel_type"]
-          subject?: string | null
           body?: string
-          variables_used?: string[]
-          is_system?: boolean
-          created_by?: string | null
+          channel?: Database["public"]["Enums"]["channel_type"]
           created_at?: string
+          created_by?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          org_id?: string
+          subject?: string | null
           updated_at?: string
+          variables_used?: string[] | null
         }
         Relationships: [
           {
@@ -753,57 +1169,50 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "message_templates_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       notifications: {
         Row: {
-          id: string
-          org_id: string
-          user_id: string
-          type: Database["public"]["Enums"]["notification_type"]
-          title: string
           body: string | null
-          read_at: string | null
-          resource_type: string | null
-          resource_id: string | null
-          metadata: Json
           created_at: string
+          id: string
+          metadata: Json
+          org_id: string
+          read_at: string | null
+          resource_id: string | null
+          resource_type: string | null
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
           updated_at: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          org_id: string
-          user_id: string
-          type: Database["public"]["Enums"]["notification_type"]
-          title: string
           body?: string | null
-          read_at?: string | null
-          resource_type?: string | null
-          resource_id?: string | null
-          metadata?: Json
           created_at?: string
+          id?: string
+          metadata?: Json
+          org_id: string
+          read_at?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
           updated_at?: string
+          user_id: string
         }
         Update: {
-          id?: string
-          org_id?: string
-          user_id?: string
-          type?: Database["public"]["Enums"]["notification_type"]
-          title?: string
           body?: string | null
-          read_at?: string | null
-          resource_type?: string | null
-          resource_id?: string | null
-          metadata?: Json
           created_at?: string
+          id?: string
+          metadata?: Json
+          org_id?: string
+          read_at?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["notification_type"]
           updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
@@ -813,48 +1222,82 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      organization_call_settings: {
+        Row: {
+          calls_enabled: boolean
+          created_at: string
+          daily_call_target: number
+          default_call_type: Database["public"]["Enums"]["call_type"]
+          id: string
+          org_id: string
+          significant_threshold_seconds: number
+          updated_at: string
+        }
+        Insert: {
+          calls_enabled?: boolean
+          created_at?: string
+          daily_call_target?: number
+          default_call_type?: Database["public"]["Enums"]["call_type"]
+          id?: string
+          org_id: string
+          significant_threshold_seconds?: number
+          updated_at?: string
+        }
+        Update: {
+          calls_enabled?: boolean
+          created_at?: string
+          daily_call_target?: number
+          default_call_type?: Database["public"]["Enums"]["call_type"]
+          id?: string
+          org_id?: string
+          significant_threshold_seconds?: number
+          updated_at?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
+            foreignKeyName: "organization_call_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
       }
       organization_members: {
         Row: {
-          id: string
-          org_id: string
-          user_id: string
-          role: Database["public"]["Enums"]["member_role"]
-          status: Database["public"]["Enums"]["member_status"]
-          invited_at: string
           accepted_at: string | null
           created_at: string
+          id: string
+          invited_at: string
+          org_id: string
+          role: Database["public"]["Enums"]["member_role"]
+          status: Database["public"]["Enums"]["member_status"]
           updated_at: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          org_id: string
-          user_id: string
-          role?: Database["public"]["Enums"]["member_role"]
-          status?: Database["public"]["Enums"]["member_status"]
-          invited_at?: string
           accepted_at?: string | null
           created_at?: string
+          id?: string
+          invited_at?: string
+          org_id: string
+          role?: Database["public"]["Enums"]["member_role"]
+          status?: Database["public"]["Enums"]["member_status"]
           updated_at?: string
+          user_id: string
         }
         Update: {
-          id?: string
-          org_id?: string
-          user_id?: string
-          role?: Database["public"]["Enums"]["member_role"]
-          status?: Database["public"]["Enums"]["member_status"]
-          invited_at?: string
           accepted_at?: string | null
           created_at?: string
+          id?: string
+          invited_at?: string
+          org_id?: string
+          role?: Database["public"]["Enums"]["member_role"]
+          status?: Database["public"]["Enums"]["member_status"]
           updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
@@ -864,130 +1307,162 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "organization_members_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       organizations: {
         Row: {
-          id: string
-          name: string
-          slug: string
-          owner_id: string
+          abm_enabled: boolean
+          abm_group_field: string
           created_at: string
+          id: string
+          lead_visibility_mode: string
+          name: string
+          owner_id: string
+          slug: string
+          stripe_customer_id: string | null
           updated_at: string
         }
         Insert: {
-          id?: string
-          name: string
-          slug: string
-          owner_id: string
+          abm_enabled?: boolean
+          abm_group_field?: string
           created_at?: string
+          id?: string
+          lead_visibility_mode?: string
+          name: string
+          owner_id: string
+          slug: string
+          stripe_customer_id?: string | null
           updated_at?: string
         }
         Update: {
-          id?: string
-          name?: string
-          slug?: string
-          owner_id?: string
+          abm_enabled?: boolean
+          abm_group_field?: string
           created_at?: string
+          id?: string
+          lead_visibility_mode?: string
+          name?: string
+          owner_id?: string
+          slug?: string
+          stripe_customer_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      phone_blacklist: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          phone_pattern: string
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          phone_pattern: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          phone_pattern?: string
+          reason?: string | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "organizations_owner_id_fkey"
-            columns: ["owner_id"]
+            foreignKeyName: "phone_blacklist_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
       }
       plans: {
         Row: {
-          id: string
-          name: string
-          slug: string
-          price_cents: number
-          max_leads: number
-          max_ai_per_day: number
-          max_whatsapp_per_month: number
-          included_users: number
-          additional_user_price_cents: number
-          features: Json
           active: boolean
+          additional_user_price_cents: number
           created_at: string
+          features: Json
+          id: string
+          included_users: number
+          max_ai_per_day: number
+          max_leads: number
+          max_whatsapp_per_month: number
+          name: string
+          price_cents: number
+          slug: string
           updated_at: string
         }
         Insert: {
-          id?: string
-          name: string
-          slug: string
-          price_cents: number
-          max_leads: number
-          max_ai_per_day: number
-          max_whatsapp_per_month: number
-          included_users?: number
-          additional_user_price_cents: number
-          features?: Json
           active?: boolean
+          additional_user_price_cents: number
           created_at?: string
+          features?: Json
+          id?: string
+          included_users?: number
+          max_ai_per_day: number
+          max_leads: number
+          max_whatsapp_per_month: number
+          name: string
+          price_cents: number
+          slug: string
           updated_at?: string
         }
         Update: {
-          id?: string
-          name?: string
-          slug?: string
-          price_cents?: number
-          max_leads?: number
-          max_ai_per_day?: number
-          max_whatsapp_per_month?: number
-          included_users?: number
-          additional_user_price_cents?: number
-          features?: Json
           active?: boolean
+          additional_user_price_cents?: number
           created_at?: string
+          features?: Json
+          id?: string
+          included_users?: number
+          max_ai_per_day?: number
+          max_leads?: number
+          max_whatsapp_per_month?: number
+          name?: string
+          price_cents?: number
+          slug?: string
           updated_at?: string
         }
         Relationships: []
       }
       subscriptions: {
         Row: {
+          created_at: string
+          current_period_end: string
+          current_period_start: string
           id: string
           org_id: string
           plan_id: string
           status: Database["public"]["Enums"]["subscription_status"]
-          current_period_start: string
-          current_period_end: string
           stripe_subscription_id: string | null
-          created_at: string
           updated_at: string
         }
         Insert: {
+          created_at?: string
+          current_period_end?: string
+          current_period_start?: string
           id?: string
           org_id: string
           plan_id: string
           status?: Database["public"]["Enums"]["subscription_status"]
-          current_period_start?: string
-          current_period_end?: string
           stripe_subscription_id?: string | null
-          created_at?: string
           updated_at?: string
         }
         Update: {
+          created_at?: string
+          current_period_end?: string
+          current_period_start?: string
           id?: string
           org_id?: string
           plan_id?: string
           status?: Database["public"]["Enums"]["subscription_status"]
-          current_period_start?: string
-          current_period_end?: string
           stripe_subscription_id?: string | null
-          created_at?: string
           updated_at?: string
         }
         Relationships: [
@@ -1007,35 +1482,62 @@ export type Database = {
           },
         ]
       }
+      webhook_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          id: string
+          payload: Json | null
+          processed_at: string | null
+          provider: string
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          provider: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          provider?: string
+        }
+        Relationships: []
+      }
       whatsapp_connections: {
         Row: {
+          access_token_encrypted: string
+          business_account_id: string
+          created_at: string
           id: string
           org_id: string
           phone_number_id: string
-          business_account_id: string
-          access_token_encrypted: string
           status: Database["public"]["Enums"]["connection_status"]
-          created_at: string
           updated_at: string
         }
         Insert: {
+          access_token_encrypted: string
+          business_account_id: string
+          created_at?: string
           id?: string
           org_id: string
           phone_number_id: string
-          business_account_id: string
-          access_token_encrypted: string
           status?: Database["public"]["Enums"]["connection_status"]
-          created_at?: string
           updated_at?: string
         }
         Update: {
+          access_token_encrypted?: string
+          business_account_id?: string
+          created_at?: string
           id?: string
           org_id?: string
           phone_number_id?: string
-          business_account_id?: string
-          access_token_encrypted?: string
           status?: Database["public"]["Enums"]["connection_status"]
-          created_at?: string
           updated_at?: string
         }
         Relationships: [
@@ -1052,26 +1554,26 @@ export type Database = {
         Row: {
           id: string
           org_id: string
-          plan_credits: number
-          used_credits: number
           overage_count: number
           period: string
+          plan_credits: number
+          used_credits: number
         }
         Insert: {
           id?: string
           org_id: string
-          plan_credits?: number
-          used_credits?: number
           overage_count?: number
           period: string
+          plan_credits?: number
+          used_credits?: number
         }
         Update: {
           id?: string
           org_id?: string
-          plan_credits?: number
-          used_credits?: number
           overage_count?: number
           period?: string
+          plan_credits?: number
+          used_credits?: number
         }
         Relationships: [
           {
@@ -1088,30 +1590,64 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      user_org_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      is_manager: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_manager: { Args: never; Returns: boolean }
+      user_org_id: { Args: never; Returns: string }
     }
     Enums: {
+      cadence_status: "draft" | "active" | "paused" | "archived"
+      call_status:
+        | "significant"
+        | "not_significant"
+        | "no_contact"
+        | "busy"
+        | "not_connected"
+      call_type: "inbound" | "outbound" | "manual"
+      channel_type: "email" | "whatsapp" | "phone" | "linkedin" | "research"
+      connection_status: "connected" | "disconnected" | "error" | "syncing"
+      crm_type: "hubspot" | "pipedrive" | "rdstation"
+      enrichment_status:
+        | "pending"
+        | "enriching"
+        | "enriched"
+        | "enrichment_failed"
+        | "not_found"
+      enrollment_status:
+        | "active"
+        | "paused"
+        | "completed"
+        | "replied"
+        | "bounced"
+        | "unsubscribed"
+      import_status: "processing" | "completed" | "failed"
+      interaction_type:
+        | "sent"
+        | "delivered"
+        | "opened"
+        | "clicked"
+        | "replied"
+        | "bounced"
+        | "failed"
+        | "meeting_scheduled"
+      lead_status:
+        | "new"
+        | "contacted"
+        | "qualified"
+        | "unqualified"
+        | "archived"
       member_role: "manager" | "sdr"
       member_status: "invited" | "active" | "suspended" | "removed"
-      lead_status: "new" | "contacted" | "qualified" | "unqualified" | "archived"
-      enrichment_status: "pending" | "enriching" | "enriched" | "enrichment_failed" | "not_found"
-      import_status: "processing" | "completed" | "failed"
-      cadence_status: "draft" | "active" | "paused" | "archived"
-      enrollment_status: "active" | "paused" | "completed" | "replied" | "bounced" | "unsubscribed"
-      channel_type: "email" | "whatsapp"
-      interaction_type: "sent" | "delivered" | "opened" | "clicked" | "replied" | "bounced" | "failed" | "meeting_scheduled"
-      crm_type: "hubspot" | "pipedrive" | "rdstation"
-      connection_status: "connected" | "disconnected" | "error" | "syncing"
+      notification_type:
+        | "lead_replied"
+        | "lead_opened"
+        | "lead_clicked"
+        | "lead_bounced"
+        | "sync_completed"
+        | "integration_error"
+        | "member_invited"
+        | "member_joined"
+        | "usage_limit_alert"
       subscription_status: "active" | "past_due" | "canceled" | "trialing"
       sync_direction: "push" | "pull"
-      notification_type: "lead_replied" | "lead_opened" | "lead_clicked" | "lead_bounced" | "sync_completed" | "integration_error" | "member_invited" | "member_joined" | "usage_limit_alert"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1119,27 +1655,33 @@ export type Database = {
   }
 }
 
-type PublicSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
-  PublicTableNameOrOptions extends
-    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-        Database[PublicTableNameOrOptions["schema"]]["Views"])
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
-        PublicSchema["Views"])
-    ? (PublicSchema["Tables"] &
-        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -1147,20 +1689,24 @@ export type Tables<
     : never
 
 export type TablesInsert<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -1168,20 +1714,24 @@ export type TablesInsert<
     : never
 
 export type TablesUpdate<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -1189,14 +1739,100 @@ export type TablesUpdate<
     : never
 
 export type Enums<
-  PublicEnumNameOrOptions extends
-    | keyof PublicSchema["Enums"]
-    | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
-    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
+  public: {
+    Enums: {
+      cadence_status: ["draft", "active", "paused", "archived"],
+      call_status: [
+        "significant",
+        "not_significant",
+        "no_contact",
+        "busy",
+        "not_connected",
+      ],
+      call_type: ["inbound", "outbound", "manual"],
+      channel_type: ["email", "whatsapp", "phone", "linkedin", "research"],
+      connection_status: ["connected", "disconnected", "error", "syncing"],
+      crm_type: ["hubspot", "pipedrive", "rdstation"],
+      enrichment_status: [
+        "pending",
+        "enriching",
+        "enriched",
+        "enrichment_failed",
+        "not_found",
+      ],
+      enrollment_status: [
+        "active",
+        "paused",
+        "completed",
+        "replied",
+        "bounced",
+        "unsubscribed",
+      ],
+      import_status: ["processing", "completed", "failed"],
+      interaction_type: [
+        "sent",
+        "delivered",
+        "opened",
+        "clicked",
+        "replied",
+        "bounced",
+        "failed",
+        "meeting_scheduled",
+      ],
+      lead_status: ["new", "contacted", "qualified", "unqualified", "archived"],
+      member_role: ["manager", "sdr"],
+      member_status: ["invited", "active", "suspended", "removed"],
+      notification_type: [
+        "lead_replied",
+        "lead_opened",
+        "lead_clicked",
+        "lead_bounced",
+        "sync_completed",
+        "integration_error",
+        "member_invited",
+        "member_joined",
+        "usage_limit_alert",
+      ],
+      subscription_status: ["active", "past_due", "canceled", "trialing"],
+      sync_direction: ["push", "pull"],
+    },
+  },
+} as const
+

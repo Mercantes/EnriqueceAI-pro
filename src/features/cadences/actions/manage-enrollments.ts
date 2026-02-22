@@ -1,34 +1,17 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgId } from '@/lib/auth/get-org-id';
 
 import type { EnrollmentListResult, EnrollmentWithLead } from '../cadences.contract';
 import type { EnrollmentStatus } from '../types';
-
-async function getOrgId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, userId: string) {
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-  return member?.org_id ?? null;
-}
 
 export async function fetchCadenceEnrollments(
   cadenceId: string,
   page = 1,
   perPage = 50,
 ): Promise<ActionResult<EnrollmentListResult>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   // Verify cadence belongs to org
   const { data: cadence } = (await (supabase
@@ -84,13 +67,7 @@ export async function fetchAvailableLeads(
   search?: string,
   limit = 20,
 ): Promise<ActionResult<Array<{ id: string; name: string; cnpj: string; email: string | null }>>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   // Get leads already enrolled in this cadence
   const { data: enrolled } = (await (supabase
@@ -141,13 +118,7 @@ export async function updateEnrollmentStatus(
   enrollmentId: string,
   status: EnrollmentStatus,
 ): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { supabase } = await getAuthOrgId();
 
   const { error } = await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
@@ -164,13 +135,7 @@ export async function updateEnrollmentStatus(
 export async function removeEnrollment(
   enrollmentId: string,
 ): Promise<ActionResult<void>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { supabase } = await getAuthOrgId();
 
   const { error } = await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)

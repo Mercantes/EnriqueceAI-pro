@@ -1,37 +1,20 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgId } from '@/lib/auth/get-org-id';
 
 import { createCadenceSchema, createCadenceStepSchema } from '../cadence.schemas';
 import type { CadenceRow, CadenceStepRow } from '../types';
 
-async function getOrgId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, userId: string) {
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-  return member?.org_id ?? null;
-}
-
 export async function createCadence(
   input: Record<string, unknown>,
 ): Promise<ActionResult<CadenceRow>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
   const parsed = createCadenceSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, userId, supabase } = await getAuthOrgId();
 
   const { data, error } = (await (supabase
     .from('cadences') as ReturnType<typeof supabase.from>)
@@ -41,7 +24,7 @@ export async function createCadence(
       description: parsed.data.description ?? null,
       status: 'draft',
       total_steps: 0,
-      created_by: user.id,
+      created_by: userId,
     } as Record<string, unknown>)
     .select('*')
     .single()) as { data: CadenceRow | null; error: { message: string } | null };
@@ -57,13 +40,7 @@ export async function updateCadence(
   cadenceId: string,
   input: Record<string, unknown>,
 ): Promise<ActionResult<CadenceRow>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   const { data, error } = (await (supabase
     .from('cadences') as ReturnType<typeof supabase.from>)
@@ -84,13 +61,7 @@ export async function updateCadence(
 export async function deleteCadence(
   cadenceId: string,
 ): Promise<ActionResult<{ deleted: boolean }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   // Soft delete
   const { error } = await (supabase
@@ -109,13 +80,7 @@ export async function deleteCadence(
 export async function activateCadence(
   cadenceId: string,
 ): Promise<ActionResult<CadenceRow>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   // Check minimum 2 steps
   const { count } = (await (supabase
@@ -147,18 +112,12 @@ export async function addCadenceStep(
   cadenceId: string,
   input: Record<string, unknown>,
 ): Promise<ActionResult<CadenceStepRow>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
   const parsed = createCadenceStepSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   // Verify cadence belongs to org
   const { data: cadence } = (await (supabase
@@ -204,13 +163,7 @@ export async function removeCadenceStep(
   cadenceId: string,
   stepId: string,
 ): Promise<ActionResult<{ removed: boolean }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   // Verify cadence belongs to org
   const { data: cadence } = (await (supabase
@@ -249,13 +202,7 @@ export async function enrollLeads(
   cadenceId: string,
   leadIds: string[],
 ): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, userId, supabase } = await getAuthOrgId();
 
   // Verify cadence is active
   const { data: cadence } = (await (supabase
@@ -285,7 +232,7 @@ export async function enrollLeads(
         lead_id: leadId,
         current_step: 1,
         status: 'active',
-        enrolled_by: user.id,
+        enrolled_by: userId,
       } as Record<string, unknown>);
 
     if (error) {

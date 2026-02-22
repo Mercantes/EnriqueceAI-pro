@@ -1,8 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireManager } from '@/lib/auth/require-manager';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface CustomFieldRow {
   id: string;
@@ -14,27 +14,18 @@ export interface CustomFieldRow {
   created_at: string;
 }
 
-async function getOrgId() {
-  const user = await requireManager();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  return { orgId: member?.org_id ?? null, supabase };
-}
-
 function customFieldsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('custom_fields' as never) as ReturnType<typeof supabase.from>;
+  return supabase.from('custom_fields');
 }
 
 export async function listCustomFields(): Promise<ActionResult<CustomFieldRow[]>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const { data, error } = (await customFieldsFrom(supabase)
     .select('*')
@@ -51,8 +42,13 @@ export async function addCustomField(
   fieldType: 'text' | 'number' | 'date' | 'select',
   options?: string[],
 ): Promise<ActionResult<CustomFieldRow>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const trimmed = fieldName.trim();
   if (!trimmed) return { success: false, error: 'Nome do campo é obrigatório' };
@@ -91,8 +87,13 @@ export async function updateCustomField(
   fieldType: 'text' | 'number' | 'date' | 'select',
   options?: string[],
 ): Promise<ActionResult<CustomFieldRow>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const trimmed = fieldName.trim();
   if (!trimmed) return { success: false, error: 'Nome do campo é obrigatório' };
@@ -117,8 +118,13 @@ export async function updateCustomField(
 }
 
 export async function deleteCustomField(id: string): Promise<ActionResult<{ deleted: true }>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const { error } = await customFieldsFrom(supabase)
     .delete()

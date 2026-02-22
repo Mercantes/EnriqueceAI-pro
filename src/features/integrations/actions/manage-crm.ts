@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgId, getManagerOrgId } from '@/lib/auth/get-org-id';
 
 import type {
   CrmConnectionRow,
@@ -19,49 +18,11 @@ function getCrmRedirectUri(provider: CrmProvider): string {
   return `${baseUrl}/api/auth/callback/${provider}`;
 }
 
-async function getOrgId(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  userId: string,
-): Promise<string | null> {
-  const { data } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-  return data?.org_id ?? null;
-}
-
-async function requireManagerOrg(): Promise<{
-  userId: string;
-  orgId: string;
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
-}> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id, role')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string; role: string } | null };
-
-  if (!member) {
-    throw new Error('Organização não encontrada');
-  }
-  if (member.role !== 'manager') {
-    throw new Error('Apenas managers podem gerenciar integrações CRM');
-  }
-
-  return { userId: user.id, orgId: member.org_id, supabase };
-}
-
 export async function getCrmAuthUrl(
   provider: CrmProvider,
 ): Promise<ActionResult<{ url: string }>> {
   try {
-    await requireManagerOrg();
+    await getManagerOrgId();
 
     if (!CRMRegistry.isSupported(provider)) {
       return { success: false, error: `Provedor CRM "${provider}" não suportado` };
@@ -85,7 +46,7 @@ export async function handleCrmCallback(
   code: string,
 ): Promise<ActionResult<CrmConnectionSafe>> {
   try {
-    const { orgId, supabase } = await requireManagerOrg();
+    const { orgId, supabase } = await getManagerOrgId();
 
     const adapter = CRMRegistry.getAdapter(provider);
     const redirectUri = getCrmRedirectUri(provider);
@@ -133,7 +94,7 @@ export async function disconnectCrm(
   provider: CrmProvider,
 ): Promise<ActionResult<{ disconnected: boolean }>> {
   try {
-    const { orgId, supabase } = await requireManagerOrg();
+    const { orgId, supabase } = await getManagerOrgId();
 
     const { error } = await (supabase
       .from('crm_connections') as ReturnType<typeof supabase.from>)
@@ -159,7 +120,7 @@ export async function updateCrmFieldMapping(
   fieldMapping: FieldMapping,
 ): Promise<ActionResult<CrmConnectionSafe>> {
   try {
-    const { orgId, supabase } = await requireManagerOrg();
+    const { orgId, supabase } = await getManagerOrgId();
 
     const { data, error } = (await (supabase
       .from('crm_connections') as ReturnType<typeof supabase.from>)
@@ -184,13 +145,7 @@ export async function updateCrmFieldMapping(
 
 export async function fetchCrmConnections(): Promise<ActionResult<CrmConnectionSafe[]>> {
   try {
-    const user = await requireAuth();
-    const supabase = await createServerSupabaseClient();
-    const orgId = await getOrgId(supabase, user.id);
-
-    if (!orgId) {
-      return { success: false, error: 'Organização não encontrada' };
-    }
+    const { orgId, supabase } = await getAuthOrgId();
 
     const { data, error } = (await (supabase
       .from('crm_connections') as ReturnType<typeof supabase.from>)
@@ -215,13 +170,7 @@ export async function fetchCrmSyncLogs(
   limit = 10,
 ): Promise<ActionResult<CrmSyncLogRow[]>> {
   try {
-    const user = await requireAuth();
-    const supabase = await createServerSupabaseClient();
-    const orgId = await getOrgId(supabase, user.id);
-
-    if (!orgId) {
-      return { success: false, error: 'Organização não encontrada' };
-    }
+    const { orgId, supabase } = await getAuthOrgId();
 
     // Get connection ID for this provider
     const { data: connection } = (await (supabase
@@ -259,7 +208,7 @@ export async function triggerCrmSync(
   provider: CrmProvider,
 ): Promise<ActionResult<{ message: string }>> {
   try {
-    const { orgId, supabase } = await requireManagerOrg();
+    const { orgId, supabase } = await getManagerOrgId();
 
     // Get connection
     const { data: connection } = (await (supabase

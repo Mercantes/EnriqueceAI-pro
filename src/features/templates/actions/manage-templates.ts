@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgId } from '@/lib/auth/get-org-id';
 
 import { createTemplateSchema, updateTemplateSchema, TEMPLATE_VARIABLE_REGEX } from '../index';
 import type { MessageTemplateRow } from '../../cadences/types';
@@ -11,31 +10,15 @@ function extractVarsFromText(text: string): string[] {
   return [...new Set([...text.matchAll(TEMPLATE_VARIABLE_REGEX)].map((m) => m[1]).filter((v): v is string => v != null))];
 }
 
-async function getOrgId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, userId: string) {
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-  return member?.org_id ?? null;
-}
-
 export async function createTemplate(
   input: Record<string, unknown>,
 ): Promise<ActionResult<MessageTemplateRow>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
   const parsed = createTemplateSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, userId, supabase } = await getAuthOrgId();
 
   const { name, channel, subject, body } = parsed.data;
   const allText = `${subject ?? ''} ${body}`;
@@ -51,7 +34,7 @@ export async function createTemplate(
       body,
       variables_used,
       is_system: false,
-      created_by: user.id,
+      created_by: userId,
     } as Record<string, unknown>)
     .select('*')
     .single()) as { data: MessageTemplateRow | null; error: { message: string } | null };
@@ -67,18 +50,12 @@ export async function updateTemplate(
   templateId: string,
   input: Record<string, unknown>,
 ): Promise<ActionResult<MessageTemplateRow>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
   const parsed = updateTemplateSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   // Check template is not system
   const { data: existing } = (await (supabase
@@ -132,13 +109,7 @@ export async function updateTemplate(
 export async function deleteTemplate(
   templateId: string,
 ): Promise<ActionResult<{ deleted: boolean }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   // Check not system
   const { data: existing } = (await (supabase
@@ -172,13 +143,7 @@ export async function deleteTemplate(
 export async function duplicateTemplate(
   templateId: string,
 ): Promise<ActionResult<MessageTemplateRow>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, userId, supabase } = await getAuthOrgId();
 
   const { data: source } = (await (supabase
     .from('message_templates') as ReturnType<typeof supabase.from>)
@@ -201,7 +166,7 @@ export async function duplicateTemplate(
       body: source.body,
       variables_used: source.variables_used,
       is_system: false,
-      created_by: user.id,
+      created_by: userId,
     } as Record<string, unknown>)
     .select('*')
     .single()) as { data: MessageTemplateRow | null; error: { message: string } | null };

@@ -3,32 +3,15 @@
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireAuth } from '@/lib/auth/require-auth';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAuthOrgId } from '@/lib/auth/get-org-id';
 
 import { CnpjWsProvider } from '../services/enrichment-provider';
 import { enrichLead } from '../services/enrichment.service';
 
-async function getOrgId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, userId: string) {
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-  return member?.org_id ?? null;
-}
-
 export async function bulkArchiveLeads(
   leadIds: string[],
 ): Promise<ActionResult<{ count: number }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   if (leadIds.length === 0) {
     return { success: false, error: 'Nenhum lead selecionado' };
@@ -51,13 +34,7 @@ export async function bulkArchiveLeads(
 export async function bulkEnrichLeads(
   leadIds: string[],
 ): Promise<ActionResult<{ successCount: number; failCount: number }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   if (leadIds.length === 0) {
     return { success: false, error: 'Nenhum lead selecionado' };
@@ -107,13 +84,7 @@ export async function bulkEnrichLeads(
 export async function exportLeadsCsv(
   leadIds: string[],
 ): Promise<ActionResult<{ csv: string; filename: string }>> {
-  const user = await requireAuth();
-  const supabase = await createServerSupabaseClient();
-
-  const orgId = await getOrgId(supabase, user.id);
-  if (!orgId) {
-    return { success: false, error: 'Organização não encontrada' };
-  }
+  const { orgId, supabase } = await getAuthOrgId();
 
   if (leadIds.length === 0) {
     return { success: false, error: 'Nenhum lead selecionado' };

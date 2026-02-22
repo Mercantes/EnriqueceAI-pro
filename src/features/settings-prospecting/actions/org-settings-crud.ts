@@ -1,8 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireManager } from '@/lib/auth/require-manager';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getManagerOrgId } from '@/lib/auth/get-org-id';
 
 export interface OrgSettings {
   abm_enabled: boolean;
@@ -10,23 +9,16 @@ export interface OrgSettings {
   lead_visibility_mode: 'all' | 'own' | 'team';
 }
 
-async function getOrgId() {
-  const user = await requireManager();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  return { orgId: member?.org_id ?? null, supabase };
-}
+type ManagerOrg = Awaited<ReturnType<typeof getManagerOrgId>>;
 
 export async function getOrgSettings(): Promise<ActionResult<OrgSettings>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: ManagerOrg['supabase'];
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const { data, error } = (await supabase
     .from('organizations')
@@ -42,15 +34,20 @@ export async function saveAbmSettings(
   enabled: boolean,
   groupField: string,
 ): Promise<ActionResult<{ saved: true }>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: ManagerOrg['supabase'];
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const trimmed = groupField.trim();
   if (!trimmed) return { success: false, error: 'Campo de agrupamento é obrigatório' };
 
   const { error } = await supabase
     .from('organizations')
-    .update({ abm_enabled: enabled, abm_group_field: trimmed } as never)
+    .update({ abm_enabled: enabled, abm_group_field: trimmed })
     .eq('id', orgId);
 
   if (error) return { success: false, error: 'Erro ao salvar configuração ABM' };
@@ -60,15 +57,20 @@ export async function saveAbmSettings(
 export async function saveLeadVisibility(
   mode: 'all' | 'own' | 'team',
 ): Promise<ActionResult<{ saved: true }>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: ManagerOrg['supabase'];
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const validModes = ['all', 'own', 'team'];
   if (!validModes.includes(mode)) return { success: false, error: 'Modo de visibilidade inválido' };
 
   const { error } = await supabase
     .from('organizations')
-    .update({ lead_visibility_mode: mode } as never)
+    .update({ lead_visibility_mode: mode })
     .eq('id', orgId);
 
   if (error) return { success: false, error: 'Erro ao salvar modo de acesso' };

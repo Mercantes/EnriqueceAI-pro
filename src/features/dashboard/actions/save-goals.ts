@@ -32,8 +32,8 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
   }
 
   // Upsert org-level goal
-  const { error: goalError } = await (supabase
-    .from('goals' as never) as ReturnType<typeof supabase.from>)
+  const { error: goalError } = await supabase
+    .from('goals')
     .upsert(
       {
         org_id: member.org_id,
@@ -41,7 +41,7 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
         opportunity_target: opportunityTarget,
         conversion_target: conversionTarget,
         created_by: user.id,
-      } as Record<string, unknown>,
+      },
       { onConflict: 'org_id,month' },
     );
 
@@ -57,9 +57,9 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     opportunity_target: ug.opportunityTarget,
   }));
 
-  const { error: userGoalError } = await (supabase
-    .from('goals_per_user' as never) as ReturnType<typeof supabase.from>)
-    .upsert(userGoalRows as unknown as Record<string, unknown>[], {
+  const { error: userGoalError } = await supabase
+    .from('goals_per_user')
+    .upsert(userGoalRows, {
       onConflict: 'org_id,user_id,month',
     });
 

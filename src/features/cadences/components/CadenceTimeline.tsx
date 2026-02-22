@@ -120,6 +120,7 @@ function DayContainer({
   collapsed,
   onToggle,
   onRemoveStep,
+  onDayNumberChange,
 }: {
   dayData: DayData;
   dayIndex: number;
@@ -127,6 +128,7 @@ function DayContainer({
   collapsed: boolean;
   onToggle: () => void;
   onRemoveStep: (stepId: string) => void;
+  onDayNumberChange: (newDay: number) => void;
 }) {
   const { setNodeRef } = useSortable({
     id: `day-${dayData.day}`,
@@ -136,21 +138,31 @@ function DayContainer({
 
   return (
     <div ref={setNodeRef} className="rounded-lg border" data-testid={`day-${dayData.day}`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-2 rounded-t-lg bg-[var(--muted)] px-4 py-2.5 text-left text-sm font-medium hover:bg-[var(--accent)]"
-      >
-        {collapsed ? (
-          <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)]" />
-        )}
-        <span>Dia {dayData.day}</span>
+      <div className="flex w-full items-center gap-2 rounded-t-lg bg-[var(--muted)] px-4 py-2.5 text-sm font-medium">
+        <button type="button" onClick={onToggle} className="hover:text-[var(--foreground)]">
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)]" />
+          )}
+        </button>
+        <span>Dia</span>
+        <input
+          type="number"
+          min={1}
+          value={dayData.day}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            if (v > 0) onDayNumberChange(v);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-12 rounded border bg-[var(--background)] px-1.5 py-0.5 text-center text-sm font-medium [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          aria-label={`Número do dia ${dayData.day}`}
+        />
         <span className="text-xs text-[var(--muted-foreground)]">
           ({dayData.steps.length} {dayData.steps.length === 1 ? 'atividade' : 'atividades'})
         </span>
-      </button>
+      </div>
       {!collapsed && (
         <div className="min-h-[48px] space-y-2 p-3">
           <SortableContext
@@ -213,6 +225,15 @@ export function CadenceTimeline({ days, onDaysChange, sidebarSlot }: CadenceTime
   function addDay() {
     const nextDay = days.length > 0 ? Math.max(...days.map((d) => d.day)) + 1 : 1;
     onDaysChange([...days, { day: nextDay, steps: [] }]);
+  }
+
+  function changeDayNumber(dayIndex: number, newDay: number) {
+    // Prevent duplicate day numbers
+    if (days.some((d, i) => i !== dayIndex && d.day === newDay)) return;
+    const updated = [...days];
+    updated[dayIndex] = { ...updated[dayIndex]!, day: newDay };
+    updated.sort((a, b) => a.day - b.day);
+    onDaysChange(updated);
   }
 
   function removeStep(stepId: string) {
@@ -385,13 +406,14 @@ export function CadenceTimeline({ days, onDaysChange, sidebarSlot }: CadenceTime
       <div className="flex-1 space-y-3" data-testid="cadence-timeline">
         {days.map((dayData, dayIndex) => (
           <DayContainer
-            key={dayData.day}
+            key={dayIndex}
             dayData={dayData}
             dayIndex={dayIndex}
             days={days}
             collapsed={collapsedDays[dayData.day] ?? false}
             onToggle={() => toggleDay(dayData.day)}
             onRemoveStep={removeStep}
+            onDayNumberChange={(newDay) => changeDayNumber(dayIndex, newDay)}
           />
         ))}
 

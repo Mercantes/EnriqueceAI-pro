@@ -31,8 +31,8 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
   const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`;
 
   // Fetch org-level goal for the selected month
-  const { data: orgGoal } = (await (supabase
-    .from('goals' as never) as ReturnType<typeof supabase.from>)
+  const { data: orgGoal } = (await supabase
+    .from('goals')
     .select('opportunity_target, conversion_target')
     .eq('org_id', member.org_id)
     .eq('month', monthDate)
@@ -75,15 +75,15 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
   }
 
   // Fetch user goals for current month
-  const { data: currentUserGoals } = (await (supabase
-    .from('goals_per_user' as never) as ReturnType<typeof supabase.from>)
+  const { data: currentUserGoals } = (await supabase
+    .from('goals_per_user')
     .select('user_id, opportunity_target')
     .eq('org_id', member.org_id)
     .eq('month', monthDate)) as { data: { user_id: string; opportunity_target: number }[] | null };
 
   // Fetch user goals for previous month (reference)
-  const { data: prevUserGoals } = (await (supabase
-    .from('goals_per_user' as never) as ReturnType<typeof supabase.from>)
+  const { data: prevUserGoals } = (await supabase
+    .from('goals_per_user')
     .select('user_id, opportunity_target')
     .eq('org_id', member.org_id)
     .eq('month', prevMonth)) as { data: { user_id: string; opportunity_target: number }[] | null };

@@ -1,8 +1,8 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireManager } from '@/lib/auth/require-manager';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export interface LossReasonRow {
   id: string;
@@ -22,28 +22,19 @@ const DEFAULT_REASONS = [
   'Outros',
 ];
 
-async function getOrgId() {
-  const user = await requireManager();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  return { orgId: member?.org_id ?? null, supabase };
-}
-
-// Helper: typed query builder for loss_reasons (not in generated schema)
+// Helper: typed query builder for loss_reasons
 function lossReasonsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return (supabase.from('loss_reasons' as never) as ReturnType<typeof supabase.from>);
+  return supabase.from('loss_reasons');
 }
 
 export async function listLossReasons(): Promise<ActionResult<LossReasonRow[]>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   // Check if org has any reasons; if not, seed defaults
   const { data: existing, error: countError } = (await lossReasonsFrom(supabase)
@@ -73,8 +64,13 @@ export async function listLossReasons(): Promise<ActionResult<LossReasonRow[]>> 
 }
 
 export async function addLossReason(name: string): Promise<ActionResult<LossReasonRow>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const trimmed = name.trim();
   if (!trimmed) return { success: false, error: 'Nome é obrigatório' };
@@ -102,8 +98,13 @@ export async function updateLossReason(
   id: string,
   name: string,
 ): Promise<ActionResult<LossReasonRow>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const trimmed = name.trim();
   if (!trimmed) return { success: false, error: 'Nome é obrigatório' };
@@ -120,8 +121,13 @@ export async function updateLossReason(
 }
 
 export async function deleteLossReason(id: string): Promise<ActionResult<{ deleted: true }>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   // Check if it's a system reason
   const { data: reason } = (await lossReasonsFrom(supabase)

@@ -1,41 +1,32 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { requireManager } from '@/lib/auth/require-manager';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getManagerOrgId } from '@/lib/auth/get-org-id';
+import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CallDailyTargetRow, CallSettingsData, CallSettingsRow, PhoneBlacklistRow } from '../types';
 import { addPhoneBlacklistSchema, saveCallSettingsSchema } from '../schemas/call-settings.schemas';
 
-async function getOrgId() {
-  const user = await requireManager();
-  const supabase = await createServerSupabaseClient();
-
-  const { data: member } = (await supabase
-    .from('organization_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .single()) as { data: { org_id: string } | null };
-
-  return { orgId: member?.org_id ?? null, supabase };
-}
-
 function settingsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('organization_call_settings' as never) as ReturnType<typeof supabase.from>;
+  return supabase.from('organization_call_settings');
 }
 
 function targetsFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('call_daily_targets' as never) as ReturnType<typeof supabase.from>;
+  return supabase.from('call_daily_targets');
 }
 
 function blacklistFrom(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
-  return supabase.from('phone_blacklist' as never) as ReturnType<typeof supabase.from>;
+  return supabase.from('phone_blacklist');
 }
 
 export async function getCallSettings(): Promise<ActionResult<CallSettingsData>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const { data: settings } = (await settingsFrom(supabase)
     .select('*')
@@ -65,8 +56,13 @@ export async function getCallSettings(): Promise<ActionResult<CallSettingsData>>
 export async function saveCallSettings(
   raw: Record<string, unknown>,
 ): Promise<ActionResult<{ saved: true }>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const parsed = saveCallSettingsSchema.safeParse(raw);
   if (!parsed.success) {
@@ -111,8 +107,13 @@ export async function saveCallSettings(
 export async function saveCallDailyTargets(
   targets: Array<{ userId: string; dailyTarget: number | null }>,
 ): Promise<ActionResult<{ saved: number }>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   let saved = 0;
 
@@ -149,8 +150,13 @@ export async function saveCallDailyTargets(
 export async function addPhoneBlacklist(
   raw: Record<string, unknown>,
 ): Promise<ActionResult<PhoneBlacklistRow>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const parsed = addPhoneBlacklistSchema.safeParse(raw);
   if (!parsed.success) {
@@ -174,8 +180,13 @@ export async function addPhoneBlacklist(
 }
 
 export async function deletePhoneBlacklist(id: string): Promise<ActionResult<{ deleted: true }>> {
-  const { orgId, supabase } = await getOrgId();
-  if (!orgId) return { success: false, error: 'Organização não encontrada' };
+  let orgId: string;
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>;
+  try {
+    ({ orgId, supabase } = await getManagerOrgId());
+  } catch {
+    return { success: false, error: 'Organização não encontrada' };
+  }
 
   const { error } = await blacklistFrom(supabase)
     .delete()

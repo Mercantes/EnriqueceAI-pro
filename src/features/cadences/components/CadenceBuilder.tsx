@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowLeft, LayoutList, Linkedin, Mail, MessageSquare, Phone, Plus, Save, Search, Sparkles, Trash2, UserPlus, Zap } from 'lucide-react';
+import { ArrowLeft, LayoutList, Plus, Save, Sparkles, Trash2, UserPlus, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -32,6 +32,7 @@ import type { CadenceDetail, CadenceMetrics, EnrollmentWithLead } from '../caden
 import type { ChannelType, MessageTemplateRow } from '../types';
 import { activateCadence, addCadenceStep, removeCadenceStep, updateCadence } from '../actions/manage-cadences';
 import { createCadence } from '../actions/manage-cadences';
+import { channelConfig } from './ActivityTypeSidebar';
 import { EnrollLeadsDialog } from './EnrollLeadsDialog';
 import { EnrollmentsList } from './EnrollmentsList';
 
@@ -41,9 +42,6 @@ interface CadenceBuilderProps {
   metrics?: CadenceMetrics;
   enrollments?: EnrollmentWithLead[];
 }
-
-const channelIcon: Record<ChannelType, typeof Mail> = { email: Mail, whatsapp: MessageSquare, phone: Phone, linkedin: Linkedin, research: Search };
-const channelLabel: Record<ChannelType, string> = { email: 'Email', whatsapp: 'WhatsApp', phone: 'Ligação', linkedin: 'LinkedIn', research: 'Pesquisa' };
 
 export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }: CadenceBuilderProps) {
   const router = useRouter();
@@ -226,8 +224,6 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }
             <StepsCard
               steps={steps}
               isEditable={isEditable}
-              channelIcon={channelIcon}
-              channelLabel={channelLabel}
               onAddStep={() => setShowAddStep(true)}
               onRemoveStep={setRemoveStepId}
             />
@@ -244,8 +240,6 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }
         <StepsCard
           steps={steps}
           isEditable={isEditable}
-          channelIcon={channelIcon}
-          channelLabel={channelLabel}
           onAddStep={() => setShowAddStep(true)}
           onRemoveStep={setRemoveStepId}
         />
@@ -412,13 +406,11 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [] }
 interface StepsCardProps {
   steps: CadenceDetail['steps'];
   isEditable: boolean;
-  channelIcon: Record<ChannelType, typeof Mail>;
-  channelLabel: Record<ChannelType, string>;
   onAddStep: () => void;
   onRemoveStep: (stepId: string) => void;
 }
 
-function StepsCard({ steps, isEditable, channelIcon, channelLabel, onAddStep, onRemoveStep }: StepsCardProps) {
+function StepsCard({ steps, isEditable, onAddStep, onRemoveStep }: StepsCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -440,46 +432,50 @@ function StepsCard({ steps, isEditable, channelIcon, channelLabel, onAddStep, on
             Nenhum passo adicionado. Adicione pelo menos 2 passos para ativar a cadência.
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {steps.map((step, index) => {
-              const Icon = channelIcon[step.channel];
+              const config = channelConfig[step.channel];
+              if (!config) return null;
+              const Icon = config.icon;
               return (
                 <div
                   key={step.id}
-                  className="flex items-center gap-4 rounded-md border p-3"
+                  className="flex items-center gap-3 rounded-lg border bg-[var(--card)] px-3 py-2.5"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] text-sm font-medium">
-                    {index + 1}
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${config.bgColor}`}>
+                    <span className="text-xs font-bold">{index + 1}</span>
                   </div>
-                  <div className="flex-1">
+                  <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${config.bgColor}`}>
+                    <Icon className={`h-3.5 w-3.5 ${config.color}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
                       <span className="text-sm font-medium">
-                        {channelLabel[step.channel]}
+                        {config.label}
                       </span>
                       {step.template && (
-                        <span className="text-sm text-[var(--muted-foreground)]">
+                        <span className="truncate text-sm text-[var(--muted-foreground)]">
                           — {step.template.name}
                         </span>
+                      )}
+                      {step.ai_personalization && (
+                        <Badge variant="secondary" className="inline-flex items-center gap-0.5 px-1.5 py-0 text-[10px]">
+                          <Sparkles className="h-2.5 w-2.5" />
+                          IA
+                        </Badge>
                       )}
                     </div>
                     <p className="text-xs text-[var(--muted-foreground)]">
                       {step.delay_days > 0 || step.delay_hours > 0
                         ? `Esperar ${step.delay_days > 0 ? `${step.delay_days}d` : ''}${step.delay_hours > 0 ? ` ${step.delay_hours}h` : ''}`
                         : 'Enviar imediatamente'}
-                      {step.ai_personalization && (
-                        <Badge variant="secondary" className="ml-1 inline-flex items-center gap-0.5 px-1 py-0 text-[10px]">
-                          <Sparkles className="h-2.5 w-2.5" />
-                          IA
-                        </Badge>
-                      )}
                     </p>
                   </div>
                   {isEditable && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                      className="h-8 w-8 shrink-0 p-0 text-[var(--muted-foreground)] hover:text-red-500"
                       onClick={() => onRemoveStep(step.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -494,21 +490,23 @@ function StepsCard({ steps, isEditable, channelIcon, channelLabel, onAddStep, on
         {steps.length > 0 && (
           <div className="mt-4 border-t pt-4">
             <p className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">Timeline</p>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1">
               {steps.map((step, index) => {
-                const Icon = channelIcon[step.channel];
+                const config = channelConfig[step.channel];
+                if (!config) return null;
+                const Icon = config.icon;
                 return (
-                  <div key={step.id} className="flex items-center gap-1">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--muted)]">
-                      <Icon className="h-3 w-3" />
+                  <div key={step.id} className="flex shrink-0 items-center gap-1">
+                    <div className={`flex h-6 w-6 items-center justify-center rounded-full ${config.bgColor}`}>
+                      <Icon className={`h-3 w-3 ${config.color}`} />
                     </div>
                     {index < steps.length - 1 && (
                       <div className="flex items-center">
-                        <div className="h-px w-8 bg-[var(--border)]" />
+                        <div className="h-px w-6 bg-[var(--border)]" />
                         <span className="text-[10px] text-[var(--muted-foreground)]">
                           {step.delay_days > 0 ? `${step.delay_days}d` : step.delay_hours > 0 ? `${step.delay_hours}h` : '0'}
                         </span>
-                        <div className="h-px w-8 bg-[var(--border)]" />
+                        <div className="h-px w-6 bg-[var(--border)]" />
                       </div>
                     )}
                   </div>

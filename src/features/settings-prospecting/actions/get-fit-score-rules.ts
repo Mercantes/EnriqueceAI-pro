@@ -30,8 +30,8 @@ export async function getFitScoreRules(): Promise<ActionResult<FitScoreRuleRow[]
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data, error } = (await (supabase
-    .from('fit_score_rules' as never) as ReturnType<typeof supabase.from>)
+  const { data, error } = (await supabase
+    .from('fit_score_rules')
     .select('*')
     .eq('org_id', member.org_id)
     .order('sort_order', { ascending: true })) as { data: FitScoreRuleRow[] | null; error: unknown };

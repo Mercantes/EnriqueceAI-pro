@@ -18,8 +18,8 @@ export async function addCallFeedback(
     return { success: false, error: parsed.error.errors[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { data, error } = (await (supabase
-    .from('call_feedback' as never) as ReturnType<typeof supabase.from>)
+  const { data, error } = (await supabase
+    .from('call_feedback')
     .insert({
       call_id: parsed.data.call_id,
       user_id: user.id,

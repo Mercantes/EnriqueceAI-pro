@@ -95,8 +95,8 @@ async function fetchGoalTarget(
   userId?: string,
 ): Promise<number> {
   if (userId) {
-    const { data: userGoal } = (await (supabase
-      .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+    const { data: userGoal } = (await supabase
+      .from('daily_activity_goals')
       .select('target')
       .eq('org_id', orgId)
       .eq('user_id', userId)
@@ -105,8 +105,8 @@ async function fetchGoalTarget(
     if (userGoal) return userGoal.target;
   }
 
-  const { data: orgGoal } = (await (supabase
-    .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+  const { data: orgGoal } = (await supabase
+    .from('daily_activity_goals')
     .select('target')
     .eq('org_id', orgId)
     .is('user_id', null)

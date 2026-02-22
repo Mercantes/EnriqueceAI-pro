@@ -32,19 +32,26 @@ const pathLabels: Record<string, string> = {
   history: 'Histórico',
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function Breadcrumbs() {
   const pathname = usePathname();
   const segments = pathname.split('/').filter(Boolean);
 
-  if (segments.length <= 1) return null;
+  // Hide UUID segments from breadcrumb — the detail page handles its own title
+  const visibleSegments = segments.filter((s) => !UUID_REGEX.test(s));
+
+  if (visibleSegments.length <= 1) return null;
 
   return (
     <Breadcrumb className="mb-4">
       <BreadcrumbList>
-        {segments.map((segment, index) => {
-          const href = '/' + segments.slice(0, index + 1).join('/');
+        {visibleSegments.map((segment, index) => {
+          // Build href pointing to the original path up to this visible segment
+          const originalIndex = segments.indexOf(segment);
+          const href = '/' + segments.slice(0, originalIndex + 1).join('/');
           const label = pathLabels[segment] ?? segment;
-          const isLast = index === segments.length - 1;
+          const isLast = index === visibleSegments.length - 1;
 
           return (
             <Fragment key={href}>

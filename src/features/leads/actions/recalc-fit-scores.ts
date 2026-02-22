@@ -1,6 +1,7 @@
 'use server';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { calculateFitScore, type FitScoreRule } from '../services/fit-score.service';
@@ -14,7 +15,7 @@ async function fetchRules(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   orgId: string,
 ): Promise<FitScoreRule[]> {
-  const { data } = (await (supabase.from('fit_score_rules' as never) as ReturnType<typeof supabase.from>)
+  const { data } = (await supabase.from('fit_score_rules')
     .select('points, field, operator, value')
     .eq('org_id', orgId)
     .order('sort_order', { ascending: true })) as {
@@ -63,11 +64,10 @@ export async function recalcFitScoreForLead(
 /**
  * Batch recalculate fit_score for ALL leads in an org.
  * Processes in chunks to avoid overwhelming the database.
+ * Requires manager auth — orgId is derived from the authenticated user.
  */
-export async function recalcFitScoresForOrg(
-  orgId: string,
-): Promise<ActionResult<{ updated: number }>> {
-  const supabase = await createServerSupabaseClient();
+export async function recalcFitScoresForOrg(): Promise<ActionResult<{ updated: number }>> {
+  const { orgId, supabase } = await getManagerOrgId();
 
   const rules = await fetchRules(supabase, orgId);
 

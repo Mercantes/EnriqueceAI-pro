@@ -34,7 +34,7 @@ export async function saveFitScoreRules(
 
   const orgId = member.org_id;
 
-  const fitScoreFrom = (supabase.from('fit_score_rules' as never) as ReturnType<typeof supabase.from>);
+  const fitScoreFrom = supabase.from('fit_score_rules');
 
   // Strategy: delete all existing rules for org, then insert new ones
   // This is simpler and safer than diffing for a small dataset
@@ -59,8 +59,8 @@ export async function saveFitScoreRules(
     sort_order: i + 1,
   }));
 
-  const { error: insertError } = await (supabase
-    .from('fit_score_rules' as never) as ReturnType<typeof supabase.from>)
+  const { error: insertError } = await supabase
+    .from('fit_score_rules')
     .insert(rows);
 
   if (insertError) {
@@ -68,7 +68,7 @@ export async function saveFitScoreRules(
   }
 
   // Trigger batch recalc for all leads in org (fire-and-forget)
-  recalcFitScoresForOrg(orgId).catch(() => {
+  recalcFitScoresForOrg().catch(() => {
     // Background task — don't block the response
   });
 

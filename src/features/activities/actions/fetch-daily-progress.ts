@@ -46,8 +46,8 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
     .lte('next_step_due', new Date().toISOString())) as { count: number | null };
 
   // Get daily goal: user-specific first, fallback to org default (user_id IS NULL)
-  const { data: userGoal } = (await (supabase
-    .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+  const { data: userGoal } = (await supabase
+    .from('daily_activity_goals')
     .select('target')
     .eq('org_id', member.org_id)
     .eq('user_id', user.id)
@@ -56,8 +56,8 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   let target = userGoal?.target ?? null;
 
   if (target === null) {
-    const { data: orgGoal } = (await (supabase
-      .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+    const { data: orgGoal } = (await supabase
+      .from('daily_activity_goals')
       .select('target')
       .eq('org_id', member.org_id)
       .is('user_id', null)

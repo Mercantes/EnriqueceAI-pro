@@ -33,8 +33,8 @@ export async function saveDailyGoals(
   }
 
   // Upsert org default (user_id = null)
-  const { error: orgError } = await (supabase
-    .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+  const { error: orgError } = await supabase
+    .from('daily_activity_goals')
     .upsert(
       { org_id: orgId, user_id: null, target: input.orgDefault },
       { onConflict: 'org_id,COALESCE(user_id,\'00000000-0000-0000-0000-000000000000\')' as never },
@@ -42,14 +42,14 @@ export async function saveDailyGoals(
 
   if (orgError) {
     // Fallback: try delete + insert for org default
-    await (supabase
-      .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+    await supabase
+      .from('daily_activity_goals')
       .delete()
       .eq('org_id', orgId)
       .is('user_id', null);
 
-    const { error: insertError } = await (supabase
-      .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+    const { error: insertError } = await supabase
+      .from('daily_activity_goals')
       .insert({ org_id: orgId, user_id: null, target: input.orgDefault });
 
     if (insertError) {
@@ -63,8 +63,8 @@ export async function saveDailyGoals(
   for (const mg of input.memberGoals) {
     if (mg.target === null) {
       // Remove individual override (use org default)
-      await (supabase
-        .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+      await supabase
+        .from('daily_activity_goals')
         .delete()
         .eq('org_id', orgId)
         .eq('user_id', mg.userId);
@@ -72,14 +72,14 @@ export async function saveDailyGoals(
       if (mg.target < 0) continue;
 
       // Delete then insert to handle upsert on computed unique index
-      await (supabase
-        .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+      await supabase
+        .from('daily_activity_goals')
         .delete()
         .eq('org_id', orgId)
         .eq('user_id', mg.userId);
 
-      const { error } = await (supabase
-        .from('daily_activity_goals' as never) as ReturnType<typeof supabase.from>)
+      const { error } = await supabase
+        .from('daily_activity_goals')
         .insert({ org_id: orgId, user_id: mg.userId, target: mg.target });
 
       if (!error) saved++;

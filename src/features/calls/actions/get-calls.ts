@@ -41,7 +41,7 @@ export async function getCalls(
   const from = (filters.page - 1) * filters.per_page;
   const to = from + filters.per_page - 1;
 
-  let query = (supabase.from('calls' as never) as ReturnType<typeof supabase.from>)
+  let query = supabase.from('calls')
     .select('*', { count: 'exact' })
     .eq('org_id', member.org_id);
 

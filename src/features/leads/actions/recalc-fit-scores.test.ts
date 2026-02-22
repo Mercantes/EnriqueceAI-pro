@@ -4,6 +4,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(),
 }));
 
+vi.mock('@/lib/auth/get-org-id', () => ({
+  getManagerOrgId: vi.fn(),
+}));
+
 function createChainMock() {
   const chain: Record<string, unknown> = {};
   chain.select = vi.fn().mockReturnValue(chain);
@@ -15,6 +19,7 @@ function createChainMock() {
   return chain;
 }
 
+import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { recalcFitScoreForLead, recalcFitScoresForOrg } from './recalc-fit-scores';
@@ -69,6 +74,21 @@ describe('recalcFitScoresForOrg', () => {
     vi.clearAllMocks();
   });
 
+  function setupMockSupabase(rulesChain: Record<string, unknown>, leadsChain: Record<string, unknown>) {
+    const mockSupabase = {
+      from: (table: string) => {
+        if (table === 'fit_score_rules') return rulesChain;
+        if (table === 'leads') return leadsChain;
+        return createChainMock();
+      },
+    };
+    vi.mocked(getManagerOrgId).mockResolvedValue({
+      orgId: 'org-1',
+      userId: 'user-1',
+      supabase: mockSupabase as never,
+    });
+  }
+
   it('should recalculate scores for all leads', async () => {
     const rulesChain = createChainMock();
     const leadsChain = createChainMock();
@@ -87,17 +107,9 @@ describe('recalcFitScoresForOrg', () => {
       error: null,
     });
 
-    const mockSupabase = {
-      from: (table: string) => {
-        if (table === 'fit_score_rules') return rulesChain;
-        if (table === 'leads') return leadsChain;
-        return createChainMock();
-      },
-    };
+    setupMockSupabase(rulesChain, leadsChain);
 
-    (createServerSupabaseClient as ReturnType<typeof vi.fn>).mockResolvedValue(mockSupabase);
-
-    const result = await recalcFitScoresForOrg('org-1');
+    const result = await recalcFitScoresForOrg();
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.updated).toBe(2);
   });
@@ -109,17 +121,9 @@ describe('recalcFitScoresForOrg', () => {
     Object.assign(rulesChain, { data: [] });
     Object.assign(leadsChain, { data: null, error: { message: 'DB error' } });
 
-    const mockSupabase = {
-      from: (table: string) => {
-        if (table === 'fit_score_rules') return rulesChain;
-        if (table === 'leads') return leadsChain;
-        return createChainMock();
-      },
-    };
+    setupMockSupabase(rulesChain, leadsChain);
 
-    (createServerSupabaseClient as ReturnType<typeof vi.fn>).mockResolvedValue(mockSupabase);
-
-    const result = await recalcFitScoresForOrg('org-1');
+    const result = await recalcFitScoresForOrg();
     expect(result.success).toBe(false);
   });
 
@@ -130,17 +134,9 @@ describe('recalcFitScoresForOrg', () => {
     Object.assign(rulesChain, { data: [{ points: 5, field: 'email', operator: 'not_empty', value: null }] });
     Object.assign(leadsChain, { data: [], error: null });
 
-    const mockSupabase = {
-      from: (table: string) => {
-        if (table === 'fit_score_rules') return rulesChain;
-        if (table === 'leads') return leadsChain;
-        return createChainMock();
-      },
-    };
+    setupMockSupabase(rulesChain, leadsChain);
 
-    (createServerSupabaseClient as ReturnType<typeof vi.fn>).mockResolvedValue(mockSupabase);
-
-    const result = await recalcFitScoresForOrg('org-1');
+    const result = await recalcFitScoresForOrg();
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.updated).toBe(0);
   });

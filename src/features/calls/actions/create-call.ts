@@ -30,8 +30,8 @@ export async function createCall(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  const { data, error } = (await (supabase
-    .from('calls' as never) as ReturnType<typeof supabase.from>)
+  const { data, error } = (await supabase
+    .from('calls')
     .insert({
       ...parsed.data,
       org_id: member.org_id,

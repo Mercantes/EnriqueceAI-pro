@@ -58,7 +58,7 @@ export async function exportCallsCsv(
     return { success: false, error: 'Organização não encontrada' };
   }
 
-  let query = (supabase.from('calls' as never) as ReturnType<typeof supabase.from>)
+  let query = supabase.from('calls')
     .select('*')
     .eq('org_id', member.org_id);
 
