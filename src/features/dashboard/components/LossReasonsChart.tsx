@@ -53,8 +53,8 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               fontSize: '12px',
             }}
@@ -64,7 +64,7 @@ export function LossReasonsChart({ data }: LossReasonsChartProps) {
           />
           <Bar
             dataKey="count"
-            fill="hsl(var(--destructive))"
+            fill="var(--destructive)"
             radius={[0, 4, 4, 0]}
             barSize={20}
           />

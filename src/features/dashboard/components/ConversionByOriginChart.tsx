@@ -51,8 +51,8 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               fontSize: '12px',
             }}
@@ -61,14 +61,14 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
           <Bar
             dataKey="converted"
             name="Convertidos"
-            fill="hsl(142 71% 45%)"
+            fill="#22c55e"
             stackId="stack"
             radius={[0, 0, 0, 0]}
           />
           <Bar
             dataKey="lost"
             name="Perdidos"
-            fill="hsl(var(--destructive))"
+            fill="var(--destructive)"
             stackId="stack"
             radius={[4, 4, 0, 0]}
           />

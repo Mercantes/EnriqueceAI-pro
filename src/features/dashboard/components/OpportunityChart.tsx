@@ -54,8 +54,8 @@ export function OpportunityChart({ data, currentDay }: OpportunityChartProps) {
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               fontSize: '12px',
             }}
@@ -66,7 +66,7 @@ export function OpportunityChart({ data, currentDay }: OpportunityChartProps) {
             type="monotone"
             dataKey="actual"
             name="Realizado"
-            stroke="hsl(var(--primary))"
+            stroke="var(--primary)"
             strokeWidth={2}
             dot={false}
             connectNulls={false}
@@ -75,7 +75,7 @@ export function OpportunityChart({ data, currentDay }: OpportunityChartProps) {
             type="monotone"
             dataKey="target"
             name="Meta"
-            stroke="hsl(var(--muted-foreground))"
+            stroke="var(--muted-foreground)"
             strokeWidth={1.5}
             strokeDasharray="5 5"
             dot={false}
