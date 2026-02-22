@@ -48,7 +48,7 @@ describe('MobileNav', () => {
     expect(screen.getByText('Ajustes')).toBeInTheDocument();
   });
 
-  it('shows Ligações items with placeholder and link', async () => {
+  it('shows Ligações items with both active links', async () => {
     const user = userEvent.setup();
     render(<MobileNav />);
 
@@ -56,7 +56,19 @@ describe('MobileNav', () => {
     await user.click(await screen.findByText('Ligações'));
 
     expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
-    expect(screen.getByText(/Painel de Ligações — Em breve/)).toBeInTheDocument();
+    expect(screen.getByText('Painel de Ligações')).toBeInTheDocument();
+  });
+
+  it('shows Estatística items with active links', async () => {
+    const user = userEvent.setup();
+    render(<MobileNav />);
+
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    await user.click(await screen.findByText('Estatística'));
+
+    expect(await screen.findByText('Atividades')).toBeInTheDocument();
+    expect(screen.getByText('Conversão')).toBeInTheDocument();
+    expect(screen.getByText('Equipe')).toBeInTheDocument();
   });
 
 });

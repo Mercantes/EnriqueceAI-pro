@@ -52,17 +52,17 @@ export const navSections: NavSection[] = [
   {
     label: 'Ligações',
     items: [
-      { label: 'Painel de Ligações', placeholder: 'Em breve' },
+      { label: 'Painel de Ligações', href: '/calls/dashboard' },
       { label: 'Lista de Ligações', href: '/calls' },
     ],
   },
   {
     label: 'Estatística',
     items: [
-      { label: 'Atividades', placeholder: 'Em breve' },
-      { label: 'Conversão', placeholder: 'Em breve' },
-      { label: 'Ligações', placeholder: 'Em breve' },
-      { label: 'Equipe', placeholder: 'Em breve' },
+      { label: 'Atividades', href: '/statistics/activities' },
+      { label: 'Conversão', href: '/statistics/conversion' },
+      { label: 'Ligações', href: '/statistics/calls' },
+      { label: 'Equipe', href: '/statistics/team' },
     ],
   },
 ];

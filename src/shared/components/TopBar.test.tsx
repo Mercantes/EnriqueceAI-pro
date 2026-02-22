@@ -80,14 +80,14 @@ describe('TopBar', () => {
     expect(screen.getByText('Ajustes')).toBeInTheDocument();
   });
 
-  it('shows Ligações dropdown with Lista de Ligações and placeholder', async () => {
+  it('shows Ligações dropdown with both active links', async () => {
     const user = userEvent.setup();
     render(<TopBar />);
 
     await user.click(screen.getByText('Ligações'));
 
     expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
-    expect(screen.getByText(/Painel de Ligações — Em breve/)).toBeInTheDocument();
+    expect(screen.getByText('Painel de Ligações')).toBeInTheDocument();
   });
 
   it('exports navSections with 4 sections aligned to Meetime', () => {
