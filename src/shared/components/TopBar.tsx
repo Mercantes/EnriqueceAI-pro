@@ -57,11 +57,11 @@ export const navSections: NavSection[] = [
     ],
   },
   {
-    label: 'Estatística',
+    label: 'Estatísticas',
     items: [
-      { label: 'Atividades', href: '/statistics/activities' },
-      { label: 'Conversão', href: '/statistics/conversion' },
-      { label: 'Ligações', href: '/statistics/calls' },
+      { label: 'Ligação', href: '/statistics/calls' },
+      { label: 'Prospecção', href: '/statistics/activities' },
+      { label: 'Feedback de Oportunidade', href: '/statistics/conversion' },
       { label: 'Equipe', href: '/statistics/team' },
     ],
   },

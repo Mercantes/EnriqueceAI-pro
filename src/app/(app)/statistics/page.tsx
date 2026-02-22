@@ -11,22 +11,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui
 
 const statisticsPages = [
   {
-    title: 'Atividades',
+    title: 'Ligação',
+    description: 'Outcomes, duração, heatmap e análise por SDR.',
+    href: '/statistics/calls',
+    icon: Phone,
+  },
+  {
+    title: 'Prospecção',
     description: 'Volume e performance de atividades por canal e tipo.',
     href: '/statistics/activities',
     icon: Activity,
   },
   {
-    title: 'Conversão',
+    title: 'Feedback de Oportunidade',
     description: 'Funil de conversão e análise por cadência.',
     href: '/statistics/conversion',
     icon: BarChart3,
-  },
-  {
-    title: 'Ligações',
-    description: 'Outcomes, duração, heatmap e análise por SDR.',
-    href: '/statistics/calls',
-    icon: Phone,
   },
   {
     title: 'Equipe',

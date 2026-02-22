@@ -32,7 +32,7 @@ describe('MobileNav', () => {
     expect(await screen.findByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Prospecção')).toBeInTheDocument();
     expect(screen.getByText('Ligações')).toBeInTheDocument();
-    expect(screen.getByText('Estatística')).toBeInTheDocument();
+    expect(screen.getByText('Estatísticas')).toBeInTheDocument();
   });
 
   it('expands Prospecção section to show submenu items', async () => {
@@ -59,15 +59,17 @@ describe('MobileNav', () => {
     expect(screen.getByText('Painel de Ligações')).toBeInTheDocument();
   });
 
-  it('shows Estatística items with active links', async () => {
+  it('shows Estatísticas items with active links', async () => {
     const user = userEvent.setup();
     render(<MobileNav />);
 
     await user.click(screen.getByRole('button', { name: 'Menu' }));
-    await user.click(await screen.findByText('Estatística'));
+    await user.click(await screen.findByText('Estatísticas'));
 
-    expect(await screen.findByText('Atividades')).toBeInTheDocument();
-    expect(screen.getByText('Conversão')).toBeInTheDocument();
+    expect(await screen.findByText('Ligação')).toBeInTheDocument();
+    // "Prospecção" appears twice: as top-level section and as Estatísticas sub-item
+    expect(screen.getAllByText('Prospecção').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Feedback de Oportunidade')).toBeInTheDocument();
     expect(screen.getByText('Equipe')).toBeInTheDocument();
   });
 

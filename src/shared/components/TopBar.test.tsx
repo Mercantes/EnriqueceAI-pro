@@ -50,9 +50,9 @@ describe('TopBar', () => {
     expect(screen.getByText('Ligações')).toBeInTheDocument();
   });
 
-  it('renders Estatística dropdown trigger', () => {
+  it('renders Estatísticas dropdown trigger', () => {
     render(<TopBar />);
-    expect(screen.getByText('Estatística')).toBeInTheDocument();
+    expect(screen.getByText('Estatísticas')).toBeInTheDocument();
   });
 
   it('renders right area with notifications, help, theme and user menu', () => {
@@ -97,7 +97,7 @@ describe('TopBar', () => {
     expect(navSections[1]?.items).toHaveLength(5);
     expect(navSections[2]?.label).toBe('Ligações');
     expect(navSections[2]?.items).toHaveLength(2);
-    expect(navSections[3]?.label).toBe('Estatística');
+    expect(navSections[3]?.label).toBe('Estatísticas');
     expect(navSections[3]?.items).toHaveLength(4);
   });
 });

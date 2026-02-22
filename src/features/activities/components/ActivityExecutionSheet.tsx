@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
@@ -134,7 +134,7 @@ export function ActivityExecutionSheet({
 
   return (
     <Sheet open={selectedIndex !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="sm:max-w-full w-full p-0 flex flex-col">
+      <SheetContent side="right" className="sm:max-w-full w-full p-0 flex flex-col" showCloseButton={false}>
         {/* Header with navigation */}
         <SheetHeader className="flex-row items-center justify-between border-b border-[var(--border)] px-6 py-4 space-y-0">
           <SheetTitle className="text-base font-semibold">
@@ -161,6 +161,14 @@ export function ActivityExecutionSheet({
               onClick={() => selectedIndex !== null && onNavigate(selectedIndex + 1)}
             >
               <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-2 h-8 w-8"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
             </Button>
           </div>
         </SheetHeader>
