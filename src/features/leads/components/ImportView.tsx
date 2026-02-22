@@ -109,7 +109,7 @@ export function ImportView() {
       )}
 
       {step === 'report' && importResult && (
-        <ImportReport result={importResult} />
+        <ImportReport result={importResult} onReset={handleReset} />
       )}
     </div>
   );

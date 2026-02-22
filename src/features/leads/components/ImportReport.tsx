@@ -19,9 +19,10 @@ import { formatCnpj } from '../utils/cnpj';
 
 interface ImportReportProps {
   result: ImportLeadsResult;
+  onReset?: () => void;
 }
 
-export function ImportReport({ result }: ImportReportProps) {
+export function ImportReport({ result, onReset }: ImportReportProps) {
   const hasErrors = result.errorCount > 0;
   const allFailed = result.successCount === 0;
 
@@ -96,8 +97,8 @@ export function ImportReport({ result }: ImportReportProps) {
         <Button asChild>
           <Link href="/leads">Ver leads</Link>
         </Button>
-        <Button variant="outline" asChild>
-          <Link href="/leads/import">Nova importação</Link>
+        <Button variant="outline" onClick={onReset}>
+          Nova importação
         </Button>
       </div>
     </div>
