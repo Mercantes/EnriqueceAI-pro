@@ -95,7 +95,37 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
     if (insertError) {
       const isDuplicate = insertError.message?.includes('unique') || insertError.message?.includes('duplicate');
+
+      // If duplicate, check if the existing lead is soft-deleted and restore it
       if (isDuplicate) {
+        const { data: existingLead } = (await (supabase
+          .from('leads') as ReturnType<typeof supabase.from>)
+          .select('id, deleted_at')
+          .eq('org_id', member.org_id)
+          .eq('cnpj', row.cnpj)
+          .single()) as { data: { id: string; deleted_at: string | null } | null };
+
+        if (existingLead?.deleted_at) {
+          // Restore soft-deleted lead with fresh data
+          const { error: restoreError } = await (supabase
+            .from('leads') as ReturnType<typeof supabase.from>)
+            .update({
+              deleted_at: null,
+              status: 'new',
+              enrichment_status: 'pending',
+              razao_social: row.razao_social ?? null,
+              nome_fantasia: row.nome_fantasia ?? null,
+              created_by: user.id,
+              import_id: importId,
+            } as Record<string, unknown>)
+            .eq('id', existingLead.id);
+
+          if (!restoreError) {
+            successCount++;
+            continue;
+          }
+        }
+
         duplicateCount++;
       }
 
