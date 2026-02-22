@@ -18,10 +18,11 @@ interface LeadListViewProps {
   result: LeadListResult;
   hasFilters: boolean;
   cadenceInfo: Record<string, LeadCadenceInfo>;
+  userMap: Record<string, string>;
   currentUserId: string;
 }
 
-export function LeadListView({ result, hasFilters, cadenceInfo, currentUserId }: LeadListViewProps) {
+export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId }: LeadListViewProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const { data: leads, total, page, per_page } = result;
 
@@ -73,7 +74,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, currentUserId }:
           Nenhum lead encontrado com os filtros aplicados.
         </div>
       ) : (
-        <LeadTable leads={leads} cadenceInfo={cadenceInfo} />
+        <LeadTable leads={leads} cadenceInfo={cadenceInfo} userMap={userMap} />
       )}
 
       {/* Pagination */}

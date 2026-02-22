@@ -44,6 +44,7 @@ export { enrichLeadAction } from './actions/enrich-lead';
 export { fetchLeads } from './actions/fetch-leads';
 export { fetchLead } from './actions/fetch-lead';
 export { bulkDeleteLeads, bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from './actions/bulk-actions';
+export { fetchUserMap } from './actions/fetch-user-map';
 export { archiveLead, updateLead } from './actions/update-lead';
 
 // Services

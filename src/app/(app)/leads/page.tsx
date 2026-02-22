@@ -6,6 +6,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 
 import { fetchLeads } from '@/features/leads/actions/fetch-leads';
 import { fetchLeadsCadenceInfo } from '@/features/leads/actions/fetch-leads-cadence-info';
+import { fetchUserMap } from '@/features/leads/actions/fetch-user-map';
 import { LeadListView } from '@/features/leads/components/LeadListView';
 
 interface LeadsPageProps {
@@ -44,16 +45,27 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
     );
   }
 
-  // Fetch cadence info in parallel for all returned leads
+  // Fetch cadence info and user map in parallel
   const leadIds = result.data.data.map((l) => l.id);
-  const cadenceResult = await fetchLeadsCadenceInfo(leadIds);
+  const uniqueUserIds = [...new Set(
+    result.data.data
+      .flatMap((l) => [l.assigned_to, l.created_by])
+      .filter((id): id is string => id !== null && id !== undefined),
+  )];
+
+  const [cadenceResult, userMapResult] = await Promise.all([
+    fetchLeadsCadenceInfo(leadIds),
+    fetchUserMap(uniqueUserIds),
+  ]);
   const cadenceInfo = cadenceResult.success ? cadenceResult.data : {};
+  const userMap = userMapResult.success ? userMapResult.data : {};
 
   return (
     <LeadListView
       result={result.data}
       hasFilters={hasFilters}
       cadenceInfo={cadenceInfo}
+      userMap={userMap}
       currentUserId={user.id}
     />
   );

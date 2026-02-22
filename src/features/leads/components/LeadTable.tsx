@@ -40,6 +40,7 @@ import { LeadStatusBadge } from './LeadStatusBadge';
 interface LeadTableProps {
   leads: LeadRow[];
   cadenceInfo: Record<string, LeadCadenceInfo>;
+  userMap: Record<string, string>;
 }
 
 type SortColumn = 'created_at';
@@ -50,7 +51,7 @@ function SortIcon({ column, currentSort, currentDir }: { column: SortColumn; cur
   return <ArrowDown className="ml-1 h-3.5 w-3.5" />;
 }
 
-export function LeadTable({ leads, cadenceInfo }: LeadTableProps) {
+export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -270,7 +271,12 @@ export function LeadTable({ leads, cadenceInfo }: LeadTableProps) {
             {leads.map((lead) => {
               const isSelected = selected.has(lead.id);
               const info = cadenceInfo[lead.id];
-              const displayName = lead.nome_fantasia ?? lead.razao_social ?? formatCnpj(lead.cnpj);
+              const firstSocio = lead.socios?.[0];
+              const personName = firstSocio?.nome ?? null;
+              const companyName = lead.nome_fantasia ?? lead.razao_social ?? formatCnpj(lead.cnpj);
+              const primaryName = personName ?? companyName;
+              const secondaryName = personName ? companyName : null;
+              const responsible = userMap[lead.assigned_to ?? ''] ?? userMap[lead.created_by ?? ''] ?? null;
 
               return (
                 <TableRow
@@ -282,7 +288,7 @@ export function LeadTable({ leads, cadenceInfo }: LeadTableProps) {
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => toggleOne(lead.id)}
-                      aria-label={`Selecionar ${displayName ?? lead.cnpj}`}
+                      aria-label={`Selecionar ${primaryName}`}
                     />
                   </TableCell>
                   <TableCell
@@ -290,14 +296,14 @@ export function LeadTable({ leads, cadenceInfo }: LeadTableProps) {
                     onClick={() => navigateToLead(lead.id)}
                   >
                     <div className="flex items-center gap-3">
-                      <LeadAvatar name={displayName} size="sm" />
+                      <LeadAvatar name={primaryName} size="sm" />
                       <div className="min-w-0">
                         <div className="truncate font-semibold">
-                          {displayName}
+                          {primaryName}
                         </div>
-                        {lead.nome_fantasia && lead.razao_social && (
+                        {secondaryName && (
                           <div className="truncate text-xs text-[var(--muted-foreground)]">
-                            {lead.razao_social}
+                            {secondaryName}
                           </div>
                         )}
                       </div>
@@ -313,7 +319,7 @@ export function LeadTable({ leads, cadenceInfo }: LeadTableProps) {
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <span className="text-sm text-[var(--muted-foreground)]">
-                      {info?.responsible_email?.split('@')[0] ?? '—'}
+                      {responsible ?? '—'}
                     </span>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
