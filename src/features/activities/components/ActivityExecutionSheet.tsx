@@ -39,6 +39,17 @@ export function ActivityExecutionSheet({
 
   const activity = selectedIndex !== null ? activities[selectedIndex] : null;
 
+  // Advance to next activity or close if last
+  function advanceOrClose(enrollmentId: string) {
+    onActivityDone(enrollmentId);
+
+    if (selectedIndex !== null && selectedIndex < activities.length - 1) {
+      onNavigate(selectedIndex);
+    } else {
+      onClose();
+    }
+  }
+
   const handleSend = (subject: string, body: string, aiGenerated: boolean) => {
     if (!activity || !activity.cadenceCreatedBy) {
       toast.error('Cadência sem usuário criador — não é possível enviar');
@@ -68,13 +79,35 @@ export function ActivityExecutionSheet({
 
       if (result.success) {
         toast.success(isWhatsApp ? 'WhatsApp enviado com sucesso!' : 'Email enviado com sucesso!');
-        onActivityDone(activity.enrollmentId);
+        advanceOrClose(activity.enrollmentId);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  };
 
-        if (selectedIndex !== null && selectedIndex < activities.length - 1) {
-          onNavigate(selectedIndex);
-        } else {
-          onClose();
-        }
+  const handleMarkDone = (notes: string) => {
+    if (!activity) return;
+
+    startSendTransition(async () => {
+      const result = await executeActivity({
+        enrollmentId: activity.enrollmentId,
+        cadenceId: activity.cadenceId,
+        stepId: activity.stepId,
+        leadId: activity.lead.id,
+        orgId: activity.lead.org_id,
+        cadenceCreatedBy: activity.cadenceCreatedBy ?? '',
+        channel: activity.channel,
+        to: '',
+        subject: '',
+        body: notes,
+        aiGenerated: false,
+        templateId: null,
+      });
+
+      if (result.success) {
+        toast.success('Atividade marcada como feita!');
+        advanceOrClose(activity.enrollmentId);
       } else {
         toast.error(result.error);
       }
@@ -89,13 +122,7 @@ export function ActivityExecutionSheet({
 
       if (result.success) {
         toast.success('Atividade adiada em 2 horas');
-        onActivityDone(activity.enrollmentId);
-
-        if (selectedIndex !== null && selectedIndex < activities.length - 1) {
-          onNavigate(selectedIndex);
-        } else {
-          onClose();
-        }
+        advanceOrClose(activity.enrollmentId);
       } else {
         toast.error(result.error);
       }
@@ -108,7 +135,7 @@ export function ActivityExecutionSheet({
   return (
     <Sheet open={selectedIndex !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="sm:max-w-5xl w-full p-0 flex flex-col">
-        {/* Header */}
+        {/* Header with navigation */}
         <SheetHeader className="flex-row items-center justify-between border-b border-[var(--border)] px-6 py-4 space-y-0">
           <SheetTitle className="text-base font-semibold">
             Executar Atividade
@@ -141,7 +168,7 @@ export function ActivityExecutionSheet({
         {/* Split layout — key forces remount when activity changes */}
         {activity && (
           <div className="flex flex-1 overflow-hidden">
-            {/* Left — Lead Context */}
+            {/* Left — Lead Context with tabs */}
             <div className="w-[320px] shrink-0 border-r border-[var(--border)] overflow-y-auto p-5">
               <ActivityLeadContext
                 lead={activity.lead}
@@ -151,7 +178,7 @@ export function ActivityExecutionSheet({
               />
             </div>
 
-            {/* Right — Email Compose with auto-prepare */}
+            {/* Right — Activity panel (adapts by type) */}
             <div className="flex-1 overflow-y-auto p-5">
               <ActivityExecutionSheetContent
                 key={activity.enrollmentId}
@@ -159,6 +186,7 @@ export function ActivityExecutionSheet({
                 isSending={isSending}
                 onSend={handleSend}
                 onSkip={handleSkip}
+                onMarkDone={handleMarkDone}
               />
             </div>
           </div>

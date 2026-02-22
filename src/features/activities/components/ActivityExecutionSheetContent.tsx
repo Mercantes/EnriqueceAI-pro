@@ -8,6 +8,9 @@ import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepar
 import type { PendingActivity } from '../types';
 
 import { ActivityEmailCompose } from './ActivityEmailCompose';
+import { ActivityPhonePanel } from './ActivityPhonePanel';
+import { ActivityResearchPanel } from './ActivityResearchPanel';
+import { ActivitySocialPointPanel } from './ActivitySocialPointPanel';
 import { ActivityWhatsAppCompose } from './ActivityWhatsAppCompose';
 
 interface ActivityExecutionSheetContentProps {
@@ -15,6 +18,7 @@ interface ActivityExecutionSheetContentProps {
   isSending: boolean;
   onSend: (subject: string, body: string, aiGenerated: boolean) => void;
   onSkip: () => void;
+  onMarkDone: (notes: string) => void;
 }
 
 export function ActivityExecutionSheetContent({
@@ -22,6 +26,7 @@ export function ActivityExecutionSheetContent({
   isSending,
   onSend,
   onSkip,
+  onMarkDone,
 }: ActivityExecutionSheetContentProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [subject, setSubject] = useState(activity.templateSubject ?? '');
@@ -32,6 +37,8 @@ export function ActivityExecutionSheetContent({
       ? (activity.lead.telefone ?? '')
       : (activity.lead.email ?? ''),
   );
+
+  const leadName = activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj;
 
   // Fire-and-forget fetch on mount (key prop on parent forces remount per activity)
   useState(() => {
@@ -81,6 +88,44 @@ export function ActivityExecutionSheetContent({
     return null;
   });
 
+  // LinkedIn / Social Point
+  if (activity.channel === 'linkedin') {
+    return (
+      <ActivitySocialPointPanel
+        leadName={leadName}
+        isSending={isSending}
+        onMarkDone={onMarkDone}
+        onSkip={onSkip}
+      />
+    );
+  }
+
+  // Research
+  if (activity.channel === 'research') {
+    return (
+      <ActivityResearchPanel
+        leadName={leadName}
+        isSending={isSending}
+        onMarkDone={onMarkDone}
+        onSkip={onSkip}
+      />
+    );
+  }
+
+  // Phone
+  if (activity.channel === 'phone') {
+    return (
+      <ActivityPhonePanel
+        leadName={leadName}
+        phoneNumber={activity.lead.telefone}
+        isSending={isSending}
+        onMarkDone={onMarkDone}
+        onSkip={onSkip}
+      />
+    );
+  }
+
+  // WhatsApp
   if (activity.channel === 'whatsapp') {
     return (
       <ActivityWhatsAppCompose
@@ -96,6 +141,7 @@ export function ActivityExecutionSheetContent({
     );
   }
 
+  // Email (default)
   return (
     <ActivityEmailCompose
       to={to}
