@@ -33,6 +33,7 @@ import {
 
 import { bulkArchiveLeads, bulkDeleteLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
 import type { LeadCadenceInfo, LeadRow } from '../types';
+import { formatCnpj } from '../utils/cnpj';
 import { LeadAvatar } from './LeadAvatar';
 import { LeadStatusBadge } from './LeadStatusBadge';
 
@@ -269,7 +270,7 @@ export function LeadTable({ leads, cadenceInfo }: LeadTableProps) {
             {leads.map((lead) => {
               const isSelected = selected.has(lead.id);
               const info = cadenceInfo[lead.id];
-              const displayName = lead.nome_fantasia ?? lead.razao_social ?? null;
+              const displayName = lead.nome_fantasia ?? lead.razao_social ?? formatCnpj(lead.cnpj);
 
               return (
                 <TableRow
@@ -292,7 +293,7 @@ export function LeadTable({ leads, cadenceInfo }: LeadTableProps) {
                       <LeadAvatar name={displayName} size="sm" />
                       <div className="min-w-0">
                         <div className="truncate font-semibold">
-                          {displayName ?? '—'}
+                          {displayName}
                         </div>
                         {lead.nome_fantasia && lead.razao_social && (
                           <div className="truncate text-xs text-[var(--muted-foreground)]">

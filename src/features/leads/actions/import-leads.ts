@@ -106,18 +106,18 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
           .single()) as { data: { id: string; deleted_at: string | null } | null };
 
         if (existingLead?.deleted_at) {
-          // Restore soft-deleted lead with fresh data
+          // Restore soft-deleted lead — preserve existing enriched data
+          const restoreFields: Record<string, unknown> = {
+            deleted_at: null,
+            import_id: importId,
+          };
+          // Only overwrite name fields if the CSV actually provides them
+          if (row.razao_social) restoreFields.razao_social = row.razao_social;
+          if (row.nome_fantasia) restoreFields.nome_fantasia = row.nome_fantasia;
+
           const { error: restoreError } = await (supabase
             .from('leads') as ReturnType<typeof supabase.from>)
-            .update({
-              deleted_at: null,
-              status: 'new',
-              enrichment_status: 'pending',
-              razao_social: row.razao_social ?? null,
-              nome_fantasia: row.nome_fantasia ?? null,
-              created_by: user.id,
-              import_id: importId,
-            } as Record<string, unknown>)
+            .update(restoreFields)
             .eq('id', existingLead.id);
 
           if (!restoreError) {
