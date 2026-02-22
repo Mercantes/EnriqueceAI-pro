@@ -50,9 +50,9 @@ describe('TopBar', () => {
     expect(screen.getByText('Ligações')).toBeInTheDocument();
   });
 
-  it('renders Estatísticas dropdown trigger', () => {
+  it('renders Estatística dropdown trigger', () => {
     render(<TopBar />);
-    expect(screen.getByText('Estatísticas')).toBeInTheDocument();
+    expect(screen.getByText('Estatística')).toBeInTheDocument();
   });
 
   it('renders right area with notifications, help, theme and user menu', () => {
@@ -80,23 +80,24 @@ describe('TopBar', () => {
     expect(screen.getByText('Ajustes')).toBeInTheDocument();
   });
 
-  it('shows placeholder for Ligações dropdown', async () => {
+  it('shows Ligações dropdown with Lista de Ligações and placeholder', async () => {
     const user = userEvent.setup();
     render(<TopBar />);
 
     await user.click(screen.getByText('Ligações'));
 
-    expect(await screen.findByText('Em breve')).toBeInTheDocument();
+    expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
+    expect(screen.getByText(/Painel de Ligações — Em breve/)).toBeInTheDocument();
   });
 
-  it('exports navSections with 4 sections', () => {
+  it('exports navSections with 4 sections aligned to Meetime', () => {
     expect(navSections).toHaveLength(4);
     expect(navSections[0]?.label).toBe('Dashboard');
     expect(navSections[1]?.label).toBe('Prospecção');
     expect(navSections[1]?.items).toHaveLength(5);
     expect(navSections[2]?.label).toBe('Ligações');
-    expect(navSections[2]?.placeholder).toBe('Em breve');
-    expect(navSections[3]?.label).toBe('Estatísticas');
-    expect(navSections[3]?.placeholder).toBe('Em breve');
+    expect(navSections[2]?.items).toHaveLength(2);
+    expect(navSections[3]?.label).toBe('Estatística');
+    expect(navSections[3]?.items).toHaveLength(4);
   });
 });

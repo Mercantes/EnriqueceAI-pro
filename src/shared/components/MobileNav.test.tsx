@@ -32,7 +32,7 @@ describe('MobileNav', () => {
     expect(await screen.findByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Prospecção')).toBeInTheDocument();
     expect(screen.getByText('Ligações')).toBeInTheDocument();
-    expect(screen.getByText('Estatísticas')).toBeInTheDocument();
+    expect(screen.getByText('Estatística')).toBeInTheDocument();
   });
 
   it('expands Prospecção section to show submenu items', async () => {
@@ -48,14 +48,15 @@ describe('MobileNav', () => {
     expect(screen.getByText('Ajustes')).toBeInTheDocument();
   });
 
-  it('shows placeholder text for Ligações section', async () => {
+  it('shows Ligações items with placeholder and link', async () => {
     const user = userEvent.setup();
     render(<MobileNav />);
 
     await user.click(screen.getByRole('button', { name: 'Menu' }));
     await user.click(await screen.findByText('Ligações'));
 
-    expect(await screen.findByText('Em breve')).toBeInTheDocument();
+    expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
+    expect(screen.getByText(/Painel de Ligações — Em breve/)).toBeInTheDocument();
   });
 
 });
