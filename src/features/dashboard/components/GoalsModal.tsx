@@ -146,15 +146,17 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     Número total de oportunidades para o mês
                   </p>
                 </div>
-                <Input
-                  id="opportunity-target"
-                  type="number"
-                  min={0}
-                  className="w-40 text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  value={opportunityTarget}
-                  onChange={(e) => setOpportunityTarget(Number(e.target.value) || 0)}
-                  aria-label="Meta de Oportunidades"
-                />
+                <div className="relative w-24 shrink-0">
+                  <Input
+                    id="opportunity-target"
+                    type="number"
+                    min={0}
+                    className="text-right text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    value={opportunityTarget}
+                    onChange={(e) => setOpportunityTarget(Number(e.target.value) || 0)}
+                    aria-label="Meta de Oportunidades"
+                  />
+                </div>
               </div>
             </div>
 
@@ -167,7 +169,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                     Percentual dos leads finalizados no mês que a empresa espera transformar em oportunidades
                   </p>
                 </div>
-                <div className="relative w-40">
+                <div className="relative w-24 shrink-0">
                   <Input
                     id="conversion-target"
                     type="number"
