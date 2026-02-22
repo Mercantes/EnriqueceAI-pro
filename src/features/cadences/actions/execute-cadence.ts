@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ActionResult } from '@/lib/actions/action-result';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
@@ -115,6 +116,25 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         continue;
       }
 
+      // Auto-stop: check if lead already replied to this cadence
+      const { data: replyInteraction } = (await (supabase
+        .from('interactions') as ReturnType<typeof supabase.from>)
+        .select('id')
+        .eq('cadence_id', enrollment.cadence_id)
+        .eq('lead_id', enrollment.lead_id)
+        .eq('type', 'replied')
+        .limit(1)
+        .maybeSingle()) as { data: { id: string } | null };
+
+      if (replyInteraction) {
+        await (supabase.from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+          .update({ status: 'replied' } as Record<string, unknown>)
+          .eq('id', enrollment.id);
+        result.skipped++;
+        console.warn(`[cadence-engine] enrollment=${enrollment.id} status=replied reason=auto_stop duration_ms=${Date.now() - stepStart}`);
+        continue;
+      }
+
       let messageContent = '';
       let subject: string | null = null;
       let aiGenerated = false;
@@ -127,6 +147,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           .single()) as { data: MessageTemplateRow | null };
 
         if (template) {
+          // Build variables: lead data + vendor data
           const variables: Record<string, string | null> = {
             nome_fantasia: enrollment.lead.nome_fantasia,
             razao_social: enrollment.lead.razao_social,
@@ -136,7 +157,31 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             municipio: enrollment.lead.municipio,
             uf: enrollment.lead.uf,
             porte: enrollment.lead.porte,
+            nome_vendedor: null,
+            email_vendedor: null,
           };
+
+          // Fetch vendor (cadence creator) data for template variables
+          try {
+            const { data: cadenceForVendor } = (await (supabase
+              .from('cadences') as ReturnType<typeof supabase.from>)
+              .select('created_by')
+              .eq('id', enrollment.cadence_id)
+              .single()) as { data: { created_by: string | null } | null };
+
+            if (cadenceForVendor?.created_by) {
+              const adminClient = createAdminSupabaseClient();
+              const { data: vendorUser } = await adminClient.auth.admin.getUserById(cadenceForVendor.created_by);
+              if (vendorUser?.user) {
+                const meta = vendorUser.user.user_metadata as { full_name?: string } | undefined;
+                variables.nome_vendedor = meta?.full_name ?? null;
+                variables.email_vendedor = vendorUser.user.email ?? null;
+              }
+            }
+          } catch (vendorErr) {
+            console.error(`[cadence-engine] enrollment=${enrollment.id} failed to fetch vendor data:`, vendorErr);
+          }
+
           messageContent = renderTemplate(template.body, variables);
           if (template.subject) {
             subject = renderTemplate(template.subject, variables);

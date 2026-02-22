@@ -47,6 +47,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import type { CadenceTabCounts } from '../actions/fetch-cadences';
 import { createCadence, deleteCadence, updateCadence } from '../actions/manage-cadences';
 import type { CadenceRow, CadenceStatus, CadenceType } from '../types';
+import { CadenceTypeDialog } from './CadenceTypeDialog';
 import { PriorityIcon } from './PriorityIcon';
 
 interface CadenceListViewProps {
@@ -83,6 +84,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showTypeDialog, setShowTypeDialog] = useState(false);
 
   const activeTab = (searchParams.get('type') ?? 'standard') as CadenceType;
 
@@ -168,7 +170,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
             Exibindo {total} cadência{total !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button onClick={() => router.push('/cadences/new')}>
+        <Button onClick={() => setShowTypeDialog(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Nova Cadência
         </Button>
@@ -262,7 +264,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
           <p className="mb-6 max-w-sm text-sm text-muted-foreground">
             Crie sua primeira cadência para automatizar o contato com leads.
           </p>
-          <Button onClick={() => router.push('/cadences/new')}>
+          <Button onClick={() => setShowTypeDialog(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Criar Cadência
           </Button>
@@ -382,6 +384,9 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
           </Button>
         </div>
       )}
+
+      {/* Type selection dialog */}
+      <CadenceTypeDialog open={showTypeDialog} onOpenChange={setShowTypeDialog} />
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

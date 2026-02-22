@@ -1,10 +1,21 @@
 import { requireAuth } from '@/lib/auth/require-auth';
 
 import { fetchTemplates } from '@/features/templates/actions/fetch-templates';
+import { AutoEmailBuilder } from '@/features/cadences/components/AutoEmailBuilder';
 import { CadenceBuilder } from '@/features/cadences/components/CadenceBuilder';
 
-export default async function NewCadencePage() {
+interface NewCadencePageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function NewCadencePage({ searchParams }: NewCadencePageProps) {
   await requireAuth();
+  const sp = await searchParams;
+  const type = sp.type as string | undefined;
+
+  if (type === 'auto_email') {
+    return <AutoEmailBuilder />;
+  }
 
   const result = await fetchTemplates({ per_page: 100 });
   const templates = result.success ? result.data.data : [];

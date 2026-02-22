@@ -22,6 +22,7 @@ export async function createCadence(
       org_id: orgId,
       name: parsed.data.name,
       description: parsed.data.description ?? null,
+      type: parsed.data.type,
       status: 'draft',
       total_steps: 0,
       created_by: userId,

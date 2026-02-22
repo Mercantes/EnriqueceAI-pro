@@ -8,10 +8,14 @@ export const interactionTypeSchema = z.enum([
   'sent', 'delivered', 'opened', 'clicked', 'replied', 'bounced', 'failed', 'meeting_scheduled',
 ]);
 
+// Cadence type schema
+export const cadenceTypeSchema = z.enum(['standard', 'auto_email']);
+
 // Cadence creation schema
 export const createCadenceSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório').max(200),
   description: z.string().max(1000).nullable().optional(),
+  type: cadenceTypeSchema.default('standard'),
 });
 
 // Cadence update schema
@@ -56,7 +60,7 @@ export const batchEnrollmentSchema = z.object({
 // Template variable extraction regex
 export const TEMPLATE_VARIABLE_REGEX = /\{\{(\w+)\}\}/g;
 
-// Available template variables
+// Available template variables — lead data
 export const AVAILABLE_TEMPLATE_VARIABLES = [
   'nome_fantasia',
   'razao_social',
@@ -69,7 +73,21 @@ export const AVAILABLE_TEMPLATE_VARIABLES = [
   'cnae',
 ] as const;
 
+// Vendor/sender variables
+export const VENDOR_TEMPLATE_VARIABLES = [
+  'nome_vendedor',
+  'email_vendedor',
+] as const;
+
+// All variables combined
+export const ALL_TEMPLATE_VARIABLES = [
+  ...AVAILABLE_TEMPLATE_VARIABLES,
+  ...VENDOR_TEMPLATE_VARIABLES,
+] as const;
+
 export type TemplateVariable = (typeof AVAILABLE_TEMPLATE_VARIABLES)[number];
+export type VendorVariable = (typeof VENDOR_TEMPLATE_VARIABLES)[number];
+export type AllTemplateVariable = (typeof ALL_TEMPLATE_VARIABLES)[number];
 
 // Message template creation schema
 export const createTemplateSchema = z.object({
@@ -120,6 +138,21 @@ export const templateFiltersSchema = z.object({
   per_page: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+// Auto email step schema
+export const autoEmailStepSchema = z.object({
+  subject: z.string().min(1, 'Assunto é obrigatório').max(500),
+  body: z.string().min(1, 'Corpo do email é obrigatório').max(10000),
+  delay_days: z.number().int().min(0).default(0),
+  delay_hours: z.number().int().min(0).default(0),
+  ai_personalization: z.boolean().default(false),
+});
+
+// Save auto email cadence schema
+export const saveAutoEmailCadenceSchema = z.object({
+  cadence_id: z.string().uuid('ID da cadência inválido'),
+  steps: z.array(autoEmailStepSchema).min(1, 'Adicione pelo menos 1 step'),
+});
+
 // Inferred types
 export type CreateCadence = z.infer<typeof createCadenceSchema>;
 export type UpdateCadence = z.infer<typeof updateCadenceSchema>;
@@ -131,3 +164,5 @@ export type CreateTemplate = z.input<typeof createTemplateSchema>;
 export type UpdateTemplate = z.infer<typeof updateTemplateSchema>;
 export type CadenceFilters = z.infer<typeof cadenceFiltersSchema>;
 export type TemplateFilters = z.infer<typeof templateFiltersSchema>;
+export type AutoEmailStep = z.infer<typeof autoEmailStepSchema>;
+export type SaveAutoEmailCadence = z.infer<typeof saveAutoEmailCadenceSchema>;
