@@ -33,7 +33,7 @@ vi.mock('../services/lemit-cpf-provider', () => ({
 
 import { revalidatePath } from 'next/cache';
 import { enrichLead } from '../services/enrichment.service';
-import { bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from './bulk-actions';
+import { bulkArchiveLeads, bulkDeleteLeads, bulkEnrichLeads, exportLeadsCsv } from './bulk-actions';
 
 // Helper to build a chainable mock for: .from().select().eq().eq().single()
 function makeOrgMemberChain(orgId: string | null) {
@@ -70,6 +70,72 @@ function makeLeadsExportChain(
   const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
   return { select: selectMock };
 }
+
+describe('bulkDeleteLeads', () => {
+  beforeEach(() => {
+    resetMocks();
+    vi.useFakeTimers();
+  });
+
+  it('should soft-delete leads and return count on success', async () => {
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        return makeOrgMemberChain('org-1');
+      }
+      return makeUpdateChain(null);
+    });
+
+    const result = await bulkDeleteLeads(['lead-1', 'lead-2']);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.count).toBe(2);
+    }
+    expect(revalidatePath).toHaveBeenCalledWith('/leads');
+  });
+
+  it('should return error when org is not found', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain(null));
+
+    const result = await bulkDeleteLeads(['lead-1']);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Organização não encontrada');
+    }
+  });
+
+  it('should return error when leadIds is empty', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain('org-1'));
+
+    const result = await bulkDeleteLeads([]);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Nenhum lead selecionado');
+    }
+  });
+
+  it('should return error when DB update fails', async () => {
+    let fromCallCount = 0;
+    mockFrom.mockImplementation(() => {
+      fromCallCount++;
+      if (fromCallCount === 1) {
+        return makeOrgMemberChain('org-1');
+      }
+      return makeUpdateChain({ message: 'Update failed' });
+    });
+
+    const result = await bulkDeleteLeads(['lead-1']);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Erro ao excluir leads');
+    }
+  });
+});
 
 describe('bulkArchiveLeads', () => {
   beforeEach(() => {

@@ -43,7 +43,7 @@ export type { ImportLeadsResult } from './actions/import-leads';
 export { enrichLeadAction } from './actions/enrich-lead';
 export { fetchLeads } from './actions/fetch-leads';
 export { fetchLead } from './actions/fetch-lead';
-export { bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from './actions/bulk-actions';
+export { bulkDeleteLeads, bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from './actions/bulk-actions';
 export { archiveLead, updateLead } from './actions/update-lead';
 
 // Services
@@ -58,4 +58,4 @@ export { LeadTable } from './components/LeadTable';
 export { LeadFilters as LeadFiltersPanel } from './components/LeadFilters';
 export { LeadPagination } from './components/LeadPagination';
 export { LeadStatusBadge, EnrichmentStatusBadge } from './components/LeadStatusBadge';
-export { LeadProfile } from './components/LeadProfile';
+export { LeadDetailLayout } from './components/LeadDetailLayout';

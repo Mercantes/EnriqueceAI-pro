@@ -2,11 +2,19 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Pencil, RefreshCw } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,17 +31,17 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
-import type { LeadRow } from '../types';
-import { formatCnpj } from '../utils/cnpj';
+import { bulkArchiveLeads, bulkDeleteLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
+import type { LeadCadenceInfo, LeadRow } from '../types';
+import { LeadAvatar } from './LeadAvatar';
 import { LeadStatusBadge } from './LeadStatusBadge';
-import { LeadScoreCircle } from './LeadScoreCircle';
 
 interface LeadTableProps {
   leads: LeadRow[];
+  cadenceInfo: Record<string, LeadCadenceInfo>;
 }
 
-type SortColumn = 'created_at' | 'fit_score';
+type SortColumn = 'created_at';
 
 function SortIcon({ column, currentSort, currentDir }: { column: SortColumn; currentSort: SortColumn; currentDir: string }) {
   if (currentSort !== column) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 opacity-40" />;
@@ -41,11 +49,12 @@ function SortIcon({ column, currentSort, currentDir }: { column: SortColumn; cur
   return <ArrowDown className="ml-1 h-3.5 w-3.5" />;
 }
 
-export function LeadTable({ leads }: LeadTableProps) {
+export function LeadTable({ leads, cadenceInfo }: LeadTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+  const [deleteTarget, setDeleteTarget] = useState<string[] | null>(null);
 
   const currentSortBy = (searchParams.get('sort_by') ?? 'created_at') as SortColumn;
   const currentSortDir = searchParams.get('sort_dir') ?? 'desc';
@@ -156,6 +165,22 @@ export function LeadTable({ leads }: LeadTableProps) {
     });
   }, [router]);
 
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    const ids = deleteTarget;
+    startTransition(async () => {
+      const result = await bulkDeleteLeads(ids);
+      if (result.success) {
+        toast.success(`${result.data.count} lead${result.data.count > 1 ? 's' : ''} excluído${result.data.count > 1 ? 's' : ''}`);
+        setSelected(new Set());
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+      setDeleteTarget(null);
+    });
+  }, [deleteTarget, router]);
+
   const navigateToLead = useCallback(
     (id: string) => {
       router.push(`/leads/${id}`);
@@ -199,6 +224,16 @@ export function LeadTable({ leads }: LeadTableProps) {
               <Download className="mr-1 h-3.5 w-3.5" />
               Exportar CSV
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteTarget(Array.from(selected))}
+              disabled={isPending}
+              className="text-[var(--destructive)] hover:bg-[var(--destructive)]/10"
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              Excluir
+            </Button>
           </div>
         </div>
       )}
@@ -214,38 +249,28 @@ export function LeadTable({ leads }: LeadTableProps) {
                   aria-label="Selecionar todos"
                 />
               </TableHead>
-              <TableHead className="w-[50px]">
-                <button
-                  type="button"
-                  className="flex items-center font-medium hover:text-[var(--foreground)]"
-                  onClick={() => handleSort('fit_score')}
-                >
-                  Score
-                  <SortIcon column="fit_score" currentSort={currentSortBy} currentDir={currentSortDir} />
-                </button>
-              </TableHead>
-              <TableHead>Empresa</TableHead>
-              <TableHead>CNPJ</TableHead>
+              <TableHead>Lead</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Responsável</TableHead>
-              <TableHead>Porte</TableHead>
-              <TableHead>Cidade/UF</TableHead>
               <TableHead>
                 <button
                   type="button"
                   className="flex items-center font-medium hover:text-[var(--foreground)]"
                   onClick={() => handleSort('created_at')}
                 >
-                  Importado em
+                  Cadência
                   <SortIcon column="created_at" currentSort={currentSortBy} currentDir={currentSortDir} />
                 </button>
               </TableHead>
+              <TableHead>Responsável</TableHead>
               <TableHead className="w-[40px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {leads.map((lead) => {
               const isSelected = selected.has(lead.id);
+              const info = cadenceInfo[lead.id];
+              const displayName = lead.nome_fantasia ?? lead.razao_social ?? null;
+
               return (
                 <TableRow
                   key={lead.id}
@@ -256,44 +281,39 @@ export function LeadTable({ leads }: LeadTableProps) {
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => toggleOne(lead.id)}
-                      aria-label={`Selecionar ${lead.nome_fantasia ?? lead.cnpj}`}
+                      aria-label={`Selecionar ${displayName ?? lead.cnpj}`}
                     />
-                  </TableCell>
-                  <TableCell onClick={() => navigateToLead(lead.id)}>
-                    <LeadScoreCircle score={lead.fit_score} />
                   </TableCell>
                   <TableCell
                     className="font-medium"
                     onClick={() => navigateToLead(lead.id)}
                   >
-                    <div>
-                      <div>{lead.nome_fantasia ?? lead.razao_social ?? '—'}</div>
-                      {lead.nome_fantasia && lead.razao_social && (
-                        <div className="text-xs text-[var(--muted-foreground)]">
-                          {lead.razao_social}
+                    <div className="flex items-center gap-3">
+                      <LeadAvatar name={displayName} size="sm" />
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">
+                          {displayName ?? '—'}
                         </div>
-                      )}
+                        {lead.nome_fantasia && lead.razao_social && (
+                          <div className="truncate text-xs text-[var(--muted-foreground)]">
+                            {lead.razao_social}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </TableCell>
-                  <TableCell onClick={() => navigateToLead(lead.id)}>
-                    {formatCnpj(lead.cnpj)}
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
                     <LeadStatusBadge status={lead.status} variant="meetime" />
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
-                    <span className="text-sm text-[var(--muted-foreground)]">—</span>
+                    <span className="text-sm">
+                      {info?.cadence_name ?? '—'}
+                    </span>
                   </TableCell>
                   <TableCell onClick={() => navigateToLead(lead.id)}>
-                    {lead.porte ?? '—'}
-                  </TableCell>
-                  <TableCell onClick={() => navigateToLead(lead.id)}>
-                    {lead.endereco
-                      ? [lead.endereco.cidade, lead.endereco.uf].filter(Boolean).join('/') || '—'
-                      : '—'}
-                  </TableCell>
-                  <TableCell onClick={() => navigateToLead(lead.id)}>
-                    {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                    <span className="text-sm text-[var(--muted-foreground)]">
+                      {info?.responsible_email?.split('@')[0] ?? '—'}
+                    </span>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
@@ -317,6 +337,13 @@ export function LeadTable({ leads }: LeadTableProps) {
                           <Archive className="mr-2 h-3.5 w-3.5" />
                           Arquivar
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setDeleteTarget([lead.id])}
+                          className="text-[var(--destructive)] focus:text-[var(--destructive)]"
+                        >
+                          <Trash2 className="mr-2 h-3.5 w-3.5" />
+                          Excluir
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -326,6 +353,26 @@ export function LeadTable({ leads }: LeadTableProps) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir {deleteTarget?.length === 1 ? 'lead' : 'leads'}</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir {deleteTarget?.length ?? 0} lead{(deleteTarget?.length ?? 0) > 1 ? 's' : ''}? Esta ação não pode ser desfeita facilmente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isPending}>
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
