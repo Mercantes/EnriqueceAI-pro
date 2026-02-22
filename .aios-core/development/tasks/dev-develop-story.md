@@ -478,12 +478,16 @@ const {
 ### Order of Execution
 
 1. Read (first or next) task
-2. Implement task and its subtasks
-3. Write tests
-4. Execute validations
-5. **Only if ALL pass**: Mark task checkbox [x]
-6. Update story File List (ensure all created/modified/deleted files listed)
-7. Repeat until all tasks complete
+2. **IF task involves DB changes**: Execute Schema/Migration Pre-Flight Checklist (Checkpoint 1)
+   - Run `.aios-core/product/checklists/schema-migration-preflight-checklist.md`
+   - Cross-reference enums, function names, naming conventions against initial_schema
+   - STOP if any check fails — fix before writing migration SQL
+3. Implement task and its subtasks
+4. Write tests
+5. Execute validations
+6. **Only if ALL pass**: Mark task checkbox [x]
+7. Update story File List (ensure all created/modified/deleted files listed)
+8. Repeat until all tasks complete
 
 ### Story File Updates (All Modes)
 
@@ -522,10 +526,18 @@ const {
 3. All validations pass
 4. Full regression test suite passes
 5. File List is complete
-6. **Execute CodeRabbit Self-Healing Loop** (see below)
-7. Execute `.aios-core/product/checklists/story-dod-checklist.md`
-8. Set story status: "Ready for Review"
-9. HALT (do not proceed further)
+6. **Execute Post-Implementation QA Checklist** (Checkpoint 2)
+   - Run `.aios-core/product/checklists/post-implementation-qa-checklist.md`
+   - Verify schema-code consistency, migration integrity, type sync
+   - Run `pnpm typecheck && pnpm lint && pnpm test:run && pnpm build`
+   - Fix any failures before proceeding
+7. **Execute CodeRabbit Self-Healing Loop** (see below)
+8. **Execute Deploy Verification Checklist** (Checkpoint 3)
+   - Run `.aios-core/product/checklists/deploy-verification-checklist.md`
+   - Verify migrations committed, git clean, types current, docs complete
+9. Execute `.aios-core/product/checklists/story-dod-checklist.md`
+10. Set story status: "Ready for Review"
+11. HALT (do not proceed further)
 
 ---
 
@@ -894,6 +906,10 @@ Found 5 technical decisions needed.
 ## Dependencies
 
 - `.aios-core/product/checklists/story-dod-checklist.md` - Definition of Done checklist
+- `.aios-core/product/checklists/schema-migration-preflight-checklist.md` - Checkpoint 1: Schema/Migration Pre-Flight
+- `.aios-core/product/checklists/post-implementation-qa-checklist.md` - Checkpoint 2: Post-Implementation QA
+- `.aios-core/product/checklists/deploy-verification-checklist.md` - Checkpoint 3: Deploy Verification
+- `.claude/rules/dev-checkpoints.md` - Enforcement rule with canonical conventions
 
 ## Tools
 
