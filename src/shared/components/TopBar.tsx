@@ -54,6 +54,8 @@ export const navSections: NavSection[] = [
     items: [
       { label: 'Painel de Ligações', href: '/calls/dashboard' },
       { label: 'Lista de Ligações', href: '/calls' },
+      { label: 'Extrato', placeholder: 'Em breve' },
+      { label: 'Ajustes', placeholder: 'Em breve' },
     ],
   },
   {

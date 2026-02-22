@@ -88,6 +88,8 @@ describe('TopBar', () => {
 
     expect(await screen.findByText('Lista de Ligações')).toBeInTheDocument();
     expect(screen.getByText('Painel de Ligações')).toBeInTheDocument();
+    expect(screen.getByText(/Extrato/)).toBeInTheDocument();
+    expect(screen.getByText(/Ajustes/)).toBeInTheDocument();
   });
 
   it('exports navSections with 4 sections aligned to Meetime', () => {
@@ -96,7 +98,7 @@ describe('TopBar', () => {
     expect(navSections[1]?.label).toBe('Prospecção');
     expect(navSections[1]?.items).toHaveLength(5);
     expect(navSections[2]?.label).toBe('Ligações');
-    expect(navSections[2]?.items).toHaveLength(2);
+    expect(navSections[2]?.items).toHaveLength(4);
     expect(navSections[3]?.label).toBe('Estatísticas');
     expect(navSections[3]?.items).toHaveLength(4);
   });
