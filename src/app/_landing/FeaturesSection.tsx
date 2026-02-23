@@ -1,5 +1,7 @@
 import { BarChart3, Brain, Building2, Phone, Target, Zap } from 'lucide-react';
 
+import { Button } from '@/shared/components/ui/button';
+
 const features = [
   {
     icon: Zap,
@@ -68,6 +70,12 @@ export function FeaturesSection() {
               <p className="text-sm leading-relaxed text-muted-foreground">{feature.description}</p>
             </div>
           ))}
+        </div>
+
+        <div className="mt-14 text-center">
+          <Button size="lg" className="h-14 px-10 text-base font-bold" asChild>
+            <a href="#cadastro">Quero dar superpoderes aos meus SDRs</a>
+          </Button>
         </div>
       </div>
     </section>
