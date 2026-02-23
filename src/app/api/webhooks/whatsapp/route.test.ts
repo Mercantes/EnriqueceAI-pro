@@ -10,6 +10,16 @@ vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: () => mockSupabase,
 }));
 
+// Mock webhook utilities — keep real verifyHmacSignature and logger, stub idempotency
+vi.mock('@/lib/webhooks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/webhooks')>();
+  return {
+    ...actual,
+    isEventProcessed: vi.fn().mockResolvedValue(false),
+    markEventProcessed: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 import { GET, POST } from './route';
 
 // ---------------------------------------------------------------------------

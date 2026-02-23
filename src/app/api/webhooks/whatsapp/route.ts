@@ -1,8 +1,12 @@
-import crypto from 'crypto';
-
 import { NextResponse } from 'next/server';
 
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import {
+  createWebhookLogger,
+  isEventProcessed,
+  markEventProcessed,
+  verifyHmacSignature,
+} from '@/lib/webhooks';
 
 interface WhatsAppWebhookPayload {
   object: string;
@@ -26,6 +30,8 @@ interface WhatsAppWebhookPayload {
     }[];
   }[];
 }
+
+const logger = createWebhookLogger('whatsapp');
 
 export async function GET(request: Request) {
   // WhatsApp webhook verification
@@ -54,16 +60,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
     }
 
-    const expectedSignature = 'sha256=' + crypto
-      .createHmac('sha256', appSecret)
-      .update(rawBody)
-      .digest('hex');
-
-    const sigBuffer = Buffer.from(signature);
-    const expectedBuffer = Buffer.from(expectedSignature);
-
-    if (sigBuffer.length !== expectedBuffer.length ||
-        !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+    if (!verifyHmacSignature(rawBody, signature, appSecret)) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
   }
@@ -83,6 +80,9 @@ export async function POST(request: Request) {
 
       // Process delivery status updates
       for (const status of value.statuses ?? []) {
+        const statusEventId = `status_${status.id}_${status.status}`;
+        if (await isEventProcessed(supabase, 'whatsapp', statusEventId)) continue;
+
         const typeMap: Record<string, string> = {
           sent: 'sent',
           delivered: 'delivered',
@@ -100,11 +100,17 @@ export async function POST(request: Request) {
             metadata: status.errors ? { errors: status.errors } : null,
           } as Record<string, unknown>)
           .eq('external_id', status.id);
+
+        await markEventProcessed(supabase, 'whatsapp', statusEventId, `status.${status.status}`);
       }
 
       // Process incoming messages (reply detection)
       for (const message of value.messages ?? []) {
+        const msgEventId = `msg_${message.id}`;
+        if (await isEventProcessed(supabase, 'whatsapp', msgEventId)) continue;
+
         await processIncomingMessage(supabase, message);
+        await markEventProcessed(supabase, 'whatsapp', msgEventId, `message.${message.type}`);
       }
     }
   }
@@ -134,7 +140,7 @@ async function processIncomingMessage(
     .maybeSingle()) as { data: { id: string; org_id: string } | null };
 
   if (!lead) {
-    console.warn(`[whatsapp-webhook] No lead found for phone=${phone}`);
+    logger.warn('No lead found for phone', { phone });
     return;
   }
 
@@ -149,7 +155,7 @@ async function processIncomingMessage(
     .maybeSingle()) as { data: { id: string; cadence_id: string; current_step: number } | null };
 
   if (!enrollment) {
-    console.warn(`[whatsapp-webhook] No active enrollment for lead=${lead.id}`);
+    logger.warn('No active enrollment for lead', { lead_id: lead.id });
     return;
   }
 
@@ -185,5 +191,5 @@ async function processIncomingMessage(
     .update({ status: 'replied' } as Record<string, unknown>)
     .eq('id', enrollment.id);
 
-  console.warn(`[whatsapp-webhook] Reply detected: lead=${lead.id} enrollment=${enrollment.id}`);
+  logger.info('Reply detected', { lead_id: lead.id, enrollment_id: enrollment.id });
 }

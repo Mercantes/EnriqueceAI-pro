@@ -3,8 +3,10 @@ import type Stripe from 'stripe';
 
 import { stripe } from '@/lib/stripe';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { createWebhookLogger, isEventProcessed, markEventProcessed } from '@/lib/webhooks';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+const logger = createWebhookLogger('stripe');
 
 /** Extract period dates from a Stripe subscription (v20+: period is on items) */
 function getSubscriptionPeriod(sub: Stripe.Subscription) {
@@ -36,11 +38,17 @@ export async function POST(request: Request) {
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('Stripe webhook signature verification failed:', message);
+    logger.error('Signature verification failed', { error: message });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
   const supabase = createServiceRoleClient();
+
+  // Idempotency check — skip already-processed events
+  if (await isEventProcessed(supabase, 'stripe', event.id)) {
+    logger.info('Duplicate event skipped', { event_id: event.id, event_type: event.type });
+    return NextResponse.json({ received: true });
+  }
 
   try {
     switch (event.type) {
@@ -149,9 +157,14 @@ export async function POST(request: Request) {
       }
     }
   } catch (err) {
-    console.error('Error processing Stripe webhook:', err);
+    logger.error('Error processing webhook', {
+      event_id: event.id,
+      event_type: event.type,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
   }
 
+  await markEventProcessed(supabase, 'stripe', event.id, event.type);
   return NextResponse.json({ received: true });
 }

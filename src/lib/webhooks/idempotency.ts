@@ -1,0 +1,43 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * Check if a webhook event has already been processed.
+ * Uses the `webhook_events` table with unique(provider, event_id) constraint.
+ */
+export async function isEventProcessed(
+  supabase: SupabaseClient,
+  provider: string,
+  eventId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('webhook_events')
+    .select('id')
+    .eq('provider', provider)
+    .eq('event_id', eventId)
+    .maybeSingle();
+
+  return data !== null;
+}
+
+/**
+ * Mark a webhook event as processed by inserting into `webhook_events`.
+ * Uses ON CONFLICT DO NOTHING to safely handle race conditions.
+ */
+export async function markEventProcessed(
+  supabase: SupabaseClient,
+  provider: string,
+  eventId: string,
+  eventType: string,
+  payload?: unknown,
+): Promise<void> {
+  await supabase.from('webhook_events').upsert(
+    {
+      provider,
+      event_id: eventId,
+      event_type: eventType,
+      payload: payload ?? null,
+      processed_at: new Date().toISOString(),
+    },
+    { onConflict: 'provider,event_id', ignoreDuplicates: true },
+  );
+}
