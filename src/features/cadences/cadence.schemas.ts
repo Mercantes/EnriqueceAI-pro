@@ -62,15 +62,11 @@ export const TEMPLATE_VARIABLE_REGEX = /\{\{(\w+)\}\}/g;
 
 // Available template variables — lead data
 export const AVAILABLE_TEMPLATE_VARIABLES = [
+  'primeiro_nome',
+  'empresa',
   'nome_fantasia',
   'razao_social',
-  'cnpj',
-  'email',
   'telefone',
-  'porte',
-  'cidade',
-  'uf',
-  'cnae',
 ] as const;
 
 // Vendor/sender variables

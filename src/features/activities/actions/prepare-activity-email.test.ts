@@ -30,6 +30,7 @@ const mockLead: ActivityLead = {
   municipio: 'São Paulo',
   uf: 'SP',
   porte: 'ME',
+  primeiro_nome: 'João',
 };
 
 // ---------------------------------------------------------------------------

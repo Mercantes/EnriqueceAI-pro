@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 
 import { AIService } from '@/features/ai/services/ai.service';
 import type { LeadContext } from '@/features/ai/types';
+import { cleanCompanyName } from '@/features/cadences/utils/clean-company-name';
 import { renderTemplate } from '@/features/cadences/utils/render-template';
 
 import type { ActivityLead, PreparedEmail, PreparedWhatsApp } from '../types';
@@ -42,6 +43,8 @@ export async function prepareActivityEmail(
 
   // Render template variables
   const variables: Record<string, string | null> = {
+    primeiro_nome: lead.primeiro_nome,
+    empresa: cleanCompanyName(lead.nome_fantasia ?? lead.razao_social),
     nome_fantasia: lead.nome_fantasia,
     razao_social: lead.razao_social,
     cnpj: lead.cnpj,
@@ -124,6 +127,8 @@ export async function prepareActivityWhatsApp(
   }
 
   const variables: Record<string, string | null> = {
+    primeiro_nome: lead.primeiro_nome,
+    empresa: cleanCompanyName(lead.nome_fantasia ?? lead.razao_social),
     nome_fantasia: lead.nome_fantasia,
     razao_social: lead.razao_social,
     cnpj: lead.cnpj,

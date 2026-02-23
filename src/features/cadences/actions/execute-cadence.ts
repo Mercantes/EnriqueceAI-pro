@@ -13,6 +13,7 @@ import { EmailService } from '@/features/integrations/services/email.service';
 import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
 import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 
+import { cleanCompanyName } from '../utils/clean-company-name';
 import { renderTemplate } from '../utils/render-template';
 import type { CadenceStepRow, InteractionRow, MessageTemplateRow } from '../types';
 
@@ -36,6 +37,7 @@ interface EnrollmentWithLead {
     municipio: string | null;
     uf: string | null;
     porte: string | null;
+    socios: Array<{ nome: string; qualificacao?: string }> | null;
   };
 }
 
@@ -148,7 +150,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
         if (template) {
           // Build variables: lead data + vendor data
+          const primarySocioNome = enrollment.lead.socios?.[0]?.nome ?? null;
           const variables: Record<string, string | null> = {
+            primeiro_nome: primarySocioNome ? primarySocioNome.trim().split(/\s+/)[0] ?? null : null,
+            empresa: cleanCompanyName(enrollment.lead.nome_fantasia ?? enrollment.lead.razao_social),
             nome_fantasia: enrollment.lead.nome_fantasia,
             razao_social: enrollment.lead.razao_social,
             cnpj: enrollment.lead.cnpj,

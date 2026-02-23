@@ -8,6 +8,10 @@ import type { CadenceStepRow, MessageTemplateRow } from '@/features/cadences/typ
 
 import type { ActivityLead, PendingActivity } from '../types';
 
+interface RawLead extends Omit<ActivityLead, 'primeiro_nome'> {
+  socios: Array<{ nome: string }> | null;
+}
+
 interface EnrollmentRow {
   id: string;
   cadence_id: string;
@@ -15,7 +19,7 @@ interface EnrollmentRow {
   current_step: number;
   status: string;
   next_step_due: string | null;
-  lead: ActivityLead;
+  lead: RawLead;
   cadence: { id: string; name: string; total_steps: number; created_by: string | null };
 }
 
@@ -133,7 +137,10 @@ export async function fetchActivityLog(
       templateBody: template?.body ?? null,
       aiPersonalization: currentStep.ai_personalization,
       nextStepDue: enrollment.next_step_due,
-      lead: enrollment.lead,
+      lead: {
+        ...enrollment.lead,
+        primeiro_nome: enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0] ?? null,
+      },
     };
 
     // Search filter

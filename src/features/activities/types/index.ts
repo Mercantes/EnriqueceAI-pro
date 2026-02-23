@@ -12,6 +12,7 @@ export interface ActivityLead {
   municipio: string | null;
   uf: string | null;
   porte: string | null;
+  primeiro_nome: string | null;
 }
 
 // A single pending activity derived from enrollment + step + cadence

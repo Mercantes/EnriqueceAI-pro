@@ -8,6 +8,10 @@ import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/
 
 import type { ActivityLead, PendingActivity } from '../types';
 
+interface RawLead extends Omit<ActivityLead, 'primeiro_nome'> {
+  socios: Array<{ nome: string }> | null;
+}
+
 interface EnrollmentRow {
   id: string;
   cadence_id: string;
@@ -15,7 +19,7 @@ interface EnrollmentRow {
   current_step: number;
   status: string;
   next_step_due: string | null;
-  lead: ActivityLead;
+  lead: RawLead;
   cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by'>;
 }
 
@@ -102,7 +106,10 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
       templateBody: template?.body ?? null,
       aiPersonalization: currentStep.ai_personalization,
       nextStepDue: enrollment.next_step_due,
-      lead: enrollment.lead,
+      lead: {
+        ...enrollment.lead,
+        primeiro_nome: enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0] ?? null,
+      },
     });
   }
 

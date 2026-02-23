@@ -44,6 +44,7 @@ function createMockActivity(overrides: Partial<PendingActivity> = {}): PendingAc
       municipio: null,
       uf: null,
       porte: null,
+      primeiro_nome: null,
     },
     ...overrides,
   };

@@ -42,6 +42,7 @@ const baseLead = {
   municipio: null as string | null,
   uf: null as string | null,
   porte: null as string | null,
+  primeiro_nome: null as string | null,
 };
 
 function makeActivity(overrides: Partial<PendingActivity> = {}): PendingActivity {
