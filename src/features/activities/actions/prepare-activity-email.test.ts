@@ -4,6 +4,24 @@ vi.mock('@/lib/auth/require-auth', () => ({
   requireAuth: vi.fn(() => Promise.resolve({ id: 'user-1', email: 'test@test.com' })),
 }));
 
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminSupabaseClient: vi.fn(() => ({
+    auth: {
+      admin: {
+        getUserById: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: 'user-1',
+              email: 'vendedor@test.com',
+              user_metadata: { full_name: 'João Vendedor' },
+            },
+          },
+        }),
+      },
+    },
+  })),
+}));
+
 const mockPersonalizeMessage = vi.fn();
 vi.mock('@/features/ai/services/ai.service', () => ({
   AIService: {
@@ -42,7 +60,7 @@ describe('prepareActivityEmail', () => {
     vi.clearAllMocks();
   });
 
-  it('should return error when lead has no email', async () => {
+  it('should return success with empty to when lead has no email', async () => {
     const result = await prepareActivityEmail({
       lead: { ...mockLead, email: null },
       templateSubject: 'Olá',
@@ -51,10 +69,10 @@ describe('prepareActivityEmail', () => {
       channel: 'email',
     });
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toBe('Lead sem email cadastrado');
-    }
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.to).toBe('');
+    expect(result.data.body).toBe('Corpo');
   });
 
   it('should return empty body when no template body provided', async () => {

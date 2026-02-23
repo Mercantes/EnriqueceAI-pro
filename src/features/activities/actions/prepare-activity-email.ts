@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 import { AIService } from '@/features/ai/services/ai.service';
 import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
@@ -18,22 +19,37 @@ interface PrepareInput {
   channel: 'email' | 'whatsapp';
 }
 
+async function resolveVendorVariables(userId: string): Promise<{ nome_vendedor: string | null; email_vendedor: string | null }> {
+  try {
+    const adminClient = createAdminSupabaseClient();
+    const { data: vendorUser } = await adminClient.auth.admin.getUserById(userId);
+    if (vendorUser?.user) {
+      const meta = vendorUser.user.user_metadata as { full_name?: string } | undefined;
+      return {
+        nome_vendedor: meta?.full_name ?? null,
+        email_vendedor: vendorUser.user.email ?? null,
+      };
+    }
+  } catch {
+    // Fallback: no vendor data
+  }
+  return { nome_vendedor: null, email_vendedor: null };
+}
+
 export async function prepareActivityEmail(
   input: PrepareInput,
 ): Promise<ActionResult<PreparedEmail>> {
-  await requireAuth();
+  const user = await requireAuth();
 
   const { lead, templateSubject, templateBody, aiPersonalization, channel } = input;
 
-  if (!lead.email) {
-    return { success: false, error: 'Lead sem email cadastrado' };
-  }
+  const toEmail = lead.email ?? '';
 
   if (!templateBody) {
     return {
       success: true,
       data: {
-        to: lead.email,
+        to: toEmail,
         subject: templateSubject ?? '',
         body: '',
         aiPersonalized: false,
@@ -41,7 +57,11 @@ export async function prepareActivityEmail(
     };
   }
 
-  const variables = buildLeadTemplateVariables(lead);
+  const vendorVars = await resolveVendorVariables(user.id);
+  const variables: Record<string, string | null> = {
+    ...buildLeadTemplateVariables(lead),
+    ...vendorVars,
+  };
 
   let body = renderTemplate(templateBody, variables);
   let subject = templateSubject ? renderTemplate(templateSubject, variables) : '';
@@ -69,7 +89,7 @@ export async function prepareActivityEmail(
   return {
     success: true,
     data: {
-      to: lead.email,
+      to: toEmail,
       subject,
       body,
       aiPersonalized,
@@ -80,7 +100,7 @@ export async function prepareActivityEmail(
 export async function prepareActivityWhatsApp(
   input: PrepareInput,
 ): Promise<ActionResult<PreparedWhatsApp>> {
-  await requireAuth();
+  const user = await requireAuth();
 
   const { lead, templateBody, aiPersonalization, channel } = input;
 
@@ -99,7 +119,11 @@ export async function prepareActivityWhatsApp(
     };
   }
 
-  const variables = buildLeadTemplateVariables(lead);
+  const vendorVars = await resolveVendorVariables(user.id);
+  const variables: Record<string, string | null> = {
+    ...buildLeadTemplateVariables(lead),
+    ...vendorVars,
+  };
 
   let body = renderTemplate(templateBody, variables);
   let aiPersonalized = false;

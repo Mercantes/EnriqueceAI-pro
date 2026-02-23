@@ -1,12 +1,14 @@
 'use client';
 
+import { useState } from 'react';
+
+import { Clock, Eye, Loader2, Pencil, Send, Sparkles } from 'lucide-react';
+
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
-
-import { Loader2, Send, Clock, Sparkles } from 'lucide-react';
 
 interface ActivityEmailComposeProps {
   to: string;
@@ -33,6 +35,7 @@ export function ActivityEmailCompose({
   onSend,
   onSkip,
 }: ActivityEmailComposeProps) {
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview');
   const canSend = !isSending && !isLoading && to && subject.trim() && body.trim();
 
   return (
@@ -41,12 +44,14 @@ export function ActivityEmailCompose({
         <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
           Compor Email
         </h3>
-        {aiPersonalized && (
-          <Badge variant="outline" className="gap-1 text-xs">
-            <Sparkles className="h-3 w-3" />
-            Personalizado por IA
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {aiPersonalized && (
+            <Badge variant="outline" className="gap-1 text-xs">
+              <Sparkles className="h-3 w-3" />
+              Personalizado por IA
+            </Badge>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -60,7 +65,12 @@ export function ActivityEmailCompose({
             {/* To field (read-only) */}
             <div className="space-y-1">
               <Label className="text-xs">Para</Label>
-              <Input value={to} readOnly className="bg-[var(--muted)]" />
+              <Input
+                value={to}
+                readOnly
+                className="bg-[var(--muted)]"
+                placeholder={!to ? 'Lead sem email cadastrado' : undefined}
+              />
             </div>
 
             {/* Subject */}
@@ -73,15 +83,51 @@ export function ActivityEmailCompose({
               />
             </div>
 
-            {/* Body */}
+            {/* Body with Edit/Preview toggle */}
             <div className="flex flex-1 flex-col space-y-1">
-              <Label className="text-xs">Mensagem</Label>
-              <Textarea
-                value={body}
-                onChange={(e) => onBodyChange(e.target.value)}
-                placeholder="Corpo do email"
-                className="min-h-[200px] flex-1 resize-none"
-              />
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Mensagem</Label>
+                <div className="flex rounded-md border border-[var(--border)] text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('edit')}
+                    className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
+                      viewMode === 'edit'
+                        ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                        : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                    }`}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('preview')}
+                    className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
+                      viewMode === 'preview'
+                        ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                        : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                    }`}
+                  >
+                    <Eye className="h-3 w-3" />
+                    Preview
+                  </button>
+                </div>
+              </div>
+
+              {viewMode === 'edit' ? (
+                <Textarea
+                  value={body}
+                  onChange={(e) => onBodyChange(e.target.value)}
+                  placeholder="Corpo do email"
+                  className="min-h-[200px] flex-1 resize-none font-mono text-xs"
+                />
+              ) : (
+                <div
+                  className="min-h-[200px] flex-1 overflow-auto rounded-md border border-[var(--border)] bg-white p-4 text-sm dark:bg-[var(--card)]"
+                  dangerouslySetInnerHTML={{ __html: body }}
+                />
+              )}
             </div>
           </div>
 
