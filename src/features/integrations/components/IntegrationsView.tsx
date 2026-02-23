@@ -150,7 +150,7 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
                 <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={40} height={40} className="rounded-lg" />
                 <div>
                   <CardTitle className="text-base">WhatsApp</CardTitle>
-                  <p className="text-xs text-[var(--muted-foreground)]">Envio via Evolution API</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Envio via WhatsApp API</p>
                 </div>
               </div>
               {evolution.step === 'connected' ? (
