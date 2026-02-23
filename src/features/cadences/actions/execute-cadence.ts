@@ -8,12 +8,12 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { AIService } from '@/features/ai/services/ai.service';
-import type { LeadContext } from '@/features/ai/types';
+import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
 import { EmailService } from '@/features/integrations/services/email.service';
 import { WhatsAppCreditService } from '@/features/integrations/services/whatsapp-credit.service';
 import { WhatsAppService, validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
 
-import { cleanCompanyName } from '../utils/clean-company-name';
+import { buildLeadTemplateVariables } from '../utils/build-template-variables';
 import { renderTemplate } from '../utils/render-template';
 import type { CadenceStepRow, InteractionRow, MessageTemplateRow } from '../types';
 
@@ -150,18 +150,8 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
         if (template) {
           // Build variables: lead data + vendor data
-          const primarySocioNome = enrollment.lead.socios?.[0]?.nome ?? null;
           const variables: Record<string, string | null> = {
-            primeiro_nome: primarySocioNome ? primarySocioNome.trim().split(/\s+/)[0] ?? null : null,
-            empresa: cleanCompanyName(enrollment.lead.nome_fantasia ?? enrollment.lead.razao_social),
-            nome_fantasia: enrollment.lead.nome_fantasia,
-            razao_social: enrollment.lead.razao_social,
-            cnpj: enrollment.lead.cnpj,
-            email: enrollment.lead.email,
-            telefone: enrollment.lead.telefone,
-            municipio: enrollment.lead.municipio,
-            uf: enrollment.lead.uf,
-            porte: enrollment.lead.porte,
+            ...buildLeadTemplateVariables(enrollment.lead, enrollment.lead.socios?.[0]?.nome),
             nome_vendedor: null,
             email_vendedor: null,
           };
@@ -195,20 +185,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           // AI personalization when enabled
           if (step.ai_personalization && messageContent) {
             try {
-              const leadContext: LeadContext = {
-                nome_fantasia: enrollment.lead.nome_fantasia,
-                razao_social: enrollment.lead.razao_social,
-                cnpj: enrollment.lead.cnpj,
-                email: enrollment.lead.email,
-                telefone: enrollment.lead.telefone,
-                porte: enrollment.lead.porte,
-                cnae: null,
-                situacao_cadastral: null,
-                faturamento_estimado: null,
-                endereco: enrollment.lead.municipio
-                  ? { cidade: enrollment.lead.municipio, uf: enrollment.lead.uf ?? undefined }
-                  : null,
-              };
+              const leadContext = buildLeadContext(enrollment.lead);
               const aiResult = await AIService.personalizeMessage(
                 step.channel as 'email' | 'whatsapp',
                 messageContent,
