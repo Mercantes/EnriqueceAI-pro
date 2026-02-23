@@ -10,6 +10,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('../actions/manage-cadences', () => ({
+  activateCadence: vi.fn(),
   createCadence: vi.fn(),
   deleteCadence: vi.fn(),
   updateCadence: vi.fn(),

@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 
 import type { CadenceDetail, CadenceStepWithTemplate } from '../cadences.contract';
 import type { ChannelType } from '../types';
+import { activateCadence } from '../actions/manage-cadences';
 import { saveTimelineSteps } from '../actions/save-timeline-steps';
 import { ActivityTypeSidebar, channelConfig } from './ActivityTypeSidebar';
 import { CadenceTimeline, type DayData, type TimelineStep } from './CadenceTimeline';
@@ -93,6 +94,24 @@ export function TimelineBuilder({ cadence }: TimelineBuilderProps) {
     });
   }
 
+  function handleActivate() {
+    startTransition(async () => {
+      const stepInputs = daysToStepInputs(days);
+      const saveResult = await saveTimelineSteps(cadence.id, stepInputs);
+      if (!saveResult.success) {
+        toast.error(saveResult.error);
+        return;
+      }
+      const activateResult = await activateCadence(cadence.id);
+      if (activateResult.success) {
+        toast.success('Cadência ativada com sucesso!');
+        router.push(`/cadences/${cadence.id}`);
+      } else {
+        toast.error(activateResult.error);
+      }
+    });
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Main area: Sidebar + Timeline (both inside DndContext) */}
@@ -107,7 +126,7 @@ export function TimelineBuilder({ cadence }: TimelineBuilderProps) {
       {/* Bottom Bar */}
       <div className="flex items-center justify-between border-t bg-[var(--card)] px-6 py-3">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/cadences')}>
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/cadences/${cadence.id}`)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Voltar
           </Button>
@@ -119,10 +138,18 @@ export function TimelineBuilder({ cadence }: TimelineBuilderProps) {
           </div>
         </div>
         {isEditable && (
-          <Button onClick={handleSave} disabled={isPending}>
-            <Save className="mr-2 h-4 w-4" />
-            {isPending ? 'Salvando...' : 'Editar Cadência'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleSave} disabled={isPending}>
+              <Save className="mr-2 h-4 w-4" />
+              {isPending ? 'Salvando...' : 'Salvar Passos'}
+            </Button>
+            {cadence.status === 'draft' && totalSteps >= 2 && (
+              <Button onClick={handleActivate} disabled={isPending}>
+                <Zap className="mr-2 h-4 w-4" />
+                {isPending ? 'Ativando...' : 'Salvar e Ativar'}
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </div>

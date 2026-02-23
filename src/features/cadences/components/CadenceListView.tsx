@@ -45,7 +45,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 
 import type { CadenceTabCounts } from '../actions/fetch-cadences';
-import { createCadence, deleteCadence, updateCadence } from '../actions/manage-cadences';
+import { activateCadence, createCadence, deleteCadence, updateCadence } from '../actions/manage-cadences';
 import type { CadenceRow, CadenceStatus, CadenceType } from '../types';
 import { CadenceTypeDialog } from './CadenceTypeDialog';
 import { PriorityIcon } from './PriorityIcon';
@@ -136,6 +136,18 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
       const result = await updateCadence(cadence.id, { status: 'archived' });
       if (result.success) {
         toast.success('Cadência arquivada');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleActivateDraft(cadence: CadenceRow) {
+    startTransition(async () => {
+      const result = await activateCadence(cadence.id);
+      if (result.success) {
+        toast.success('Cadência ativada');
         router.refresh();
       } else {
         toast.error(result.error);
@@ -294,6 +306,12 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
                           <Pencil className="mr-2 h-4 w-4" />
                           Editar
                         </DropdownMenuItem>
+                        {cadence.status === 'draft' && cadence.total_steps >= 2 && (
+                          <DropdownMenuItem onClick={() => handleActivateDraft(cadence)}>
+                            <Zap className="mr-2 h-4 w-4" />
+                            Ativar
+                          </DropdownMenuItem>
+                        )}
                         {(cadence.status === 'active' || cadence.status === 'paused') && (
                           <DropdownMenuItem onClick={() => handleToggleStatus(cadence)}>
                             {cadence.status === 'active' ? (
