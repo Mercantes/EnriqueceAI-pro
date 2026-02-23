@@ -98,6 +98,7 @@ export async function fetchLeadsFinishedRanking(
     totalFinished += counts.finished;
     entries.push({
       userId,
+      userName: '',
       value: counts.finished,
       secondaryValue: counts.prospecting,
     });
@@ -191,7 +192,7 @@ export async function fetchActivitiesRanking(
   let totalActivities = 0;
   for (const [userId, count] of sdrCounts) {
     totalActivities += count;
-    entries.push({ userId, value: count });
+    entries.push({ userId, userName: '', value: count });
   }
 
   // Get goal
@@ -291,6 +292,7 @@ export async function fetchConversionRanking(
     const rate = stats.total > 0 ? Math.round((stats.qualified / stats.total) * 100) : 0;
     entries.push({
       userId,
+      userName: '',
       value: rate,
       secondaryValue: stats.total,
     });

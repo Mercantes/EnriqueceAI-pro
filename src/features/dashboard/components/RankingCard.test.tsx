@@ -12,8 +12,8 @@ function createCardData(overrides: Partial<RankingCardData> = {}): RankingCardDa
     percentOfTarget: -20,
     averagePerSdr: 12.5,
     sdrBreakdown: [
-      { userId: 'aaaa1111-0000-0000-0000-000000000001', value: 15, secondaryValue: 3 },
-      { userId: 'bbbb2222-0000-0000-0000-000000000002', value: 10 },
+      { userId: 'aaaa1111-0000-0000-0000-000000000001', userName: 'João Silva', value: 15, secondaryValue: 3 },
+      { userId: 'bbbb2222-0000-0000-0000-000000000002', userName: 'Maria Santos', value: 10 },
     ],
     ...overrides,
   };
@@ -70,8 +70,8 @@ describe('RankingCard', () => {
       <RankingCard title="Test" icon={Users} data={createCardData()} />,
     );
     expect(screen.getByText('Por vendedor')).toBeInTheDocument();
-    expect(screen.getByText('aaaa1111...')).toBeInTheDocument();
-    expect(screen.getByText('bbbb2222...')).toBeInTheDocument();
+    expect(screen.getByText('João Silva')).toBeInTheDocument();
+    expect(screen.getByText('Maria Santos')).toBeInTheDocument();
   });
 
   it('should render secondary label when provided', () => {

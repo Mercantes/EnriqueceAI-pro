@@ -78,7 +78,7 @@ export function RankingCard({
                 className="flex items-center justify-between text-sm"
               >
                 <span className="truncate text-muted-foreground">
-                  {sdr.userId.slice(0, 8)}...
+                  {sdr.userName || sdr.userId.slice(0, 8)}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="font-medium">

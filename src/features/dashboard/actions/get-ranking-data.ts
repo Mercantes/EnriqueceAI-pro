@@ -4,10 +4,11 @@ import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { fetchRankingData } from '../services/ranking-metrics.service';
-import type { DashboardFilters, RankingData } from '../types';
+import type { DashboardFilters, RankingData, SdrRankingEntry } from '../types';
 
 const filtersSchema = z.object({
   month: z
@@ -43,6 +44,45 @@ export async function getRankingData(
 
   try {
     const ranking = await fetchRankingData(supabase, member.org_id, filters);
+
+    // Resolve user IDs to display names
+    const allUserIds = new Set<string>();
+    for (const card of [ranking.leadsFinished, ranking.activitiesDone, ranking.conversionRate]) {
+      for (const entry of card.sdrBreakdown) {
+        allUserIds.add(entry.userId);
+      }
+    }
+
+    const userNameMap = new Map<string, string>();
+    if (allUserIds.size > 0) {
+      try {
+        const adminClient = createAdminSupabaseClient();
+        const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 100 });
+        if (usersData?.users) {
+          for (const u of usersData.users) {
+            if (allUserIds.has(u.id)) {
+              const meta = u.user_metadata as { full_name?: string } | undefined;
+              const name = meta?.full_name ?? u.email?.split('@')[0] ?? u.id.slice(0, 8);
+              userNameMap.set(u.id, name);
+            }
+          }
+        }
+      } catch {
+        // Fallback: keep userId truncated
+      }
+    }
+
+    function resolveNames(entries: SdrRankingEntry[]): SdrRankingEntry[] {
+      return entries.map((e) => ({
+        ...e,
+        userName: userNameMap.get(e.userId) ?? e.userId.slice(0, 8),
+      }));
+    }
+
+    ranking.leadsFinished.sdrBreakdown = resolveNames(ranking.leadsFinished.sdrBreakdown);
+    ranking.activitiesDone.sdrBreakdown = resolveNames(ranking.activitiesDone.sdrBreakdown);
+    ranking.conversionRate.sdrBreakdown = resolveNames(ranking.conversionRate.sdrBreakdown);
+
     return { success: true, data: ranking };
   } catch {
     return { success: false, error: 'Erro ao buscar dados de ranking' };
