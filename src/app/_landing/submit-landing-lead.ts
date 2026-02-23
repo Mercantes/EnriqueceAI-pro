@@ -15,9 +15,9 @@ export async function submitLandingLead(
 
   const supabase = createServiceRoleClient();
 
-  const { data, error } = await supabase
-    .from('landing_leads')
-    .insert(parsed.data)
+  const { data, error } = await (supabase
+    .from('landing_leads' as never) as ReturnType<typeof supabase.from>)
+    .insert(parsed.data as never)
     .select('id')
     .single();
 
