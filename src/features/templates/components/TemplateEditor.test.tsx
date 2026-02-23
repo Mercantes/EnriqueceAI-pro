@@ -65,9 +65,9 @@ describe('TemplateEditor', () => {
   it('should show available variables', () => {
     render(<TemplateEditor />);
     expect(screen.getByText('Variáveis disponíveis')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '{{primeiro_nome}}' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '{{empresa}}' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '{{nome_fantasia}}' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '{{razao_social}}' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '{{cnpj}}' })).toBeInTheDocument();
   });
 
   it('should show preview button', () => {

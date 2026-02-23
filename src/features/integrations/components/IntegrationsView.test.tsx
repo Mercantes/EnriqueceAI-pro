@@ -37,7 +37,7 @@ const gmailConnected: GmailConnectionSafe = {
   updated_at: '2026-02-15T10:00:00Z',
 };
 
-const whatsappConnected: WhatsAppConnectionSafe = {
+const _whatsappConnected: WhatsAppConnectionSafe = {
   id: 'wa-1',
   phone_number_id: '123456789',
   business_account_id: 'BA-987',
