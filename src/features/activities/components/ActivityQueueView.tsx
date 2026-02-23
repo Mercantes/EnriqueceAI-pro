@@ -2,9 +2,11 @@
 
 import { useCallback, useMemo, useState } from 'react';
 
-import { ChevronDown, ListChecks, Zap } from 'lucide-react';
+import { ChevronDown, ListChecks, UserPlus, Users, Zap } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
+
+import { EnrollInCadenceDialog } from '@/features/leads/components/EnrollInCadenceDialog';
 
 import type { PendingCallLead } from '../actions/fetch-pending-calls';
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
@@ -30,6 +32,8 @@ interface ActivityQueueViewProps {
   pendingCalls: PendingCallLead[];
   dialerQueue?: DialerQueueItem[];
   showPowerDialer?: boolean;
+  availableLeadsCount?: number;
+  availableLeadIds?: string[];
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -73,12 +77,13 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
   });
 }
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], showPowerDialer = true }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [] }: ActivityQueueViewProps) {
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
   const [quickMode, setQuickMode] = useState(false);
   const [filters, setFilters] = useState<ActivityFilterValues>(defaultFilters);
+  const [enrollOpen, setEnrollOpen] = useState(false);
 
   const handleActivityDone = useCallback((enrollmentId: string) => {
     setActivities((prev) => prev.filter((a) => a.enrollmentId !== enrollmentId));
@@ -132,6 +137,35 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
   return (
     <div className="space-y-6">
+      {/* Available leads banner */}
+      {availableLeadsCount > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/20">
+          <div className="flex items-center gap-2 text-sm">
+            <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <span>
+              Prospectando <strong>{activities.length}</strong> leads
+              {' · '}
+              <strong>{availableLeadsCount}</strong> leads disponíveis para serem iniciados
+            </span>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setEnrollOpen(true)}
+            className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Iniciar novos leads
+          </Button>
+        </div>
+      )}
+
+      {/* Enrollment dialog */}
+      <EnrollInCadenceDialog
+        open={enrollOpen}
+        onOpenChange={setEnrollOpen}
+        leadIds={availableLeadIds}
+      />
+
       {/* Progress cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <ProgressCard completed={progress.completed} total={progress.total} />
@@ -200,7 +234,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           </div>
 
           {filtered.length === 0 ? (
-            <ActivityEmptyState />
+            <ActivityEmptyState onStartActivities={availableLeadsCount > 0 ? () => setEnrollOpen(true) : undefined} />
           ) : quickMode && grouped ? (
             /* Quick mode: grouped by channel */
             <div className="space-y-4">
