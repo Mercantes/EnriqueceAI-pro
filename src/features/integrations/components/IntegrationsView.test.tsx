@@ -17,6 +17,17 @@ vi.mock('../actions/manage-gmail', () => ({
   disconnectGmail: vi.fn(),
 }));
 
+vi.mock('../hooks/useEvolutionWhatsApp', () => ({
+  useEvolutionWhatsApp: () => ({
+    step: 'idle' as const,
+    qrBase64: null,
+    phone: null,
+    error: null,
+    connect: vi.fn(),
+    refreshQr: vi.fn(),
+  }),
+}));
+
 
 const gmailConnected: GmailConnectionSafe = {
   id: 'gmail-1',
@@ -75,7 +86,7 @@ describe('IntegrationsView', () => {
 
   it('should show WhatsApp card', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getByText('WhatsApp Business')).toBeInTheDocument();
+    expect(screen.getByText('WhatsApp')).toBeInTheDocument();
   });
 
   it('should show email address when Gmail connected', () => {
@@ -93,14 +104,9 @@ describe('IntegrationsView', () => {
     expect(screen.getAllByText('Desconectar').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should show WhatsApp phone number when connected', () => {
-    render(<IntegrationsView {...defaultProps} whatsapp={whatsappConnected} />);
-    expect(screen.getByText('Phone ID: 123456789')).toBeInTheDocument();
-  });
-
-  it('should show "Em breve" badge for WhatsApp when not connected', () => {
+  it('should show WhatsApp subtitle when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getAllByText('Em breve').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Envio via WhatsApp API')).toBeInTheDocument();
   });
 
   it('should show error status for Google when Gmail has error', () => {
@@ -147,9 +153,10 @@ describe('IntegrationsView', () => {
     expect(screen.getByText('Discador VoIP')).toBeInTheDocument();
   });
 
-  it('should show "Em breve" badge for API4Com when not connected', () => {
+  it('should show connect button for API4Com when not connected', () => {
     render(<IntegrationsView {...defaultProps} />);
-    expect(screen.getAllByText('Em breve').length).toBeGreaterThanOrEqual(1);
+    // Both WhatsApp and API4Com show "Conectar" when not connected
+    expect(screen.getAllByText('Conectar').length).toBeGreaterThanOrEqual(2);
   });
 
   it('should show ramal and Gerenciar button when API4Com connected', () => {

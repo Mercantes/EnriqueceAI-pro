@@ -28,6 +28,7 @@ const mockLead = {
   municipio: 'São Paulo',
   uf: 'SP',
   porte: 'ME',
+  primeiro_nome: null,
 };
 
 const mockCadence = {

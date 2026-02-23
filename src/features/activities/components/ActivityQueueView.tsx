@@ -4,10 +4,10 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { ChevronDown, ListChecks, Zap } from 'lucide-react';
 
-import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 
 import type { PendingCallLead } from '../actions/fetch-pending-calls';
+import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DailyProgress } from '../actions/fetch-daily-progress';
 import type { PendingActivity } from '../types';
 
@@ -28,6 +28,7 @@ interface ActivityQueueViewProps {
   initialActivities: PendingActivity[];
   progress: DailyProgress;
   pendingCalls: PendingCallLead[];
+  dialerQueue?: DialerQueueItem[];
   showPowerDialer?: boolean;
 }
 
@@ -72,7 +73,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
   });
 }
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, showPowerDialer = true }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], showPowerDialer = true }: ActivityQueueViewProps) {
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
@@ -161,13 +162,12 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, s
             }`}
           >
             Power Dialer
-            <Badge variant="secondary" className="ml-2 text-xs">Em breve</Badge>
           </button>
         )}
       </div>
 
       {activeTab === 'dialer' && showPowerDialer ? (
-        <PowerDialerTab />
+        <PowerDialerTab initialQueue={dialerQueue} />
       ) : (
         <>
           {/* Pending calls section */}
