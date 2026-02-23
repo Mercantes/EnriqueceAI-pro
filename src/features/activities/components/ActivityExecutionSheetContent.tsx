@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { toast } from 'sonner';
 
@@ -40,8 +40,10 @@ export function ActivityExecutionSheetContent({
 
   const leadName = activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj;
 
-  // Fire-and-forget fetch on mount (key prop on parent forces remount per activity)
-  useState(() => {
+  // Fetch prepared message on mount (key prop on parent forces remount per activity)
+  useEffect(() => {
+    let cancelled = false;
+
     if (activity.channel === 'whatsapp') {
       prepareActivityWhatsApp({
         lead: activity.lead,
@@ -50,6 +52,7 @@ export function ActivityExecutionSheetContent({
         aiPersonalization: activity.aiPersonalization,
         channel: 'whatsapp',
       }).then((result) => {
+        if (cancelled) return;
         if (result.success) {
           setTo(result.data.to);
           setBody(result.data.body);
@@ -59,7 +62,7 @@ export function ActivityExecutionSheetContent({
         }
         setIsLoading(false);
       }).catch(() => {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       });
     } else if (activity.channel === 'email') {
       prepareActivityEmail({
@@ -69,6 +72,7 @@ export function ActivityExecutionSheetContent({
         aiPersonalization: activity.aiPersonalization,
         channel: activity.channel,
       }).then((result) => {
+        if (cancelled) return;
         if (result.success) {
           setTo(result.data.to);
           setSubject(result.data.subject);
@@ -79,14 +83,16 @@ export function ActivityExecutionSheetContent({
         }
         setIsLoading(false);
       }).catch(() => {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       });
     } else {
       // phone, linkedin, research — no auto-prepare needed
       setIsLoading(false);
     }
-    return null;
-  });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity.enrollmentId]);
 
   // LinkedIn / Social Point
   if (activity.channel === 'linkedin') {
