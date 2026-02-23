@@ -3,6 +3,15 @@
  * Supports CNPJ.ws (free, basic data) and Lemit (premium, contact data).
  */
 
+/**
+ * Infer "Sócio" or "Sócia" from the person's first name.
+ * Heuristic: Brazilian female names typically end in "a".
+ */
+export function inferQualificacao(nome: string): string {
+  const firstName = nome.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+  return firstName.endsWith('a') ? 'Sócia' : 'Sócio';
+}
+
 export interface EnrichmentData {
   razao_social?: string;
   nome_fantasia?: string;
@@ -107,7 +116,9 @@ export class CnpjWsProvider implements EnrichmentProvider {
       situacao_cadastral: (estabelecimento?.situacao_cadastral as string) || undefined,
       socios: socios?.map((s) => ({
         nome: s.nome as string,
-        qualificacao: (s.qualificacao as Record<string, unknown>)?.descricao as string | undefined,
+        qualificacao:
+          ((s.qualificacao as Record<string, unknown>)?.descricao as string | undefined) ||
+          inferQualificacao(s.nome as string),
       })),
     };
   }
@@ -202,7 +213,7 @@ export class LemitProvider implements EnrichmentProvider {
       faturamento_estimado: empresa.faturamento_estimado as number | undefined,
       socios: socios?.map((s) => ({
         nome: s.nome as string,
-        qualificacao: s.qualificacao as string | undefined,
+        qualificacao: (s.qualificacao as string | undefined) || inferQualificacao(s.nome as string),
         cpf_masked: s.cpf_masked as string | undefined,
         cpf: s.cpf as string | undefined,
         participacao: s.participacao as number | undefined,

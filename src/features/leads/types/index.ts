@@ -48,6 +48,9 @@ export interface LeadRow {
   socios: LeadSocio[] | null;
   faturamento_estimado: number | null;
   notes: string | null;
+  instagram: string | null;
+  linkedin: string | null;
+  website: string | null;
   fit_score: number | null;
   enriched_at: string | null;
   created_by: string | null;
@@ -116,6 +119,9 @@ export interface LeadInsert {
   telefone?: string | null;
   socios?: LeadSocio[] | null;
   faturamento_estimado?: number | null;
+  instagram?: string | null;
+  linkedin?: string | null;
+  website?: string | null;
   assigned_to?: string | null;
   created_by?: string | null;
   import_id?: string | null;

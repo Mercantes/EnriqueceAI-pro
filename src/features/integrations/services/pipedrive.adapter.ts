@@ -204,8 +204,8 @@ export class PipedriveAdapter implements CRMAdapter {
     const apiDomain = credentials.api_key ?? '';
     const body: Record<string, unknown> = {};
 
-    for (const [fluxField, crmField] of Object.entries(fieldMapping)) {
-      const value = lead[fluxField];
+    for (const [appField, crmField] of Object.entries(fieldMapping)) {
+      const value = lead[appField];
       if (value !== null && value !== undefined) {
         if (crmField === 'email') {
           body.email = [{ value, primary: true }];

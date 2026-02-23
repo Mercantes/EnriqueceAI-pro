@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { CallStatus } from '@/features/calls/types';
+import { CALL_STATUS_COLORS, CALL_STATUS_LABELS } from '@/shared/constants/chart-colors';
 
 import type {
   CallOutcomeBarEntry,
@@ -11,22 +12,6 @@ import type {
   SdrCallEntry,
 } from '../types/call-statistics.types';
 import { safeRate } from '../types/shared';
-
-const STATUS_LABELS: Record<CallStatus, string> = {
-  significant: 'Significativa',
-  not_significant: 'Não Significativa',
-  no_contact: 'Sem Contato',
-  busy: 'Ocupado',
-  not_connected: 'Não Conectada',
-};
-
-const STATUS_COLORS: Record<CallStatus, string> = {
-  significant: '#22c55e',
-  not_significant: '#6b7280',
-  no_contact: '#eab308',
-  busy: '#f97316',
-  not_connected: '#ef4444',
-};
 
 const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -149,10 +134,10 @@ function calculateOutcomes(calls: CallRow[]): CallOutcomeBarEntry[] {
 
   return allStatuses.map((status) => ({
     status,
-    label: STATUS_LABELS[status],
+    label: CALL_STATUS_LABELS[status],
     count: counts.get(status) ?? 0,
     percentage: safeRate(counts.get(status) ?? 0, total),
-    color: STATUS_COLORS[status],
+    color: CALL_STATUS_COLORS[status],
   }));
 }
 

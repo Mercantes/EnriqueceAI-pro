@@ -24,6 +24,10 @@ import {
 
 import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
+import { disconnectApi4Com } from '../actions/manage-api4com';
+import { useEvolutionWhatsApp } from '../hooks/useEvolutionWhatsApp';
+import { Api4ComConfigModal } from './Api4ComConfigModal';
+import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
 
 interface IntegrationsViewProps {
   gmail: GmailConnectionSafe | null;
@@ -44,6 +48,10 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showDisconnect, setShowDisconnect] = useState<'google' | null>(null);
+  const [showEvolutionModal, setShowEvolutionModal] = useState(false);
+  const [showApi4ComConfig, setShowApi4ComConfig] = useState(false);
+  const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);
+  const evolution = useEvolutionWhatsApp();
 
   function handleConnectGoogle() {
     startTransition(async () => {
@@ -141,35 +149,47 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
               <div className="flex items-center gap-3">
                 <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={40} height={40} className="rounded-lg" />
                 <div>
-                  <CardTitle className="text-base">WhatsApp Business</CardTitle>
-                  <p className="text-xs text-[var(--muted-foreground)]">Envio via Meta Cloud API</p>
+                  <CardTitle className="text-base">WhatsApp</CardTitle>
+                  <p className="text-xs text-[var(--muted-foreground)]">Envio via Evolution API</p>
                 </div>
               </div>
-              {whatsapp && (
-                <Badge variant="outline" className={statusConfig[whatsapp.status].className}>
-                  {whatsapp.status === 'connected' && <Check className="mr-1 h-3 w-3" />}
-                  {statusConfig[whatsapp.status].label}
+              {evolution.step === 'connected' ? (
+                <Badge variant="outline" className={statusConfig.connected.className}>
+                  <Check className="mr-1 h-3 w-3" />Conectado
                 </Badge>
-              )}
+              ) : whatsapp?.status === 'connected' ? (
+                <Badge variant="outline" className={statusConfig.connected.className}>
+                  <Check className="mr-1 h-3 w-3" />Conectado
+                </Badge>
+              ) : null}
             </div>
           </CardHeader>
           <CardContent>
-            {whatsapp ? (
+            {evolution.step === 'connected' ? (
               <div className="space-y-3">
                 <div className="rounded-md bg-[var(--muted)] p-3">
-                  <p className="text-sm font-medium">Phone ID: {whatsapp.phone_number_id}</p>
+                  <p className="text-sm font-medium">
+                    {evolution.phone ? `Número: ${evolution.phone}` : 'WhatsApp conectado'}
+                  </p>
                   <p className="text-xs text-[var(--muted-foreground)]">
-                    Business: {whatsapp.business_account_id}
+                    Via Evolution API
                   </p>
                 </div>
-                <Badge variant="outline">Gerenciado pelo administrador</Badge>
               </div>
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--muted-foreground)]">
-                  Integração WhatsApp Business estará disponível em breve. Requer verificação Meta Business.
+                  Conecte seu WhatsApp para enviar mensagens em cadências e se comunicar com leads.
                 </p>
-                <Badge variant="secondary">Em breve</Badge>
+                <Button
+                  onClick={() => {
+                    setShowEvolutionModal(true);
+                    evolution.connect();
+                  }}
+                  disabled={evolution.step === 'creating' || evolution.step === 'waiting_scan'}
+                >
+                  Conectar
+                </Button>
               </div>
             )}
           </CardContent>
@@ -198,16 +218,29 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
           <CardContent>
             {api4com ? (
               <div className="space-y-4">
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Discador VoIP integrado. Sincronize ligações e grave chamadas automaticamente.
-                </p>
-                <div className="border-t border-[var(--border)] pt-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm">Ramal {api4com.ramal}</p>
-                    <Button variant="outline" size="sm">
-                      Gerenciar
-                    </Button>
-                  </div>
+                <div className="rounded-md bg-[var(--muted)] p-3">
+                  <p className="text-sm font-medium">Ramal {api4com.ramal}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Conectado em {new Date(api4com.created_at).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowApi4ComConfig(true)}
+                  >
+                    Gerenciar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600"
+                    onClick={() => setShowDisconnectApi4Com(true)}
+                  >
+                    <Unplug className="mr-2 h-4 w-4" />
+                    Desconectar
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -215,7 +248,9 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
                 <p className="text-sm text-[var(--muted-foreground)]">
                   Discador VoIP integrado. Sincronize ligações e grave chamadas automaticamente.
                 </p>
-                <Badge variant="secondary">Em breve</Badge>
+                <Button onClick={() => setShowApi4ComConfig(true)}>
+                  Conectar
+                </Button>
               </div>
             )}
           </CardContent>
@@ -243,6 +278,68 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* API4Com config modal */}
+      <Api4ComConfigModal
+        open={showApi4ComConfig}
+        onOpenChange={setShowApi4ComConfig}
+        onSuccess={() => router.refresh()}
+        defaultRamal={api4com?.ramal ?? ''}
+        defaultBaseUrl={api4com?.base_url ?? ''}
+        hasExistingApiKey={api4com?.has_api_key ?? false}
+      />
+
+      {/* Disconnect API4Com dialog */}
+      <Dialog open={showDisconnectApi4Com} onOpenChange={setShowDisconnectApi4Com}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Desconectar API4Com</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja desconectar a API4Com? As configurações de ramal e token serão removidas.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDisconnectApi4Com(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await disconnectApi4Com();
+                  if (result.success) {
+                    toast.success('API4Com desconectado');
+                  } else {
+                    toast.error(result.error);
+                  }
+                  setShowDisconnectApi4Com(false);
+                  router.refresh();
+                });
+              }}
+            >
+              {isPending ? 'Desconectando...' : 'Desconectar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* WhatsApp Evolution QR Code modal */}
+      {showEvolutionModal && evolution.step !== 'idle' && (
+        <WhatsAppEvolutionModal
+          qrBase64={evolution.qrBase64}
+          step={evolution.step}
+          phone={evolution.phone}
+          error={evolution.error}
+          onRefreshQr={evolution.refreshQr}
+          onClose={() => {
+            setShowEvolutionModal(false);
+            if (evolution.step === 'connected') {
+              router.refresh();
+            }
+          }}
+        />
+      )}
 
     </div>
   );

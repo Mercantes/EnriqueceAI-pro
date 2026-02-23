@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { CONVERSION_COLORS } from '@/shared/constants/chart-colors';
+
 import type {
   CadenceConversionRow,
   ConversionAnalyticsData,
@@ -121,11 +123,11 @@ function calculateFunnel(leads: LeadRow[], interactions: InteractionRow[]): Funn
   const qualifiedLeads = leads.filter((l) => l.status === 'qualified').length;
 
   return [
-    { label: 'Total Leads', count: totalLeads, percentage: 100, color: '#6366f1' },
-    { label: 'Contactados', count: contactedLeads.size, percentage: safeRate(contactedLeads.size, totalLeads), color: '#3b82f6' },
-    { label: 'Respondidos', count: repliedLeads.size, percentage: safeRate(repliedLeads.size, totalLeads), color: '#8b5cf6' },
-    { label: 'Reunião', count: meetingLeads.size, percentage: safeRate(meetingLeads.size, totalLeads), color: '#f59e0b' },
-    { label: 'Qualificados', count: qualifiedLeads, percentage: safeRate(qualifiedLeads, totalLeads), color: '#22c55e' },
+    { label: 'Total Leads', count: totalLeads, percentage: 100, color: CONVERSION_COLORS.totalLeads },
+    { label: 'Contactados', count: contactedLeads.size, percentage: safeRate(contactedLeads.size, totalLeads), color: CONVERSION_COLORS.contacted },
+    { label: 'Respondidos', count: repliedLeads.size, percentage: safeRate(repliedLeads.size, totalLeads), color: CONVERSION_COLORS.replied },
+    { label: 'Reunião', count: meetingLeads.size, percentage: safeRate(meetingLeads.size, totalLeads), color: CONVERSION_COLORS.meeting },
+    { label: 'Qualificados', count: qualifiedLeads, percentage: safeRate(qualifiedLeads, totalLeads), color: CONVERSION_COLORS.qualified },
   ];
 }
 

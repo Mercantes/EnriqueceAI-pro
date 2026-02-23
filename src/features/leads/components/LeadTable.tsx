@@ -2,19 +2,11 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Pencil, RefreshCw, Trash2, Zap } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Pencil, RefreshCw, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +23,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
-import { bulkArchiveLeads, bulkDeleteLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
+import { bulkArchiveLeads, bulkEnrichLeads, exportLeadsCsv } from '../actions/bulk-actions';
 import type { LeadCadenceInfo, LeadRow } from '../types';
 import { formatCnpj } from '../utils/cnpj';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -57,7 +49,6 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
-  const [deleteTarget, setDeleteTarget] = useState<string[] | null>(null);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
 
   const currentSortBy = (searchParams.get('sort_by') ?? 'created_at') as SortColumn;
@@ -169,22 +160,6 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
     });
   }, [router]);
 
-  const handleConfirmDelete = useCallback(() => {
-    if (!deleteTarget) return;
-    const ids = deleteTarget;
-    startTransition(async () => {
-      const result = await bulkDeleteLeads(ids);
-      if (result.success) {
-        toast.success(`${result.data.count} lead${result.data.count > 1 ? 's' : ''} excluído${result.data.count > 1 ? 's' : ''}`);
-        setSelected(new Set());
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-      setDeleteTarget(null);
-    });
-  }, [deleteTarget, router]);
-
   const navigateToLead = useCallback(
     (id: string) => {
       router.push(`/leads/${id}`);
@@ -236,16 +211,6 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
             >
               <Download className="mr-1 h-3.5 w-3.5" />
               Exportar CSV
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeleteTarget(Array.from(selected))}
-              disabled={isPending}
-              className="text-[var(--destructive)] hover:bg-[var(--destructive)]/10"
-            >
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
-              Excluir
             </Button>
           </div>
         </div>
@@ -355,13 +320,6 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
                           <Archive className="mr-2 h-3.5 w-3.5" />
                           Arquivar
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setDeleteTarget([lead.id])}
-                          className="text-[var(--destructive)] focus:text-[var(--destructive)]"
-                        >
-                          <Trash2 className="mr-2 h-3.5 w-3.5" />
-                          Excluir
-                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -384,25 +342,6 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
         leadIds={Array.from(selected)}
       />
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Excluir {deleteTarget?.length === 1 ? 'lead' : 'leads'}</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja excluir {deleteTarget?.length ?? 0} lead{(deleteTarget?.length ?? 0) > 1 ? 's' : ''}? Esta ação não pode ser desfeita facilmente.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isPending}>
-              Excluir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

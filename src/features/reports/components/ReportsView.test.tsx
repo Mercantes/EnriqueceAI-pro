@@ -59,7 +59,7 @@ function makeCadenceMetric(overrides: Partial<CadenceMetrics> = {}): CadenceMetr
 function makeSdrMetric(overrides: Partial<SdrMetrics> = {}): SdrMetrics {
   return {
     userId: 'u1',
-    userName: 'sdr@flux.com',
+    userName: 'sdr@enriqueceai.com',
     leadsWorked: 50,
     messagesSent: 120,
     replies: 15,
@@ -193,14 +193,14 @@ describe('ReportsView', () => {
     });
 
     it('passes sdrMetrics to SdrReport', () => {
-      const sdrMetrics = [makeSdrMetric({ userName: 'vendedor@flux.com' })];
+      const sdrMetrics = [makeSdrMetric({ userName: 'vendedor@enriqueceai.com' })];
       const data = makeReportData({ sdrMetrics });
       render(<ReportsView data={data} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Por SDR' }));
 
       const sdrReport = screen.getByTestId('sdr-report');
-      expect(sdrReport.textContent).toContain('vendedor@flux.com');
+      expect(sdrReport.textContent).toContain('vendedor@enriqueceai.com');
     });
 
     it('can switch back to Geral tab after switching away', () => {

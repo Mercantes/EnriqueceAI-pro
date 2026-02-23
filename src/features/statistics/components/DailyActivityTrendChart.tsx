@@ -11,6 +11,8 @@ import {
   YAxis,
 } from 'recharts';
 
+import { CHART_ACCENT } from '@/shared/constants/chart-colors';
+
 import type { DailyActivityEntry } from '../types/activity-analytics.types';
 
 interface DailyActivityTrendChartProps {
@@ -63,7 +65,7 @@ export function DailyActivityTrendChart({ data }: DailyActivityTrendChartProps) 
           type="monotone"
           dataKey="target"
           name="Meta"
-          stroke="#ef4444"
+          stroke={CHART_ACCENT.targetLine}
           strokeWidth={1.5}
           strokeDasharray="5 5"
           dot={false}

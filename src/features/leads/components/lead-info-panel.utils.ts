@@ -19,6 +19,9 @@ export interface LeadInfoPanelData {
   status: LeadStatus | null;
   enrichment_status: EnrichmentStatus | null;
   notes: string | null;
+  instagram: string | null;
+  linkedin: string | null;
+  website: string | null;
 }
 
 export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
@@ -39,6 +42,9 @@ export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
     status: lead.status,
     enrichment_status: lead.enrichment_status,
     notes: lead.notes,
+    instagram: lead.instagram,
+    linkedin: lead.linkedin,
+    website: lead.website,
   };
 }
 
@@ -60,5 +66,8 @@ export function activityLeadToInfoPanelData(lead: ActivityLead): LeadInfoPanelDa
     status: null,
     enrichment_status: null,
     notes: null,
+    instagram: null,
+    linkedin: null,
+    website: null,
   };
 }

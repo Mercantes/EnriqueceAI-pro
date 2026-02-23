@@ -225,10 +225,10 @@ export class HubSpotAdapter implements CRMAdapter {
     fieldMapping: Record<string, string>,
     externalId?: string,
   ): Promise<{ external_id: string }> {
-    // Map Flux fields to HubSpot properties
+    // Map EnriqueceAI fields to HubSpot properties
     const properties: Record<string, string> = {};
-    for (const [fluxField, crmField] of Object.entries(fieldMapping)) {
-      const value = lead[fluxField];
+    for (const [appField, crmField] of Object.entries(fieldMapping)) {
+      const value = lead[appField];
       if (value !== null && value !== undefined) {
         properties[crmField] = value;
       }

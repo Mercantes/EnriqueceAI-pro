@@ -10,6 +10,8 @@ import {
   YAxis,
 } from 'recharts';
 
+import { CHART_ACCENT } from '@/shared/constants/chart-colors';
+
 import type { DurationBucket } from '../types/call-statistics.types';
 
 interface DurationDistributionChartProps {
@@ -46,7 +48,7 @@ export function DurationDistributionChart({ data }: DurationDistributionChartPro
           }}
           formatter={((value: number) => [value, 'Ligações']) as never}
         />
-        <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="count" fill={CHART_ACCENT.duration} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

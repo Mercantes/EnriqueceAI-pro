@@ -10,7 +10,6 @@ import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 
 import { signIn } from '../actions/sign-in';
-import { GoogleButton } from './GoogleButton';
 
 export function LoginForm({ error: initialError }: { error?: string }) {
   const router = useRouter();
@@ -56,23 +55,6 @@ export function LoginForm({ error: initialError }: { error?: string }) {
         </Button>
       </form>
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">ou</span>
-        </div>
-      </div>
-
-      <GoogleButton mode="signin" />
-
-      <p className="text-center text-sm text-muted-foreground">
-        Não tem conta?{' '}
-        <Link href="/signup" className="text-primary hover:underline">
-          Criar conta
-        </Link>
-      </p>
     </div>
   );
 }

@@ -70,7 +70,7 @@ export class CrmSyncService {
         supabase,
       );
 
-      // 1. Pull contacts from CRM → Flux leads
+      // 1. Pull contacts from CRM → EnriqueceAI leads
       pullResult = await CrmSyncService.pullContacts(
         supabase,
         adapter,
@@ -79,7 +79,7 @@ export class CrmSyncService {
         fieldMapping,
       );
 
-      // 2. Push Flux leads → CRM contacts
+      // 2. Push EnriqueceAI leads → CRM contacts
       pushResult = await CrmSyncService.pushLeads(
         supabase,
         adapter,
@@ -88,7 +88,7 @@ export class CrmSyncService {
         fieldMapping,
       );
 
-      // 3. Push Flux interactions → CRM activities
+      // 3. Push EnriqueceAI interactions → CRM activities
       activityResult = await CrmSyncService.pushActivities(
         supabase,
         adapter,
@@ -155,8 +155,8 @@ export class CrmSyncService {
   }
 
   /**
-   * Pull contacts from CRM and update/create leads in Flux.
-   * Last-write-wins: CRM data overwrites Flux if CRM updated_at is newer.
+   * Pull contacts from CRM and update/create leads in EnriqueceAI.
+   * Last-write-wins: CRM data overwrites EnriqueceAI if CRM updated_at is newer.
    */
   private static async pullContacts(
     supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
@@ -172,10 +172,10 @@ export class CrmSyncService {
       connection.last_sync_at ?? undefined,
     );
 
-    // Build reverse mapping: CRM field -> Flux field
+    // Build reverse mapping: CRM field -> EnriqueceAI field
     const reverseMapping: Record<string, string> = {};
-    for (const [fluxField, crmField] of Object.entries(fieldMapping.leads)) {
-      reverseMapping[crmField] = fluxField;
+    for (const [appField, crmField] of Object.entries(fieldMapping.leads)) {
+      reverseMapping[crmField] = appField;
     }
 
     for (const contact of contacts) {
@@ -205,7 +205,7 @@ export class CrmSyncService {
     reverseMapping: Record<string, string>,
     orgId: string,
   ) {
-    // Map CRM properties to Flux lead fields
+    // Map CRM properties to EnriqueceAI lead fields
     const leadData: Record<string, string | null> = {};
     for (const [crmField, value] of Object.entries(contact.properties)) {
       if (reverseMapping[crmField] && value) {
@@ -256,7 +256,7 @@ export class CrmSyncService {
   }
 
   /**
-   * Push Flux leads to CRM.
+   * Push EnriqueceAI leads to CRM.
    * Pushes leads that were updated since last sync.
    */
   private static async pushLeads(
@@ -336,7 +336,7 @@ export class CrmSyncService {
   }
 
   /**
-   * Push Flux interactions (cadence activities) to CRM as notes/activities.
+   * Push EnriqueceAI interactions (cadence activities) to CRM as notes/activities.
    */
   private static async pushActivities(
     supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,

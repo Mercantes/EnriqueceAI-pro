@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   Calendar,
   Check,
@@ -13,16 +15,21 @@ import {
   Pencil,
   Phone,
   Reply,
+  Save,
   Search,
   Send,
   Settings,
   User,
+  X,
   XCircle,
   Zap,
 } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+
+import { updateLead } from '../actions/update-lead';
 import {
   Tooltip,
   TooltipContent,
@@ -33,9 +40,7 @@ import {
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import type { InteractionType } from '@/features/cadences/types';
 
-import { formatCnpj } from '../utils/cnpj';
 import { EnrichmentStatusBadge, LeadStatusBadge } from './LeadStatusBadge';
-import { FitScoreBadge } from './FitScoreBadge';
 import { LeadNotes } from './LeadNotes';
 import { MeetimeFieldRow } from './MeetimeFieldRow';
 import type { LeadInfoPanelData } from './lead-info-panel.utils';
@@ -47,7 +52,6 @@ export interface LeadInfoPanelProps {
   showConfigTab?: boolean;
   cadenceConfig?: { cadenceName: string; stepOrder: number; totalSteps: number };
   kpis?: { completed: number; open: number; conversations: number };
-  onEditRequest?: () => void;
 }
 
 type TabId = 'dados' | 'timeline' | 'notas' | 'config';
@@ -87,8 +91,10 @@ export function LeadInfoPanel({
   showConfigTab = false,
   cadenceConfig,
   kpis,
-  onEditRequest,
 }: LeadInfoPanelProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
   const availableTabs: { id: TabId; icon: typeof User; label: string }[] = [
     { id: 'dados', icon: User, label: 'Dados' },
     { id: 'timeline', icon: Clock, label: 'Timeline' },
@@ -97,47 +103,103 @@ export function LeadInfoPanel({
   ];
 
   const [activeTab, setActiveTab] = useState<TabId>('dados');
+  const [isEditing, setIsEditing] = useState(false);
 
-  // Gather socio celulares
-  const socioCelulares = (data.socios ?? []).flatMap((socio) =>
-    (socio.celulares ?? []).map((cel) => ({
-      nome: socio.nome,
-      ddd: cel.ddd,
-      numero: cel.numero,
-      whatsapp: cel.whatsapp,
-    })),
-  );
+  // Primary contact (first socio)
+  const primarySocio = data.socios?.[0] ?? null;
 
-  // Gather socio emails
-  const socioEmails = (data.socios ?? []).flatMap((socio) =>
-    (socio.emails ?? []).map((e) => ({
-      nome: socio.nome,
-      email: e.email,
-    })),
-  );
+  const primaryEmail = (data.socios ?? []).flatMap((s) => s.emails ?? []).sort((a, b) => a.ranking - b.ranking)[0]?.email ?? data.email ?? '';
 
-  // Format address
-  const endereco = data.endereco;
-  const enderecoFormatted = endereco
-    ? [
-        endereco.logradouro,
-        endereco.numero ? `n\u00ba ${endereco.numero}` : null,
-        endereco.complemento,
-        endereco.bairro,
-        [endereco.cidade, endereco.uf].filter(Boolean).join('/'),
-        endereco.cep ? `CEP ${endereco.cep}` : null,
-      ]
-        .filter(Boolean)
-        .join(', ')
-    : null;
+  const [editFields, setEditFields] = useState({
+    razao_social: data.razao_social ?? '',
+    nome_fantasia: data.nome_fantasia ?? '',
+    email: primaryEmail,
+    telefone: data.telefone ?? '',
+    socio_nome: primarySocio?.nome ?? '',
+    socio_qualificacao: primarySocio?.qualificacao ?? '',
+    instagram: data.instagram ?? '',
+    linkedin: data.linkedin ?? '',
+    website: data.website ?? '',
+  });
 
-  // Format faturamento
-  const faturamentoFormatted =
-    data.faturamento_estimado != null
-      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-          data.faturamento_estimado,
-        )
-      : null;
+  const handleSave = useCallback(() => {
+    startTransition(async () => {
+      const { socio_nome, socio_qualificacao, email: editEmail, ...leadFields } = editFields;
+
+      // Rebuild socios array with edited first socio
+      let updatedSocios = data.socios ? [...data.socios] : [];
+      if (socio_nome || socio_qualificacao) {
+        const existingSocio = updatedSocios[0] ?? { nome: '', qualificacao: '' };
+        updatedSocios[0] = {
+          ...existingSocio,
+          nome: socio_nome || existingSocio.nome,
+          qualificacao: socio_qualificacao || existingSocio.qualificacao,
+        };
+      }
+
+      // Update email on socio if it came from socios, otherwise on lead
+      const emailOnSocio = (data.socios ?? []).flatMap((s) => s.emails ?? []).length > 0;
+      if (emailOnSocio && updatedSocios[0]) {
+        const existingEmails = updatedSocios[0].emails ?? [];
+        if (existingEmails.length > 0 && existingEmails[0]) {
+          existingEmails[0] = { ...existingEmails[0], email: editEmail };
+        } else {
+          updatedSocios[0].emails = [{ email: editEmail, ranking: 1 }];
+        }
+      }
+
+      const result = await updateLead(data.id, {
+        ...leadFields,
+        email: emailOnSocio ? data.email : editEmail,
+        socios: updatedSocios,
+      });
+      if (result.success) {
+        toast.success('Lead atualizado');
+        setIsEditing(false);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [data.id, data.email, data.socios, editFields, router]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditFields({
+      razao_social: data.razao_social ?? '',
+      nome_fantasia: data.nome_fantasia ?? '',
+      email: primaryEmail,
+      telefone: data.telefone ?? '',
+      socio_nome: primarySocio?.nome ?? '',
+      socio_qualificacao: primarySocio?.qualificacao ?? '',
+      instagram: data.instagram ?? '',
+      linkedin: data.linkedin ?? '',
+      website: data.website ?? '',
+    });
+    setIsEditing(false);
+  }, [data, primarySocio, primaryEmail]);
+
+  const fullName = primarySocio?.nome ?? data.razao_social ?? null;
+  const firstName = fullName?.split(' ')[0] ?? null;
+  const companyName = data.nome_fantasia ?? data.razao_social ?? null;
+  const cargo = primarySocio?.qualificacao
+    || (primarySocio?.nome ? (primarySocio.nome.trim().split(/\s+/)[0]?.toLowerCase().endsWith('a') ? 'Sócia' : 'Sócio') : null);
+
+  // Gather all phones with type
+  const allPhones: Array<{ tipo: string; numero: string; href: string; whatsapp: boolean; nome?: string }> = [];
+  if (data.telefone) {
+    allPhones.push({ tipo: 'Fixo', numero: data.telefone, href: `tel:${data.telefone}`, whatsapp: false });
+  }
+  for (const socio of data.socios ?? []) {
+    for (const cel of socio.celulares ?? []) {
+      allPhones.push({
+        tipo: 'Celular',
+        numero: `(${cel.ddd}) ${cel.numero}`,
+        href: `tel:+55${cel.ddd}${cel.numero}`,
+        whatsapp: cel.whatsapp,
+        nome: socio.nome,
+      });
+    }
+  }
 
   return (
     <div className="flex h-full w-80 shrink-0 flex-col">
@@ -200,13 +262,155 @@ export function LeadInfoPanel({
         {activeTab === 'dados' && (
           <div className="space-y-4">
             <p className="text-[10px] italic text-[var(--muted-foreground)]">
-              *Mostrando apenas campos preenchidos
+              *Mostrando apenas campos preenchidos.
             </p>
 
-            {/* GERAL */}
+            {/* GERAL — contact principal */}
             <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                 Geral
+              </h4>
+              {isEditing ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)]">Primeiro nome</p>
+                    <MeetimeFieldRow label="" value={editFields.socio_nome.split(' ')[0] || '—'} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)]">Nome completo</p>
+                    <Input
+                      value={editFields.socio_nome}
+                      onChange={(e) => setEditFields({ ...editFields, socio_nome: e.target.value })}
+                      className="h-8 text-sm"
+                      placeholder="Nome completo"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)]">E-mail</p>
+                    <Input
+                      value={editFields.email}
+                      onChange={(e) => setEditFields({ ...editFields, email: e.target.value })}
+                      className="h-8 text-sm"
+                      placeholder="email@empresa.com"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)]">Empresa (Nome Fantasia)</p>
+                    <Input
+                      value={editFields.nome_fantasia}
+                      onChange={(e) => setEditFields({ ...editFields, nome_fantasia: e.target.value })}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)]">Cargo</p>
+                    <Input
+                      value={editFields.socio_qualificacao}
+                      onChange={(e) => setEditFields({ ...editFields, socio_qualificacao: e.target.value })}
+                      className="h-8 text-sm"
+                      placeholder="Cargo"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {firstName && <MeetimeFieldRow label="Primeiro nome" value={firstName} />}
+                  {fullName && <MeetimeFieldRow label="Nome completo" value={fullName} />}
+                  {primaryEmail && <MeetimeFieldRow label="E-mail" value={primaryEmail} href={`mailto:${primaryEmail}`} />}
+                  {companyName && <MeetimeFieldRow label="Empresa" value={companyName} />}
+                  <MeetimeFieldRow label="Cargo" value={cargo || '—'} />
+                </>
+              )}
+            </div>
+
+            {/* TELEFONE(S) — with type descriptor */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                Telefone(s)
+              </h4>
+              {isEditing && (
+                <div className="space-y-1">
+                  <p className="text-xs text-[var(--muted-foreground)]">Telefone da empresa</p>
+                  <Input
+                    value={editFields.telefone}
+                    onChange={(e) => setEditFields({ ...editFields, telefone: e.target.value })}
+                    className="h-8 text-sm"
+                    placeholder="(11) 3000-0000"
+                  />
+                </div>
+              )}
+              {allPhones.length === 0 && !isEditing ? (
+                <p className="text-xs text-[var(--muted-foreground)]">Nenhum telefone informado.</p>
+              ) : (
+                allPhones.map((phone, i) => (
+                  <div key={`phone-${i}`} className="flex gap-2">
+                    <div className="w-20 shrink-0 space-y-1">
+                      <p className="text-[10px] text-[var(--muted-foreground)]">Descrição:</p>
+                      <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-xs font-medium">
+                        {phone.tipo}
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="text-[10px] text-[var(--muted-foreground)]">Telefone:</p>
+                      <div className="rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
+                        <a href={phone.href} className="text-[var(--primary)] hover:underline truncate">
+                          {phone.numero}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* SOCIAL */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                Social
+              </h4>
+              {isEditing ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)]">Instagram</p>
+                    <Input
+                      value={editFields.instagram}
+                      onChange={(e) => setEditFields({ ...editFields, instagram: e.target.value })}
+                      className="h-8 text-sm"
+                      placeholder="@usuario"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)]">LinkedIn</p>
+                    <Input
+                      value={editFields.linkedin}
+                      onChange={(e) => setEditFields({ ...editFields, linkedin: e.target.value })}
+                      className="h-8 text-sm"
+                      placeholder="https://linkedin.com/in/..."
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-[var(--muted-foreground)]">Site</p>
+                    <Input
+                      value={editFields.website}
+                      onChange={(e) => setEditFields({ ...editFields, website: e.target.value })}
+                      className="h-8 text-sm"
+                      placeholder="https://..."
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <MeetimeFieldRow label="Instagram" value={data.instagram || '—'} href={data.instagram ? `https://instagram.com/${data.instagram.replace('@', '')}` : undefined} />
+                  <MeetimeFieldRow label="LinkedIn" value={data.linkedin || '—'} href={data.linkedin || undefined} />
+                  <MeetimeFieldRow label="Site" value={data.website || '—'} href={data.website || undefined} />
+                </>
+              )}
+            </div>
+
+            {/* STATUS — metadados internos */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                Status
               </h4>
               {data.status && (
                 <MeetimeFieldRow label="Status" value={<LeadStatusBadge status={data.status} variant="meetime" />} />
@@ -228,68 +432,6 @@ export function LeadInfoPanel({
                 <MeetimeFieldRow label="Responsável" value={enrollment.enrolled_by_email.split('@')[0] ?? ''} />
               )}
             </div>
-
-            {/* CONTATO */}
-            {(data.email || data.telefone || socioCelulares.length > 0 || socioEmails.length > 0) && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                  Contato
-                </h4>
-                {data.email && (
-                  <MeetimeFieldRow label="Email da empresa" value={data.email} href={`mailto:${data.email}`} />
-                )}
-                {data.telefone && (
-                  <MeetimeFieldRow label="Telefone da empresa" value={data.telefone} href={`tel:${data.telefone}`} />
-                )}
-                {socioCelulares.map((cel, i) => (
-                  <MeetimeFieldRow
-                    key={`cel-${i}`}
-                    label={`Celular — ${cel.nome}`}
-                    value={
-                      <span className="flex items-center gap-1.5">
-                        <a href={`tel:+55${cel.ddd}${cel.numero}`} className="text-[var(--primary)] hover:underline">
-                          ({cel.ddd}) {cel.numero}
-                        </a>
-                        {cel.whatsapp && (
-                          <Badge variant="outline" className="h-5 border-green-500 text-green-600 text-[10px]">
-                            <MessageSquare className="mr-0.5 h-2.5 w-2.5" />
-                            WhatsApp
-                          </Badge>
-                        )}
-                      </span>
-                    }
-                  />
-                ))}
-                {socioEmails.map((se, i) => (
-                  <MeetimeFieldRow
-                    key={`se-${i}`}
-                    label={`Email — ${se.nome}`}
-                    value={se.email}
-                    href={`mailto:${se.email}`}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* EMPRESA */}
-            {(data.cnpj || data.razao_social || data.nome_fantasia || data.porte || data.cnae || data.situacao_cadastral || faturamentoFormatted || enderecoFormatted || data.fit_score != null) && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                  Empresa
-                </h4>
-                <MeetimeFieldRow label="CNPJ" value={formatCnpj(data.cnpj)} mono />
-                {data.razao_social && <MeetimeFieldRow label="Razão Social" value={data.razao_social} />}
-                {data.nome_fantasia && <MeetimeFieldRow label="Nome Fantasia" value={data.nome_fantasia} />}
-                {data.porte && <MeetimeFieldRow label="Porte" value={data.porte} />}
-                {data.cnae && <MeetimeFieldRow label="CNAE" value={data.cnae} />}
-                {data.situacao_cadastral && <MeetimeFieldRow label="Situação Cadastral" value={data.situacao_cadastral} />}
-                {faturamentoFormatted && <MeetimeFieldRow label="Faturamento Estimado" value={faturamentoFormatted} />}
-                {enderecoFormatted && <MeetimeFieldRow label="Endereço" value={enderecoFormatted} />}
-                {data.fit_score != null && (
-                  <MeetimeFieldRow label="Fit Score" value={<FitScoreBadge score={data.fit_score} />} />
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -362,17 +504,40 @@ export function LeadInfoPanel({
         )}
       </div>
 
-      {/* FAB */}
-      {onEditRequest && (
-        <div className="mt-3 flex justify-end">
-          <Button
-            size="icon"
-            variant="default"
-            className="h-10 w-10 rounded-full shadow-lg"
-            onClick={onEditRequest}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+      {/* FAB — sticky, only on Dados tab */}
+      {activeTab === 'dados' && (
+        <div className="sticky bottom-0 flex justify-end gap-2 pt-3 pb-1 bg-[var(--background)]">
+          {isEditing ? (
+            <>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-10 w-10 rounded-full shadow-lg"
+                onClick={handleCancelEdit}
+                disabled={isPending}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="default"
+                className="h-10 w-10 rounded-full shadow-lg"
+                onClick={handleSave}
+                disabled={isPending}
+              >
+                <Save className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="icon"
+              variant="default"
+              className="h-10 w-10 rounded-full shadow-lg"
+              onClick={() => setIsEditing(true)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       )}
     </div>

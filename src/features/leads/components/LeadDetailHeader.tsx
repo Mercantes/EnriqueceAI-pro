@@ -6,7 +6,6 @@ import {
   Archive,
   Calendar,
   ChevronLeft,
-  Edit2,
   Mail,
   MoreHorizontal,
   Phone,
@@ -36,7 +35,6 @@ interface LeadDetailHeaderProps {
   onShowCadence: () => void;
   onShowAI: () => void;
   onShowMeeting: () => void;
-  onShowEdit: () => void;
   onShowArchive: () => void;
   onEnrich: () => void;
 }
@@ -47,7 +45,6 @@ export function LeadDetailHeader({
   onShowCadence,
   onShowAI,
   onShowMeeting,
-  onShowEdit,
   onShowArchive,
   onEnrich,
 }: LeadDetailHeaderProps) {
@@ -59,11 +56,18 @@ export function LeadDetailHeader({
   const primaryName = personName ?? companyName ?? '—';
   const secondaryName = personName ? companyName : null;
 
-  const handleStatusChange = useCallback((status: 'qualified' | 'unqualified') => {
+  const isClosed = lead.status === 'qualified' || lead.status === 'unqualified';
+
+  const handleStatusChange = useCallback((status: 'qualified' | 'unqualified' | 'contacted') => {
     startTransition(async () => {
       const result = await updateLead(lead.id, { status });
       if (result.success) {
-        toast.success(status === 'qualified' ? 'Lead marcado como ganho' : 'Lead marcado como perdido');
+        const messages: Record<string, string> = {
+          qualified: 'Lead marcado como ganho',
+          unqualified: 'Lead marcado como perdido',
+          contacted: 'Lead reaberto',
+        };
+        toast.success(messages[status]);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -99,24 +103,38 @@ export function LeadDetailHeader({
             </a>
           </Button>
         )}
-        <Button
-          size="sm"
-          className="bg-green-600 hover:bg-green-700"
-          onClick={() => handleStatusChange('qualified')}
-          disabled={isPending || lead.status === 'qualified'}
-        >
-          <ThumbsUp className="mr-1 h-4 w-4" />
-          Ganho
-        </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => handleStatusChange('unqualified')}
-          disabled={isPending || lead.status === 'unqualified'}
-        >
-          <ThumbsDown className="mr-1 h-4 w-4" />
-          Perdido
-        </Button>
+        {isClosed ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleStatusChange('contacted')}
+            disabled={isPending}
+          >
+            <RefreshCw className="mr-1 h-4 w-4" />
+            Reabrir
+          </Button>
+        ) : (
+          <>
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => handleStatusChange('qualified')}
+              disabled={isPending}
+            >
+              <ThumbsUp className="mr-1 h-4 w-4" />
+              Ganho
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleStatusChange('unqualified')}
+              disabled={isPending}
+            >
+              <ThumbsDown className="mr-1 h-4 w-4" />
+              Perdido
+            </Button>
+          </>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -145,10 +163,6 @@ export function LeadDetailHeader({
             <DropdownMenuItem onClick={onEnrich}>
               <RefreshCw className="mr-2 h-3.5 w-3.5" />
               Enriquecer
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onShowEdit}>
-              <Edit2 className="mr-2 h-3.5 w-3.5" />
-              Editar
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onShowArchive} className="text-red-600">

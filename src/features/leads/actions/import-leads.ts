@@ -188,6 +188,11 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
     } as Record<string, unknown>)
     .eq('id', importId);
 
+  // Trigger auto-enrichment (fire-and-forget)
+  if (successCount > 0) {
+    triggerAutoEnrichment(importId).catch(() => {});
+  }
+
   revalidatePath('/leads');
   revalidatePath('/leads/import');
 
@@ -202,4 +207,24 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       errors: importErrors,
     },
   };
+}
+
+async function triggerAutoEnrichment(importId: string): Promise<void> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!serviceRoleKey) {
+    console.warn('[import-leads] Cannot trigger enrichment: missing SUPABASE_SERVICE_ROLE_KEY');
+    return;
+  }
+
+  await fetch(`${appUrl}/api/workers/enrich-leads`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ importId }),
+    signal: AbortSignal.timeout(10_000),
+  });
 }

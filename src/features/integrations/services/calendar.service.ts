@@ -148,7 +148,7 @@ export async function createCalendarEvent(
   if (input.generateMeetLink) {
     event.conferenceData = {
       createRequest: {
-        requestId: `flux-${Date.now()}`,
+        requestId: `enriqueceai-${Date.now()}`,
         conferenceSolutionKey: { type: 'hangoutsMeet' },
       },
     };

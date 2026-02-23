@@ -77,7 +77,7 @@ export function CsvDropzone({ onFileSelect, disabled }: CsvDropzoneProps) {
           <Upload className="mb-4 h-10 w-10 text-muted-foreground" />
           <p className="mb-2 text-sm font-medium">Arraste um arquivo CSV aqui</p>
           <p className="mb-4 text-xs text-muted-foreground">ou clique para selecionar</p>
-          <label>
+          <label className="cursor-pointer">
             <input type="file" accept=".csv" onChange={handleFileInput} className="hidden" disabled={disabled} />
             <Button variant="outline" size="sm" asChild disabled={disabled}>
               <span>Selecionar arquivo</span>

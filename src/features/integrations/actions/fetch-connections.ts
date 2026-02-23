@@ -61,12 +61,24 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .maybeSingle()) as { data: CalendarConnectionSafe | null };
 
   // Fetch API4Com connection (per user) — exclude encrypted api key
-  const { data: api4comRow } = (await (supabase
+  const { data: api4comRaw } = (await (supabase
     .from('api4com_connections' as never) as ReturnType<typeof supabase.from>)
-    .select('id, ramal, status, created_at, updated_at')
+    .select('id, ramal, base_url, api_key_encrypted, status, created_at, updated_at')
     .eq('org_id', member.org_id)
     .eq('user_id', user.id)
-    .maybeSingle()) as { data: Api4ComConnectionSafe | null };
+    .maybeSingle()) as { data: { id: string; ramal: string; base_url: string; api_key_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
+
+  const api4comRow: Api4ComConnectionSafe | null = api4comRaw
+    ? {
+        id: api4comRaw.id,
+        ramal: api4comRaw.ramal,
+        base_url: api4comRaw.base_url,
+        has_api_key: !!api4comRaw.api_key_encrypted,
+        status: api4comRaw.status as Api4ComConnectionSafe['status'],
+        created_at: api4comRaw.created_at,
+        updated_at: api4comRaw.updated_at,
+      }
+    : null;
 
   return {
     success: true,

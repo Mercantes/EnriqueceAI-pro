@@ -46,6 +46,8 @@ const calendarConnected: CalendarConnectionSafe = {
 const api4comConnected: Api4ComConnectionSafe = {
   id: 'voip-1',
   ramal: '1014',
+  base_url: 'https://api.api4com.com/api/v1/',
+  has_api_key: true,
   status: 'connected',
   created_at: '2026-02-15T10:00:00Z',
   updated_at: '2026-02-15T10:00:00Z',

@@ -186,8 +186,8 @@ export class RDStationAdapter implements CRMAdapter {
     const body: Record<string, unknown> = {};
     const customFields: Record<string, string> = {};
 
-    for (const [fluxField, crmField] of Object.entries(fieldMapping)) {
-      const value = lead[fluxField];
+    for (const [appField, crmField] of Object.entries(fieldMapping)) {
+      const value = lead[appField];
       if (value !== null && value !== undefined) {
         if (crmField.startsWith('cf_')) {
           customFields[crmField] = value;
@@ -239,7 +239,7 @@ export class RDStationAdapter implements CRMAdapter {
           event_type: 'CONVERSION',
           event_family: 'CDP',
           payload: {
-            conversion_identifier: `flux_${activity.type}_${Date.now()}`,
+            conversion_identifier: `enriqueceai_${activity.type}_${Date.now()}`,
             contact_uuid: activity.contact_external_id,
             cf_activity_type: activity.type,
             cf_activity_subject: activity.subject,

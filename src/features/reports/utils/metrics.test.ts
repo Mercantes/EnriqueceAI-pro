@@ -84,8 +84,8 @@ describe('calculateCadenceMetrics', () => {
 
 describe('calculateSdrMetrics', () => {
   const members: RawMember[] = [
-    { user_id: 'u1', user_email: 'sdr1@flux.com' },
-    { user_id: 'u2', user_email: 'sdr2@flux.com' },
+    { user_id: 'u1', user_email: 'sdr1@enriqueceai.com' },
+    { user_id: 'u2', user_email: 'sdr2@enriqueceai.com' },
   ];
 
   const enrollments: RawEnrollment[] = [
@@ -111,7 +111,7 @@ describe('calculateSdrMetrics', () => {
     const result = calculateSdrMetrics(members, enrollments, interactions);
     const sdr1 = result.find((m) => m.userId === 'u1')!;
 
-    expect(sdr1.userName).toBe('sdr1@flux.com');
+    expect(sdr1.userName).toBe('sdr1@enriqueceai.com');
     expect(sdr1.leadsWorked).toBe(2);
     expect(sdr1.messagesSent).toBe(2);
     expect(sdr1.replies).toBe(1);
@@ -122,7 +122,7 @@ describe('calculateSdrMetrics', () => {
 
   it('should handle SDR with no enrollments', () => {
     const result = calculateSdrMetrics(
-      [{ user_id: 'u99', user_email: 'new@flux.com' }],
+      [{ user_id: 'u99', user_email: 'new@enriqueceai.com' }],
       [],
       [],
     );

@@ -11,10 +11,9 @@ interface LeadDetailSidebarProps {
   lead: LeadRow;
   enrollmentData: LeadEnrollmentData;
   timeline: TimelineEntry[];
-  onEditRequest?: () => void;
 }
 
-export function LeadDetailSidebar({ lead, enrollmentData, timeline, onEditRequest }: LeadDetailSidebarProps) {
+export function LeadDetailSidebar({ lead, enrollmentData, timeline }: LeadDetailSidebarProps) {
   const { enrollment, kpis } = enrollmentData;
 
   return (
@@ -23,7 +22,6 @@ export function LeadDetailSidebar({ lead, enrollmentData, timeline, onEditReques
       enrollment={enrollment}
       timeline={timeline}
       kpis={kpis}
-      onEditRequest={onEditRequest}
     />
   );
 }

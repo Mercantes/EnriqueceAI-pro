@@ -11,9 +11,9 @@ import {
   YAxis,
 } from 'recharts';
 
-import type { SdrTrendEntry } from '../types/team-analytics.types';
+import { CHART_SERIES_COLORS } from '@/shared/constants/chart-colors';
 
-const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
+import type { SdrTrendEntry } from '../types/team-analytics.types';
 
 interface SdrPerformanceTrendChartProps {
   data: SdrTrendEntry[];
@@ -58,7 +58,7 @@ export function SdrPerformanceTrendChart({ data, sdrNames }: SdrPerformanceTrend
             key={name}
             type="monotone"
             dataKey={name}
-            stroke={COLORS[idx % COLORS.length]}
+            stroke={CHART_SERIES_COLORS[idx % CHART_SERIES_COLORS.length]}
             strokeWidth={2}
             dot={false}
           />

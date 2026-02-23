@@ -60,7 +60,7 @@ export interface CrmCredentials {
   api_key?: string; // Alternative auth
 }
 
-// Field mapping: Flux field name -> CRM field name
+// Field mapping: EnriqueceAI field name -> CRM field name
 export interface FieldMapping {
   leads: Record<string, string>;
   activities?: Record<string, string>;

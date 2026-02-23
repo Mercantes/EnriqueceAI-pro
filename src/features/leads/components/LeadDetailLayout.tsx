@@ -13,8 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
-import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator';
@@ -22,7 +20,7 @@ import type { LeadContext } from '@/features/ai/types';
 
 import { enrichLeadAction } from '../actions/enrich-lead';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
-import { archiveLead, updateLead } from '../actions/update-lead';
+import { archiveLead } from '../actions/update-lead';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -43,17 +41,10 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
 
   // Dialog state
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [showEnrollCadence, setShowEnrollCadence] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
-  const [editData, setEditData] = useState({
-    razao_social: lead.razao_social ?? '',
-    nome_fantasia: lead.nome_fantasia ?? '',
-    email: lead.email ?? '',
-    telefone: lead.telefone ?? '',
-  });
 
   const handleArchive = useCallback(() => {
     startTransition(async () => {
@@ -67,19 +58,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     });
     setShowArchiveDialog(false);
   }, [lead.id, router]);
-
-  const handleEdit = useCallback(() => {
-    startTransition(async () => {
-      const result = await updateLead(lead.id, editData);
-      if (result.success) {
-        toast.success('Lead atualizado');
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-    setShowEditDialog(false);
-  }, [lead.id, editData, router]);
 
   const handleEnrich = useCallback(() => {
     startTransition(async () => {
@@ -101,7 +79,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
         onShowCadence={() => setShowEnrollCadence(true)}
         onShowAI={() => setShowAIGenerator(true)}
         onShowMeeting={() => setShowMeeting(true)}
-        onShowEdit={() => setShowEditDialog(true)}
         onShowArchive={() => setShowArchiveDialog(true)}
         onEnrich={handleEnrich}
       />
@@ -114,7 +91,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
       )}
 
       <div className="flex gap-6">
-        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} onEditRequest={() => setShowEditDialog(true)} />
+        <LeadDetailSidebar lead={lead} enrollmentData={enrollmentData} timeline={timeline} />
         <LeadDetailTabs lead={lead} timeline={timeline} showMeeting={showMeeting} onShowMeetingChange={setShowMeeting} />
       </div>
 
@@ -133,58 +110,6 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
             </Button>
             <Button variant="destructive" onClick={handleArchive} disabled={isPending}>
               Arquivar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar lead</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="razao_social">Razão Social</Label>
-              <Input
-                id="razao_social"
-                value={editData.razao_social}
-                onChange={(e) => setEditData({ ...editData, razao_social: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="nome_fantasia">Nome Fantasia</Label>
-              <Input
-                id="nome_fantasia"
-                value={editData.nome_fantasia}
-                onChange={(e) => setEditData({ ...editData, nome_fantasia: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={editData.email}
-                onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="telefone">Telefone</Label>
-              <Input
-                id="telefone"
-                value={editData.telefone}
-                onChange={(e) => setEditData({ ...editData, telefone: e.target.value })}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleEdit} disabled={isPending}>
-              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>

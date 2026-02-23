@@ -11,6 +11,8 @@ import {
   YAxis,
 } from 'recharts';
 
+import { CHART_ACCENT } from '@/shared/constants/chart-colors';
+
 import type { HourlyCallEntry } from '../types/call-dashboard.types';
 
 interface HourlyDistributionChartProps {
@@ -54,7 +56,7 @@ export function HourlyDistributionChart({ data }: HourlyDistributionChartProps) 
           {data.map((entry) => (
             <Cell
               key={entry.hour}
-              fill={entry.count === maxCount && maxCount > 0 ? '#f97316' : 'var(--primary)'}
+              fill={entry.count === maxCount && maxCount > 0 ? CHART_ACCENT.peakHighlight : 'var(--primary)'}
             />
           ))}
         </Bar>

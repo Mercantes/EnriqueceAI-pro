@@ -11,6 +11,8 @@ import {
   YAxis,
 } from 'recharts';
 
+import { CHART_ACCENT } from '@/shared/constants/chart-colors';
+
 import type { SdrCallEntry } from '../types/call-statistics.types';
 
 interface CallsPerSdrChartProps {
@@ -65,7 +67,7 @@ export function CallsPerSdrChart({ data }: CallsPerSdrChartProps) {
         />
         <Legend />
         <Bar yAxisId="left" dataKey="Total Ligações" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-        <Bar yAxisId="right" dataKey="Taxa Conexão (%)" fill="#22c55e" radius={[4, 4, 0, 0]} />
+        <Bar yAxisId="right" dataKey="Taxa Conexão (%)" fill={CHART_ACCENT.connectionRate} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

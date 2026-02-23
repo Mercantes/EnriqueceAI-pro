@@ -63,7 +63,7 @@ describe('sdrMetricsToCsv', () => {
     const metrics: SdrMetrics[] = [
       {
         userId: 'u1',
-        userName: 'sdr@flux.com',
+        userName: 'sdr@enriqueceai.com',
         leadsWorked: 50,
         messagesSent: 120,
         replies: 15,
@@ -77,7 +77,7 @@ describe('sdrMetricsToCsv', () => {
 
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('SDR');
-    expect(lines[1]).toContain('sdr@flux.com');
+    expect(lines[1]).toContain('sdr@enriqueceai.com');
     expect(lines[1]).toContain('50');
   });
 });

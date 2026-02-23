@@ -1,5 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import {
+  CHANNEL_COLORS,
+  CHANNEL_LABELS,
+  CHART_FALLBACK_COLOR,
+  INTERACTION_TYPE_COLORS,
+  INTERACTION_TYPE_LABELS,
+} from '@/shared/constants/chart-colors';
+
 import type {
   ActivityAnalyticsData,
   ActivityAnalyticsKpis,
@@ -9,44 +17,6 @@ import type {
   GoalData,
 } from '../types/activity-analytics.types';
 import { safeRate } from '../types/shared';
-
-const CHANNEL_COLORS: Record<string, string> = {
-  email: '#3b82f6',
-  whatsapp: '#22c55e',
-  phone: '#8b5cf6',
-  linkedin: '#0ea5e9',
-  research: '#f59e0b',
-};
-
-const CHANNEL_LABELS: Record<string, string> = {
-  email: 'Email',
-  whatsapp: 'WhatsApp',
-  phone: 'Telefone',
-  linkedin: 'LinkedIn',
-  research: 'Pesquisa',
-};
-
-const TYPE_COLORS: Record<string, string> = {
-  sent: '#3b82f6',
-  opened: '#8b5cf6',
-  replied: '#22c55e',
-  bounced: '#ef4444',
-  meeting_scheduled: '#f59e0b',
-  delivered: '#06b6d4',
-  clicked: '#ec4899',
-  failed: '#6b7280',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  sent: 'Enviadas',
-  delivered: 'Entregues',
-  opened: 'Abertas',
-  clicked: 'Clicadas',
-  replied: 'Respondidas',
-  bounced: 'Bounced',
-  meeting_scheduled: 'Reuniões',
-  failed: 'Falharam',
-};
 
 interface InteractionRow {
   id: string;
@@ -150,7 +120,7 @@ function calculateChannelVolume(interactions: InteractionRow[]): ChannelVolumeEn
       channel,
       label: CHANNEL_LABELS[channel] ?? channel,
       count,
-      color: CHANNEL_COLORS[channel] ?? '#6b7280',
+      color: CHANNEL_COLORS[channel] ?? CHART_FALLBACK_COLOR,
     }))
     .sort((a, b) => b.count - a.count);
 }
@@ -199,10 +169,10 @@ function calculateActivityTypes(interactions: InteractionRow[]): ActivityTypeEnt
   return Array.from(counts.entries())
     .map(([type, count]) => ({
       type,
-      label: TYPE_LABELS[type] ?? type,
+      label: INTERACTION_TYPE_LABELS[type] ?? type,
       count,
       percentage: safeRate(count, total),
-      color: TYPE_COLORS[type] ?? '#6b7280',
+      color: INTERACTION_TYPE_COLORS[type] ?? CHART_FALLBACK_COLOR,
     }))
     .filter((e) => e.count > 0)
     .sort((a, b) => b.count - a.count);

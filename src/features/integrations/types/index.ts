@@ -72,8 +72,9 @@ export interface Api4ComConnectionRow {
   id: string;
   org_id: string;
   user_id: string;
-  api_key_encrypted: string;
+  api_key_encrypted: string | null;
   ramal: string;
+  base_url: string;
   status: ConnectionStatus;
   created_at: string;
   updated_at: string;
@@ -82,9 +83,39 @@ export interface Api4ComConnectionRow {
 export interface Api4ComConnectionSafe {
   id: string;
   ramal: string;
+  base_url: string;
+  has_api_key: boolean;
   status: ConnectionStatus;
   created_at: string;
   updated_at: string;
+}
+
+// Evolution API WhatsApp instance status
+export type EvolutionStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'not_configured';
+
+export interface EvolutionCreateResponse {
+  instance_name: string;
+  qr_base64: string | null;
+  status: EvolutionStatus;
+  phone?: string;
+  message?: string;
+  last_error?: string;
+}
+
+export interface EvolutionStatusResponse {
+  status: EvolutionStatus;
+  phone: string | null;
+  instance_name?: string;
+  qr_base64?: string | null;
+  message?: string;
+}
+
+export interface EvolutionQrResponse {
+  qr_base64: string | null;
+  status: EvolutionStatus;
+  instance_name?: string;
+  phone?: string;
+  message?: string;
 }
 
 // Re-export CRM types
