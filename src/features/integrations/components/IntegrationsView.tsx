@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectApi4Com } from '../actions/manage-api4com';
 import { useEvolutionWhatsApp } from '../hooks/useEvolutionWhatsApp';
@@ -35,6 +35,7 @@ interface IntegrationsViewProps {
   crm: CrmConnectionSafe | null;
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
+  evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
 }
 
 const statusConfig = {
@@ -44,7 +45,7 @@ const statusConfig = {
   syncing: { label: 'Sincronizando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
 } as const;
 
-export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com }: IntegrationsViewProps) {
+export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, evolutionInstance }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showDisconnect, setShowDisconnect] = useState<'google' | null>(null);
@@ -153,7 +154,7 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
                   <p className="text-xs text-[var(--muted-foreground)]">Envio via WhatsApp API</p>
                 </div>
               </div>
-              {evolution.step === 'connected' ? (
+              {(evolution.step === 'connected' || evolutionInstance?.status === 'connected') ? (
                 <Badge variant="outline" className={statusConfig.connected.className}>
                   <Check className="mr-1 h-3 w-3" />Conectado
                 </Badge>
@@ -165,14 +166,18 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
             </div>
           </CardHeader>
           <CardContent>
-            {evolution.step === 'connected' ? (
+            {(evolution.step === 'connected' || evolutionInstance?.status === 'connected') ? (
               <div className="space-y-3">
                 <div className="rounded-md bg-[var(--muted)] p-3">
                   <p className="text-sm font-medium">
-                    {evolution.phone ? `Número: ${evolution.phone}` : 'WhatsApp conectado'}
+                    {(evolution.phone || evolutionInstance?.phone)
+                      ? `Número: ${evolution.phone || evolutionInstance?.phone}`
+                      : 'WhatsApp conectado'}
                   </p>
                   <p className="text-xs text-[var(--muted-foreground)]">
-                    Via Evolution API
+                    Conectado{evolutionInstance?.created_at
+                      ? ` em ${new Date(evolutionInstance.created_at).toLocaleDateString('pt-BR')}`
+                      : ''}
                   </p>
                 </div>
               </div>

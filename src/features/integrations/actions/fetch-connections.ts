@@ -4,7 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
+import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 
 export interface ConnectionsOverview {
   gmail: GmailConnectionSafe | null;
@@ -12,6 +12,7 @@ export interface ConnectionsOverview {
   crm: CrmConnectionSafe | null;
   calendar: CalendarConnectionSafe | null;
   api4com: Api4ComConnectionSafe | null;
+  evolutionInstance: WhatsAppEvolutionInstanceSafe | null;
 }
 
 export async function fetchConnections(): Promise<ActionResult<ConnectionsOverview>> {
@@ -68,6 +69,13 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
     .eq('user_id', user.id)
     .maybeSingle()) as { data: { id: string; ramal: string; base_url: string; api_key_encrypted: string | null; status: string; created_at: string; updated_at: string } | null };
 
+  // Fetch WhatsApp Evolution instance (per org)
+  const { data: evolutionRow } = (await (supabase
+    .from('whatsapp_instances' as never) as ReturnType<typeof supabase.from>)
+    .select('id, instance_name, status, phone, created_at, updated_at')
+    .eq('org_id', member.org_id)
+    .maybeSingle()) as { data: WhatsAppEvolutionInstanceSafe | null };
+
   const api4comRow: Api4ComConnectionSafe | null = api4comRaw
     ? {
         id: api4comRaw.id,
@@ -88,6 +96,7 @@ export async function fetchConnections(): Promise<ActionResult<ConnectionsOvervi
       crm: crmRow ?? null,
       calendar: calendarRow ?? null,
       api4com: api4comRow ?? null,
+      evolutionInstance: evolutionRow ?? null,
     },
   };
 }

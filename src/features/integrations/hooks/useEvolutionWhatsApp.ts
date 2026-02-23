@@ -54,30 +54,28 @@ export function useEvolutionWhatsApp() {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke<EvolutionStatusResponse>('evolution-status');
+      try {
+        const { data, error } = await supabase.functions.invoke<EvolutionStatusResponse>('evolution-status');
 
-      if (!mountedRef.current) return;
+        if (!mountedRef.current) return;
+        if (error || !data) return; // Silently ignore poll errors
 
-      if (error) {
-        console.error('[evolution] Status poll error:', error);
-        return;
-      }
-
-      if (!data) return;
-
-      if (data.status === 'connected') {
-        stopPolling();
-        setState((prev) => ({
-          ...prev,
-          step: 'connected',
-          phone: data.phone,
-          qrBase64: null,
-        }));
-      } else if (data.qr_base64 && data.qr_base64 !== '') {
-        setState((prev) => ({
-          ...prev,
-          qrBase64: data.qr_base64 ?? prev.qrBase64,
-        }));
+        if (data.status === 'connected') {
+          stopPolling();
+          setState((prev) => ({
+            ...prev,
+            step: 'connected',
+            phone: data.phone,
+            qrBase64: null,
+          }));
+        } else if (data.qr_base64 && data.qr_base64 !== '') {
+          setState((prev) => ({
+            ...prev,
+            qrBase64: data.qr_base64 ?? prev.qrBase64,
+          }));
+        }
+      } catch {
+        // Silently ignore — polling will retry on next interval
       }
     }, POLL_INTERVAL_MS);
   }, [stopPolling]);

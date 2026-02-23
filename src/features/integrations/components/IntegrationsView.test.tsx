@@ -53,7 +53,7 @@ const api4comConnected: Api4ComConnectionSafe = {
   updated_at: '2026-02-15T10:00:00Z',
 };
 
-const defaultProps = { gmail: null, whatsapp: null, crm: null, calendar: null, api4com: null };
+const defaultProps = { gmail: null, whatsapp: null, crm: null, calendar: null, api4com: null, evolutionInstance: null };
 
 describe('IntegrationsView', () => {
   it('should render integrations header', () => {

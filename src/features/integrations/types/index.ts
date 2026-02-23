@@ -90,6 +90,16 @@ export interface Api4ComConnectionSafe {
   updated_at: string;
 }
 
+// WhatsApp Evolution instance (from whatsapp_instances table)
+export interface WhatsAppEvolutionInstanceSafe {
+  id: string;
+  instance_name: string;
+  status: 'connecting' | 'connected' | 'disconnected' | 'error';
+  phone: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Evolution API WhatsApp instance status
 export type EvolutionStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'not_configured';
 
