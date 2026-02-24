@@ -39,10 +39,12 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
     .gte('created_at', todayStart.toISOString())) as { count: number | null };
 
   // Count pending activities (active enrollments with next_step_due <= now)
+  // Exclude auto_email cadences — they run in background, not in the manual activity queue
   const { count: pending } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-    .select('id', { count: 'exact', head: true })
+    .select('id, cadence:cadences!inner(type)', { count: 'exact', head: true })
     .eq('status', 'active')
+    .neq('cadence.type', 'auto_email')
     .lte('next_step_due', new Date().toISOString())) as { count: number | null };
 
   // Get daily goal: user-specific first, fallback to org default (user_id IS NULL)
