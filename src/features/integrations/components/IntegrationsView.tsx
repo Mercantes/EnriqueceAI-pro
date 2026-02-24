@@ -25,6 +25,7 @@ import {
 import type { Api4ComConnectionSafe, CalendarConnectionSafe, CrmConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe, WhatsAppEvolutionInstanceSafe } from '../types';
 import { disconnectGmail, getGmailAuthUrl } from '../actions/manage-gmail';
 import { disconnectApi4Com } from '../actions/manage-api4com';
+import { disconnectEvolutionWhatsApp } from '../actions/manage-whatsapp';
 import { useEvolutionWhatsApp } from '../hooks/useEvolutionWhatsApp';
 import { Api4ComConfigModal } from './Api4ComConfigModal';
 import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
@@ -48,7 +49,7 @@ const statusConfig = {
 export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com, evolutionInstance }: IntegrationsViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [showDisconnect, setShowDisconnect] = useState<'google' | null>(null);
+  const [showDisconnect, setShowDisconnect] = useState<'google' | 'whatsapp' | null>(null);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [showApi4ComConfig, setShowApi4ComConfig] = useState(false);
   const [showDisconnectApi4Com, setShowDisconnectApi4Com] = useState(false);
@@ -167,7 +168,7 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
           </CardHeader>
           <CardContent>
             {(evolution.step === 'connected' || evolutionInstance?.status === 'connected') ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="rounded-md bg-[var(--muted)] p-3">
                   <p className="text-sm font-medium">
                     {(evolution.phone || evolutionInstance?.phone)
@@ -180,6 +181,15 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
                       : ''}
                   </p>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600"
+                  onClick={() => setShowDisconnect('whatsapp')}
+                >
+                  <Unplug className="mr-2 h-4 w-4" />
+                  Desconectar
+                </Button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -278,6 +288,42 @@ export function IntegrationsView({ gmail, whatsapp, crm: _crm, calendar, api4com
               Cancelar
             </Button>
             <Button variant="destructive" disabled={isPending} onClick={handleDisconnectGoogle}>
+              {isPending ? 'Desconectando...' : 'Desconectar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disconnect WhatsApp dialog */}
+      <Dialog open={showDisconnect === 'whatsapp'} onOpenChange={() => setShowDisconnect(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Desconectar WhatsApp</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja desconectar o WhatsApp? Cadências com passos de WhatsApp não poderão ser executadas automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDisconnect(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await disconnectEvolutionWhatsApp();
+                  if (result.success) {
+                    evolution.disconnect();
+                    toast.success('WhatsApp desconectado');
+                  } else {
+                    toast.error(result.error);
+                  }
+                  setShowDisconnect(null);
+                  router.refresh();
+                });
+              }}
+            >
               {isPending ? 'Desconectando...' : 'Desconectar'}
             </Button>
           </DialogFooter>

@@ -90,3 +90,30 @@ export async function disconnectWhatsApp(): Promise<ActionResult<{ disconnected:
 
   return { success: true, data: { disconnected: true } };
 }
+
+export async function disconnectEvolutionWhatsApp(): Promise<ActionResult<{ disconnected: boolean }>> {
+  const user = await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: member } = (await supabase
+    .from('organization_members')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .single()) as { data: { org_id: string } | null };
+
+  if (!member) {
+    return { success: false, error: 'Organização não encontrada' };
+  }
+
+  const { error } = await (supabase
+    .from('whatsapp_instances' as never) as ReturnType<typeof supabase.from>)
+    .delete()
+    .eq('org_id', member.org_id);
+
+  if (error) {
+    return { success: false, error: 'Erro ao desconectar WhatsApp' };
+  }
+
+  return { success: true, data: { disconnected: true } };
+}
