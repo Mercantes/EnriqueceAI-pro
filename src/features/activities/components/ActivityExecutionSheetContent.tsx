@@ -197,6 +197,7 @@ export function ActivityExecutionSheetContent({
     return (
       <ActivityPhonePanel
         leadName={leadName}
+        leadId={activity.lead.id}
         phoneNumber={activity.lead.telefone}
         isSending={isSending}
         onMarkDone={onMarkDone}

@@ -232,7 +232,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                         <Input
                           type="number"
                           min={0}
-                          className="w-20 text-center text-sm"
+                          className="w-20 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                           value={ug.opportunityTarget}
                           onChange={(e) =>
                             updateUserGoal(ug.userId, Number(e.target.value) || 0)

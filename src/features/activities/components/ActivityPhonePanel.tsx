@@ -1,8 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 
-import { CheckCircle2, FileText, Loader2, Phone, PhoneCall, User } from 'lucide-react';
+import {
+  CheckCircle2,
+  FileText,
+  Loader2,
+  Phone,
+  PhoneCall,
+  PhoneOff,
+  User,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 import { Label } from '@/shared/components/ui/label';
@@ -15,21 +24,97 @@ import {
 } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
+import {
+  initiateApi4ComCall,
+  hangupApi4ComCall,
+} from '@/features/calls/actions/initiate-api4com-call';
+
+type CallState = 'idle' | 'calling' | 'connected' | 'ended';
+
 interface ActivityPhonePanelProps {
   leadName: string;
+  leadId: string;
   phoneNumber: string | null;
   isSending: boolean;
   onMarkDone: (notes: string) => void;
   onSkip: () => void;
 }
 
-export function ActivityPhonePanel({ leadName, phoneNumber, isSending, onMarkDone, onSkip }: ActivityPhonePanelProps) {
+function formatTimer(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+export function ActivityPhonePanel({
+  leadName,
+  leadId,
+  phoneNumber,
+  isSending,
+  onMarkDone,
+  onSkip,
+}: ActivityPhonePanelProps) {
+  const [callState, setCallState] = useState<CallState>('idle');
+  const [api4comCallId, setApi4comCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState('');
   const [notes, setNotes] = useState('');
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  // Timer for call duration
+  useEffect(() => {
+    if (callState === 'calling' || callState === 'connected') {
+      const id = setInterval(() => setElapsed((prev) => prev + 1), 1000);
+      timerRef.current = id;
+      return () => clearInterval(id);
+    }
+    const resetId = setTimeout(() => setElapsed(0), 0);
+    return () => clearTimeout(resetId);
+  }, [callState]);
+
+  function handleInitiateCall() {
+    if (!phoneNumber) return;
+
+    startTransition(async () => {
+      setCallState('calling');
+
+      const result = await initiateApi4ComCall({
+        phone: phoneNumber,
+        leadId,
+      });
+
+      if (!result.success) {
+        toast.error(result.error);
+        setCallState('idle');
+        return;
+      }
+
+      setApi4comCallId(result.data.api4comId);
+      setCallState('connected');
+    });
+  }
+
+  function handleHangup() {
+    if (!api4comCallId) {
+      setCallState('ended');
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await hangupApi4ComCall(api4comCallId);
+      if (!result.success) {
+        toast.error(result.error);
+      }
+      setCallState('ended');
+    });
+  }
+
+  const isInCall = callState === 'calling' || callState === 'connected';
 
   return (
     <div className="flex h-full flex-col">
-      {/* Origem / Destino header — Meetime-style */}
+      {/* Origem / Destino header */}
       <div className="flex items-start justify-between rounded-lg border border-[var(--border)] p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--muted)]">
@@ -58,14 +143,67 @@ export function ActivityPhonePanel({ leadName, phoneNumber, isSending, onMarkDon
             <p className="mb-1 text-2xl font-bold tabular-nums tracking-wide">
               {phoneNumber}
             </p>
-            <a
-              href={`tel:${phoneNumber}`}
-              className="mt-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition-transform hover:scale-105 hover:bg-green-500 active:scale-95"
-              title="Ligar agora"
-            >
-              <Phone className="h-7 w-7" />
-            </a>
-            <p className="mt-2 text-xs text-[var(--muted-foreground)]">Clique para ligar</p>
+
+            {/* Timer display during call */}
+            {isInCall && (
+              <p className="mb-2 font-mono text-lg tabular-nums text-[var(--muted-foreground)]">
+                {formatTimer(elapsed)}
+              </p>
+            )}
+
+            {/* Call action buttons */}
+            <div className="mt-3 flex items-center gap-4">
+              {callState === 'idle' && (
+                <button
+                  onClick={handleInitiateCall}
+                  disabled={isPending}
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-white shadow-lg transition-transform hover:scale-105 hover:bg-green-500 active:scale-95 disabled:opacity-50"
+                  title="Ligar via API4COM"
+                >
+                  <Phone className="h-7 w-7" />
+                </button>
+              )}
+
+              {callState === 'calling' && (
+                <>
+                  <div className="flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-yellow-500 text-white shadow-lg">
+                    <Phone className="h-7 w-7" />
+                  </div>
+                  <button
+                    onClick={handleHangup}
+                    disabled={isPending}
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600 text-white shadow transition-transform hover:scale-105 hover:bg-red-500 active:scale-95"
+                    title="Desligar"
+                  >
+                    <PhoneOff className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+
+              {callState === 'connected' && (
+                <button
+                  onClick={handleHangup}
+                  disabled={isPending}
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition-transform hover:scale-105 hover:bg-red-500 active:scale-95"
+                  title="Desligar"
+                >
+                  <PhoneOff className="h-7 w-7" />
+                </button>
+              )}
+
+              {callState === 'ended' && (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--muted)]">
+                  <Phone className="h-7 w-7 text-[var(--muted-foreground)]" />
+                </div>
+              )}
+            </div>
+
+            <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+              {callState === 'idle' && 'Clique para ligar via API4COM'}
+              {callState === 'calling' && 'Chamando...'}
+              {callState === 'connected' && 'Em chamada'}
+              {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}
+            </p>
           </>
         ) : (
           <p className="text-sm text-[var(--muted-foreground)]">
@@ -95,7 +233,7 @@ export function ActivityPhonePanel({ leadName, phoneNumber, isSending, onMarkDon
         </Select>
       </div>
 
-      {/* Bloco de Notas — Meetime-style */}
+      {/* Notes */}
       <div className="mt-5 flex-1 space-y-1.5">
         <div className="flex items-center gap-1.5">
           <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
@@ -113,10 +251,13 @@ export function ActivityPhonePanel({ leadName, phoneNumber, isSending, onMarkDon
 
       {/* Actions */}
       <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
-        <Button variant="outline" onClick={onSkip} disabled={isSending}>
+        <Button variant="outline" onClick={onSkip} disabled={isSending || isInCall}>
           Pular
         </Button>
-        <Button onClick={() => onMarkDone(`[${callStatus}] ${notes}`)} disabled={isSending || !callStatus}>
+        <Button
+          onClick={() => onMarkDone(`[${callStatus}] ${notes}`.trim())}
+          disabled={isSending || !callStatus || isInCall}
+        >
           {isSending ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (

@@ -157,7 +157,7 @@ export function ActivityExecutionSheet({
             </div>
 
             {/* Right — Activity panel (adapts by type) */}
-            <div className="relative flex flex-1 flex-col overflow-y-auto p-6">
+            <div className="relative flex flex-1 flex-col overflow-y-auto px-6 pb-6 pt-14">
               {/* Navigation controls — centered, close button pinned right */}
               <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
                 <Button
