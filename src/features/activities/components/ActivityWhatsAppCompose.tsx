@@ -148,12 +148,12 @@ export function ActivityWhatsAppCompose({
               </div>
             )}
 
-            {/* Message textarea — always editable */}
+            {/* Message textarea — shows resolved variables */}
             <div className="flex flex-col space-y-1">
               <Label className="text-xs">Mensagem</Label>
               <Textarea
                 ref={textareaRef}
-                value={body}
+                value={renderedPreview}
                 onChange={(e) => onBodyChange(e.target.value)}
                 placeholder="Mensagem WhatsApp"
                 className="min-h-[150px] resize-none"

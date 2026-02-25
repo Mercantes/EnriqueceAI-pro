@@ -141,8 +141,8 @@ export function ActivityExecutionSheetContent({
     if (!tpl) return;
     setCurrentTemplateId(templateId);
 
-    // Set raw template body (with {{variables}}) — preview will render them
-    setBody(tpl.body);
+    // Render variables immediately so the textarea shows resolved text
+    setBody(renderTemplate(tpl.body, templateVariables));
     setAiPersonalized(false);
   }
 

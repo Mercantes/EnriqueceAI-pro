@@ -20,6 +20,8 @@ interface RawLead {
   municipio: string | null;
   uf: string | null;
   porte: string | null;
+  first_name: string | null;
+  last_name: string | null;
   socios: LeadSocio[] | null;
   endereco: LeadAddress | null;
   instagram: string | null;
@@ -141,7 +143,9 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
         nextStepDue: enrollment.next_step_due,
         lead: {
           ...enrollment.lead,
-          primeiro_nome: enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0] ?? null,
+          primeiro_nome: enrollment.lead.first_name
+            ?? enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0]
+            ?? null,
         },
       },
     });
