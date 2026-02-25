@@ -28,7 +28,15 @@ const mockLead = {
   municipio: 'São Paulo',
   uf: 'SP',
   porte: 'ME',
-  primeiro_nome: null,
+  socios: null,
+  endereco: null,
+  instagram: null,
+  linkedin: null,
+  website: null,
+  status: 'new' as const,
+  enrichment_status: 'enriched' as const,
+  notes: null,
+  fit_score: null,
 };
 
 const mockCadence = {
@@ -172,7 +180,7 @@ describe('fetchPendingActivities', () => {
     expect(activity.templateSubject).toBe('Olá {{nome_fantasia}}');
     expect(activity.templateBody).toBe('Prezada {{nome_fantasia}}, como vai?');
     expect(activity.aiPersonalization).toBe(false);
-    expect(activity.lead).toEqual(mockLead);
+    expect(activity.lead).toEqual({ ...mockLead, primeiro_nome: null });
   });
 
   it('should skip enrollments without matching step', async () => {

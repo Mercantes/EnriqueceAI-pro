@@ -18,18 +18,25 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   removed: { label: 'Removido', className: 'bg-gray-100 text-gray-500' },
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  manager: 'Gerente',
+  sdr: 'SDR',
+};
+
 export function UserManagement({
   members,
   ownerId,
   currentUserId,
   memberCount,
   memberMax,
+  nameMap = {},
 }: {
   members: OrganizationMemberRow[];
   ownerId: string;
   currentUserId: string;
   memberCount: number;
   memberMax: number;
+  nameMap?: Record<string, string>;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -80,7 +87,7 @@ export function UserManagement({
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="p-3 text-left text-sm font-medium">Membro</th>
-              <th className="p-3 text-left text-sm font-medium">Role</th>
+              <th className="p-3 text-left text-sm font-medium">Cargo</th>
               <th className="p-3 text-left text-sm font-medium">Status</th>
               <th className="p-3 text-right text-sm font-medium">Ações</th>
             </tr>
@@ -95,7 +102,7 @@ export function UserManagement({
               return (
                 <tr key={member.id} className="border-b last:border-0">
                   <td className="p-3">
-                    <span className="text-sm">{member.user_id}</span>
+                    <span className="text-sm">{nameMap[member.user_id] ?? member.user_id}</span>
                     {isOwner && (
                       <span className="ml-2 text-xs text-muted-foreground">(Proprietário)</span>
                     )}
@@ -117,12 +124,12 @@ export function UserManagement({
                           disabled={rolePending}
                           className="text-sm text-primary hover:underline"
                         >
-                          {member.role === 'manager' ? 'Manager' : 'SDR'}
+                          {ROLE_LABELS[member.role] ?? member.role}
                         </button>
                       </form>
                     ) : (
                       <span className="text-sm">
-                        {member.role === 'manager' ? 'Manager' : 'SDR'}
+                        {ROLE_LABELS[member.role] ?? member.role}
                       </span>
                     )}
                   </td>

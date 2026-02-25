@@ -305,6 +305,7 @@ export function AutoEmailBuilder({ cadence, metrics }: AutoEmailBuilderProps) {
               isFirst={index === 0}
               onChange={(updated) => updateStep(index, updated)}
               onRemove={() => removeStep(index)}
+              cadenceId={cadence?.id}
             />
           ))}
 

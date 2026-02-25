@@ -169,7 +169,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
       {/* Progress cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <ProgressCard completed={progress.completed} total={progress.total} />
-        <DailyGoalCard target={progress.target} completed={progress.completed} />
+        <DailyGoalCard target={progress.target} completed={progress.completed} onStartProspecting={availableLeadsCount > 0 ? () => setEnrollOpen(true) : undefined} />
       </div>
 
       {/* Tabs */}

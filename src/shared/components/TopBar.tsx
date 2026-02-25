@@ -79,6 +79,7 @@ function NavDropdownMenu({ section }: { section: NavSection }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
+          suppressHydrationWarning
           className={cn(
             'flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors',
             isActive
@@ -128,7 +129,7 @@ export function TopBar() {
 
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={32} height={32} className="rounded-full" />
+          <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={32} height={32} className="rounded-full" unoptimized />
           <span className="text-xl font-bold text-primary">Enriquece AI</span>
         </Link>
 

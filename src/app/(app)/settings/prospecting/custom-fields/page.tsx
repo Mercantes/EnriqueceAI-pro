@@ -1,9 +1,20 @@
 import { requireManager } from '@/lib/auth/require-manager';
 
-import { ComingSoonPlaceholder } from '@/features/settings-prospecting/components/ComingSoonPlaceholder';
+import { listCustomFields } from '@/features/settings-prospecting/actions/custom-fields-crud';
+import { CustomFieldsSettings } from '@/features/settings-prospecting/components/CustomFieldsSettings';
 
 export default async function CustomFieldsPage() {
   await requireManager();
 
-  return <ComingSoonPlaceholder title="Campos Personalizados" />;
+  const result = await listCustomFields();
+
+  if (!result.success) {
+    return (
+      <div className="p-4">
+        <p className="text-sm text-[var(--muted-foreground)]">{result.error}</p>
+      </div>
+    );
+  }
+
+  return <CustomFieldsSettings initial={result.data} />;
 }

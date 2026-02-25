@@ -16,6 +16,11 @@ export interface LeadForVariables {
   primeiro_nome?: string | null;
 }
 
+/** Title case: "ANGELO" → "Angelo", "maria" → "Maria" */
+function toTitleCase(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
 /**
  * Builds the lead-side template variables record.
  *
@@ -26,9 +31,10 @@ export function buildLeadTemplateVariables(
   lead: LeadForVariables,
   socioNome?: string | null,
 ): Record<string, string | null> {
-  const primeiroNome =
+  const rawNome =
     lead.primeiro_nome ??
     (socioNome ? socioNome.trim().split(/\s+/)[0] ?? null : null);
+  const primeiroNome = rawNome ? toTitleCase(rawNome) : null;
 
   return {
     primeiro_nome: primeiroNome,

@@ -5,6 +5,8 @@ import { useState, useTransition } from 'react';
 import {
   Archive,
   Copy,
+  Info,
+  Mail,
   MoreHorizontal,
   Pause,
   Pencil,
@@ -18,7 +20,6 @@ import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { Card, CardContent } from '@/shared/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -42,12 +43,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/components/ui/tooltip';
 
+import type { AutoEmailCadenceMetrics } from '../cadences.contract';
 import type { CadenceTabCounts } from '../actions/fetch-cadences';
 import { activateCadence, createCadence, deleteCadence, updateCadence } from '../actions/manage-cadences';
 import type { CadenceRow, CadenceStatus, CadenceType } from '../types';
-import { CadenceTypeDialog } from './CadenceTypeDialog';
+import { AutoEmailTable } from './AutoEmailTable';
 import { PriorityIcon } from './PriorityIcon';
 
 interface CadenceListViewProps {
@@ -56,6 +63,7 @@ interface CadenceListViewProps {
   page: number;
   perPage: number;
   tabCounts: CadenceTabCounts;
+  metrics?: Record<string, AutoEmailCadenceMetrics>;
 }
 
 const ALL_VALUE = '__all__';
@@ -79,14 +87,14 @@ const statusConfig: Record<CadenceStatus, { label: string; className: string }> 
   },
 };
 
-export function CadenceListView({ cadences, total, page, perPage, tabCounts }: CadenceListViewProps) {
+export function CadenceListView({ cadences, total, page, perPage, tabCounts, metrics }: CadenceListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [showTypeDialog, setShowTypeDialog] = useState(false);
 
   const activeTab = (searchParams.get('type') ?? 'standard') as CadenceType;
+  const hasFilters = !!(searchParams.get('search') || searchParams.get('status') || searchParams.get('priority') || searchParams.get('origin'));
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -101,8 +109,8 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
     router.push(`/cadences?${params.toString()}`);
   }
 
-  function handleTabChange(value: string) {
-    updateParams({ type: value === 'standard' ? '' : value });
+  function handleTabChange(type: CadenceType) {
+    updateParams({ type: type === 'standard' ? '' : type });
   }
 
   function handleDelete(id: string) {
@@ -173,38 +181,66 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
   const totalPages = Math.ceil(total / perPage);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Cadências</h1>
-          <p className="text-sm text-muted-foreground">
-            Exibindo {total} cadência{total !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <Button onClick={() => setShowTypeDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Cadência
-        </Button>
+    <div className="space-y-4">
+      {/* Status line */}
+      <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+        <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+        Exibindo {total === 1 ? '1 cadência' : `todas as ${total} cadências`}.
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList>
-          <TabsTrigger value="standard">
+      {/* Tabs + Create button */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-0 border-b border-[var(--border)]">
+          <button
+            type="button"
+            onClick={() => handleTabChange('standard')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'standard'
+                ? 'border-[var(--primary)] text-[var(--foreground)]'
+                : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+            }`}
+          >
             Padrão
-            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+            <Badge variant="secondary" className="h-5 min-w-5 rounded-full px-1.5 text-xs">
               {tabCounts.standard}
             </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="auto_email">
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('auto_email')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'auto_email'
+                ? 'border-[var(--primary)] text-[var(--foreground)]'
+                : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+            }`}
+          >
             E-mail Automático
-            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+            <Badge variant="secondary" className="h-5 min-w-5 rounded-full px-1.5 text-xs">
               {tabCounts.auto_email}
             </Badge>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+          </button>
+        </div>
+
+        {/* Create dropdown (Meetime-style) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="bg-emerald-600 text-white hover:bg-emerald-700">
+              <Plus className="mr-2 h-4 w-4" />
+              Criar nova
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuItem onClick={() => router.push('/cadences/new')}>
+              <Zap className="mr-2 h-4 w-4 text-blue-500" />
+              Cadência Padrão
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/cadences/new?type=auto_email')}>
+              <Mail className="mr-2 h-4 w-4 text-purple-500" />
+              Cadência Automática de E-mail
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -213,7 +249,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
           <Input
             placeholder="Buscar por nome..."
             defaultValue={searchParams.get('search') ?? ''}
-            className="pl-9"
+            className="h-9 pl-9"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 updateParams({ search: (e.target as HTMLInputElement).value });
@@ -225,11 +261,11 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
           value={searchParams.get('status') ?? ALL_VALUE}
           onValueChange={(v) => updateParams({ status: v })}
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="h-9 w-32">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todos status</SelectItem>
+            <SelectItem value={ALL_VALUE}>Todos</SelectItem>
             <SelectItem value="draft">Rascunho</SelectItem>
             <SelectItem value="active">Ativa</SelectItem>
             <SelectItem value="paused">Pausada</SelectItem>
@@ -240,11 +276,11 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
           value={searchParams.get('priority') ?? ALL_VALUE}
           onValueChange={(v) => updateParams({ priority: v })}
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="h-9 w-32">
             <SelectValue placeholder="Prioridade" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todas prioridades</SelectItem>
+            <SelectItem value={ALL_VALUE}>Todas</SelectItem>
             <SelectItem value="high">Alta</SelectItem>
             <SelectItem value="medium">Média</SelectItem>
             <SelectItem value="low">Baixa</SelectItem>
@@ -254,16 +290,26 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
           value={searchParams.get('origin') ?? ALL_VALUE}
           onValueChange={(v) => updateParams({ origin: v })}
         >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Foco/Origem" />
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue placeholder="Origem" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_VALUE}>Todas origens</SelectItem>
+            <SelectItem value={ALL_VALUE}>Todas</SelectItem>
             <SelectItem value="inbound_active">Inbound Ativo</SelectItem>
             <SelectItem value="inbound_passive">Inbound Passivo</SelectItem>
             <SelectItem value="outbound">Outbound</SelectItem>
           </SelectContent>
         </Select>
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 text-xs"
+            onClick={() => router.push('/cadences')}
+          >
+            Limpar filtros
+          </Button>
+        )}
       </div>
 
       {/* Cadence list */}
@@ -276,28 +322,107 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
           <p className="mb-6 max-w-sm text-sm text-muted-foreground">
             Crie sua primeira cadência para automatizar o contato com leads.
           </p>
-          <Button onClick={() => setShowTypeDialog(true)}>
+          <Button
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={() => router.push('/cadences/new')}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Criar Cadência
           </Button>
         </div>
+      ) : activeTab === 'auto_email' && metrics ? (
+        <AutoEmailTable
+          cadences={cadences}
+          metrics={metrics}
+          onDeleteRequest={(id) => setDeleteId(id)}
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {cadences.map((cadence) => {
-            const config = statusConfig[cadence.status];
-            return (
-              <Card key={cadence.id} className="relative">
-                <CardContent className="p-4">
-                  <div className="mb-3 flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <PriorityIcon priority={cadence.priority} />
-                      <Badge variant="outline" className={config.className}>
-                        {config.label}
-                      </Badge>
-                    </div>
+        <TooltipProvider>
+          <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+            {/* Table header */}
+            <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--muted)]/50 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-[var(--muted-foreground)]">
+              <div className="w-7 shrink-0" />
+              <div className="w-6 shrink-0" />
+              <div className="w-48 shrink-0">Nome</div>
+              <div className="min-w-0 flex-1">Descrição</div>
+              <div className="w-20 shrink-0 text-center">Status</div>
+              <div className="w-16 shrink-0 text-center">Passos</div>
+              <div className="w-8 shrink-0" />
+            </div>
+
+            {/* Table rows */}
+            {cadences.map((cadence, index) => {
+              const config = statusConfig[cadence.status];
+              return (
+                <div
+                  key={cadence.id}
+                  className={`group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--muted)]/30 ${
+                    index < cadences.length - 1 ? 'border-b border-[var(--border)]' : ''
+                  }`}
+                >
+                  {/* Info icon */}
+                  <div className="w-7 shrink-0">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-xs">
+                        <div className="space-y-1 text-xs">
+                          <p><span className="font-medium">Prioridade:</span> {cadence.priority === 'high' ? 'Alta' : cadence.priority === 'medium' ? 'Média' : 'Baixa'}</p>
+                          <p><span className="font-medium">Origem:</span> {cadence.origin === 'inbound_active' ? 'Inbound Ativo' : cadence.origin === 'inbound_passive' ? 'Inbound Passivo' : 'Outbound'}</p>
+                          <p><span className="font-medium">Criada:</span> {new Date(cadence.created_at).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+
+                  {/* Priority arrow */}
+                  <div className="w-6 shrink-0">
+                    <PriorityIcon priority={cadence.priority} className="h-5 w-5" />
+                  </div>
+
+                  {/* Name */}
+                  <div className="w-48 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/cadences/${cadence.id}`)}
+                      className="truncate text-sm font-medium text-[var(--foreground)] hover:text-[var(--primary)] hover:underline"
+                    >
+                      {cadence.name}
+                    </button>
+                  </div>
+
+                  {/* Description */}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm italic text-[var(--muted-foreground)]">
+                      {cadence.description || ''}
+                    </p>
+                  </div>
+
+                  {/* Status badge */}
+                  <div className="w-20 shrink-0 text-center">
+                    <Badge variant="outline" className={`text-[10px] ${config.className}`}>
+                      {config.label}
+                    </Badge>
+                  </div>
+
+                  {/* Steps count */}
+                  <div className="w-16 shrink-0 text-center text-xs text-[var(--muted-foreground)]">
+                    {cadence.total_steps} passo{cadence.total_steps !== 1 ? 's' : ''}
+                  </div>
+
+                  {/* Actions menu */}
+                  <div className="w-8 shrink-0">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={`Ações para ${cadence.name}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
+                          aria-label={`Ações para ${cadence.name}`}
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -342,32 +467,11 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-
-                  <button
-                    type="button"
-                    className="w-full text-left"
-                    onClick={() => router.push(`/cadences/${cadence.id}`)}
-                  >
-                    <h3 className="mb-1 font-medium">{cadence.name}</h3>
-                    {cadence.description && (
-                      <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">
-                        {cadence.description}
-                      </p>
-                    )}
-                  </button>
-
-                  <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Zap className="h-3 w-3" />
-                      {cadence.total_steps} passo{cadence.total_steps !== 1 ? 's' : ''}
-                    </div>
-                    <span>{new Date(cadence.created_at).toLocaleDateString('pt-BR')}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                </div>
+              );
+            })}
+          </div>
+        </TooltipProvider>
       )}
 
       {/* Pagination */}
@@ -402,9 +506,6 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts }: C
           </Button>
         </div>
       )}
-
-      {/* Type selection dialog */}
-      <CadenceTypeDialog open={showTypeDialog} onOpenChange={setShowTypeDialog} />
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

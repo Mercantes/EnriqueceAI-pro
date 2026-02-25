@@ -51,7 +51,8 @@ export function LeadDetailHeader({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const personName = lead.socios?.[0]?.nome ?? null;
+  const contactName = lead.first_name ? `${lead.first_name} ${lead.last_name ?? ''}`.trim() : null;
+  const personName = contactName ?? lead.socios?.[0]?.nome ?? null;
   const companyName = lead.nome_fantasia ?? lead.razao_social ?? null;
   const primaryName = personName ?? companyName ?? '—';
   const secondaryName = personName ? companyName : null;

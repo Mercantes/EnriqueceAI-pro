@@ -47,32 +47,22 @@ export async function createLead(
     return { success: false, error: 'Responsável não pertence à organização' };
   }
 
-  // Check for duplicate CNPJ
-  const { data: existing } = await supabase
-    .from('leads')
-    .select('id')
-    .eq('org_id', member.org_id)
-    .eq('cnpj', parsed.data.cnpj)
-    .is('deleted_at', null)
-    .maybeSingle();
-
-  if (existing) {
-    return { success: false, error: 'Já existe um lead com este CNPJ', code: 'DUPLICATE_CNPJ' };
-  }
-
   // 1. Create the lead
-  const { data: lead, error } = await supabase
-    .from('leads')
+  const { data: lead, error } = await (supabase
+    .from('leads') as ReturnType<typeof supabase.from>)
     .insert({
       org_id: member.org_id,
-      cnpj: parsed.data.cnpj,
-      razao_social: parsed.data.razao_social ?? null,
-      nome_fantasia: parsed.data.nome_fantasia ?? null,
-      email: parsed.data.email || null,
-      telefone: parsed.data.telefone || null,
+      first_name: parsed.data.first_name,
+      last_name: parsed.data.last_name,
+      nome_fantasia: parsed.data.empresa,
+      email: parsed.data.email,
+      telefone: parsed.data.telefone,
+      job_title: parsed.data.job_title,
+      lead_source: parsed.data.lead_source,
+      is_inbound: parsed.data.is_inbound,
       assigned_to: parsed.data.assigned_to,
       created_by: user.id,
-    })
+    } as Record<string, unknown>)
     .select('id')
     .single();
 
@@ -85,10 +75,20 @@ export async function createLead(
   // 2. Enroll in cadence if selected (non-blocking for lead creation)
   const cadenceId = parsed.data.cadence_id;
   if (cadenceId) {
-    const enrollStatus = parsed.data.enrollment_mode === 'paused' ? 'paused' : 'active';
-    await enrollLeads(cadenceId, [leadId], enrollStatus).catch(() => {
+    try {
+      const result = await enrollLeads(cadenceId, [leadId], 'active');
+
+      // If scheduled start, update enrollment's next_step_due
+      if (result.success && parsed.data.enrollment_mode === 'scheduled' && parsed.data.scheduled_start) {
+        await supabase
+          .from('cadence_enrollments')
+          .update({ next_step_due: parsed.data.scheduled_start })
+          .eq('lead_id', leadId)
+          .eq('cadence_id', cadenceId);
+      }
+    } catch {
       // Enrollment failure should not fail lead creation
-    });
+    }
   }
 
   // 3. Trigger enrichment (awaited to avoid runtime cutoff, but errors swallowed)

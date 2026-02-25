@@ -10,6 +10,7 @@ import { buildLeadTemplateVariables } from '@/features/cadences/utils/build-temp
 import { renderTemplate } from '@/features/cadences/utils/render-template';
 
 import type { ActivityLead, PreparedEmail, PreparedWhatsApp } from '../types';
+import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 
 interface PrepareInput {
   lead: ActivityLead;
@@ -104,15 +105,18 @@ export async function prepareActivityWhatsApp(
 
   const { lead, templateBody, aiPersonalization, channel } = input;
 
-  if (!lead.telefone) {
+  const resolved = resolveWhatsAppPhone(lead);
+  if (!resolved) {
     return { success: false, error: 'Lead sem telefone cadastrado' };
   }
+
+  const phone = resolved.formatted;
 
   if (!templateBody) {
     return {
       success: true,
       data: {
-        to: lead.telefone,
+        to: phone,
         body: '',
         aiPersonalized: false,
       },
@@ -147,7 +151,7 @@ export async function prepareActivityWhatsApp(
   return {
     success: true,
     data: {
-      to: lead.telefone,
+      to: phone,
       body,
       aiPersonalized,
     },

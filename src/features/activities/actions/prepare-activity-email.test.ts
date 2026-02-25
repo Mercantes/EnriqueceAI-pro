@@ -49,6 +49,15 @@ const mockLead: ActivityLead = {
   uf: 'SP',
   porte: 'ME',
   primeiro_nome: 'João',
+  socios: null,
+  endereco: null,
+  instagram: null,
+  linkedin: null,
+  website: null,
+  status: null,
+  enrichment_status: null,
+  notes: null,
+  fit_score: null,
 };
 
 // ---------------------------------------------------------------------------

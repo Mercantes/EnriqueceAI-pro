@@ -12,6 +12,13 @@ export const cnpjSchema = z
   .transform(stripCnpj)
   .refine(isValidCnpj, { message: 'CNPJ inválido' });
 
+export const cnpjOptionalSchema = z
+  .string()
+  .optional()
+  .or(z.literal(''))
+  .transform((val) => (val ? stripCnpj(val) : undefined))
+  .refine((val) => !val || isValidCnpj(val), { message: 'CNPJ inválido' });
+
 export const leadStatusSchema = z.enum(leadStatusValues);
 export const enrichmentStatusSchema = z.enum(enrichmentStatusValues);
 export const importStatusSchema = z.enum(importStatusValues);
@@ -26,15 +33,31 @@ export const leadAddressSchema = z.object({
   cep: z.string().optional(),
 });
 
+export const LEAD_SOURCE_OPTIONS = [
+  { value: 'cold_outbound', label: 'Cold Outbound' },
+  { value: 'inbound_marketing', label: 'Inbound Marketing' },
+  { value: 'indicacao', label: 'Indicação' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'evento', label: 'Evento' },
+  { value: 'site', label: 'Site' },
+  { value: 'outro', label: 'Outro' },
+] as const;
+
+export const leadSourceValues = LEAD_SOURCE_OPTIONS.map((o) => o.value) as [string, ...string[]];
+
 export const createLeadSchema = z.object({
-  cnpj: cnpjSchema,
-  razao_social: z.string().min(1).optional(),
-  nome_fantasia: z.string().min(1).optional(),
-  email: z.string().email('Email inválido').optional().or(z.literal('')),
-  telefone: z.string().min(1).optional().or(z.literal('')),
+  first_name: z.string().min(1, 'Primeiro nome é obrigatório'),
+  last_name: z.string().min(1, 'Sobrenome é obrigatório'),
+  email: z.string().email('Email inválido'),
+  telefone: z.string().min(1, 'Telefone é obrigatório'),
+  empresa: z.string().min(1, 'Empresa é obrigatória'),
+  job_title: z.string().min(1, 'Cargo é obrigatório'),
+  lead_source: z.enum(leadSourceValues as [string, ...string[]], { required_error: 'Fonte é obrigatória' }),
+  is_inbound: z.boolean().default(false),
   assigned_to: z.string().uuid('Responsável inválido'),
   cadence_id: z.string().uuid('Cadência inválida').optional().or(z.literal('')),
-  enrollment_mode: z.enum(['immediate', 'paused']).default('immediate'),
+  enrollment_mode: z.enum(['immediate', 'scheduled']).default('immediate'),
+  scheduled_start: z.string().datetime({ offset: true }).optional(),
 });
 
 export const leadFiltersSchema = z.object({

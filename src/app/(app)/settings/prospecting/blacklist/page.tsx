@@ -1,9 +1,20 @@
 import { requireManager } from '@/lib/auth/require-manager';
 
-import { ComingSoonPlaceholder } from '@/features/settings-prospecting/components/ComingSoonPlaceholder';
+import { listBlacklistDomains } from '@/features/settings-prospecting/actions/email-blacklist-crud';
+import { BlacklistSettings } from '@/features/settings-prospecting/components/BlacklistSettings';
 
 export default async function BlacklistPage() {
   await requireManager();
 
-  return <ComingSoonPlaceholder title="Blacklist de E-mails" />;
+  const result = await listBlacklistDomains();
+
+  if (!result.success) {
+    return (
+      <div className="p-4">
+        <p className="text-sm text-[var(--muted-foreground)]">{result.error}</p>
+      </div>
+    );
+  }
+
+  return <BlacklistSettings initial={result.data} />;
 }

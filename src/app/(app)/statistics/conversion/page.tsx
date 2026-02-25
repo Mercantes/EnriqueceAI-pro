@@ -1,3 +1,5 @@
+import { requireAuth } from '@/lib/auth/require-auth';
+
 import { fetchConversionAnalytics } from '@/features/statistics/actions/fetch-conversion-analytics';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { ConversionAnalyticsView } from '@/features/statistics/components/ConversionAnalyticsView';
@@ -7,6 +9,7 @@ interface PageProps {
 }
 
 export default async function ConversionAnalyticsPage({ searchParams }: PageProps) {
+  await requireAuth();
   const params = await searchParams;
   const period = params.period ?? '30d';
   const userIds = params.user ? [params.user] : undefined;

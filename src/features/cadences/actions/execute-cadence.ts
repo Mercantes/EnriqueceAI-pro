@@ -19,6 +19,11 @@ import type { CadenceStepRow, InteractionRow, MessageTemplateRow } from '../type
 
 const BATCH_SIZE = 50;
 
+/** Remove any leftover {{variable}} placeholders from rendered content */
+function stripUnresolvedVars(text: string): string {
+  return text.replace(/\{\{[^}]+\}\}/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 interface EnrollmentWithLead {
   id: string;
   cadence_id: string;
@@ -37,6 +42,7 @@ interface EnrollmentWithLead {
     municipio: string | null;
     uf: string | null;
     porte: string | null;
+    primeiro_nome: string | null;
     socios: Array<{ nome: string; qualificacao?: string }> | null;
   };
 }
@@ -177,9 +183,9 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             console.error(`[cadence-engine] enrollment=${enrollment.id} failed to fetch vendor data:`, vendorErr);
           }
 
-          messageContent = renderTemplate(template.body, variables);
+          messageContent = stripUnresolvedVars(renderTemplate(template.body, variables));
           if (template.subject) {
-            subject = renderTemplate(template.subject, variables);
+            subject = stripUnresolvedVars(renderTemplate(template.subject, variables));
           }
 
           // AI personalization when enabled

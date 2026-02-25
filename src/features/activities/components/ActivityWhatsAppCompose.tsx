@@ -1,20 +1,40 @@
 'use client';
 
+import { useRef } from 'react';
+
+import { Clock, Eye, Loader2, MessageSquare, Send, Sparkles } from 'lucide-react';
+
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
-import { Clock, Loader2, MessageSquare, Send, Sparkles } from 'lucide-react';
+import { VariableInsertBar } from '@/features/cadences/components/VariableInsertBar';
+
+import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
+import type { WhatsAppTemplateOption } from '../actions/fetch-whatsapp-templates';
 
 interface ActivityWhatsAppComposeProps {
   to: string;
   body: string;
+  renderedPreview: string;
   aiPersonalized: boolean;
   isLoading: boolean;
   isSending: boolean;
+  phones: ResolvedPhone[];
+  templates: WhatsAppTemplateOption[];
+  currentTemplateId: string | null;
+  onPhoneChange: (phone: string) => void;
   onBodyChange: (value: string) => void;
+  onTemplateChange: (templateId: string) => void;
   onSend: () => void;
   onSkip: () => void;
 }
@@ -22,14 +42,39 @@ interface ActivityWhatsAppComposeProps {
 export function ActivityWhatsAppCompose({
   to,
   body,
+  renderedPreview,
   aiPersonalized,
   isLoading,
   isSending,
+  phones,
+  templates,
+  currentTemplateId,
+  onPhoneChange,
   onBodyChange,
+  onTemplateChange,
   onSend,
   onSkip,
 }: ActivityWhatsAppComposeProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const canSend = !isSending && !isLoading && to && body.trim();
+
+  function handleInsertVariable(variable: string) {
+    const el = textareaRef.current;
+    const tag = `{{${variable}}}`;
+    if (el) {
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const newBody = body.slice(0, start) + tag + body.slice(end);
+      onBodyChange(newBody);
+      // Restore cursor after the inserted variable
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(start + tag.length, start + tag.length);
+      });
+    } else {
+      onBodyChange(body + tag);
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -53,21 +98,80 @@ export function ActivityWhatsAppCompose({
       ) : (
         <>
           <div className="mt-3 space-y-3 flex-1">
-            {/* To field (read-only) */}
+            {/* Phone field */}
             <div className="space-y-1">
               <Label className="text-xs">Para (telefone)</Label>
-              <Input value={to} readOnly className="bg-[var(--muted)]" />
+              {phones.length > 1 ? (
+                <Select value={to} onValueChange={onPhoneChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o telefone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {phones.map((phone) => (
+                      <SelectItem key={phone.raw} value={phone.formatted}>
+                        {phone.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={to}
+                  readOnly
+                  className="bg-[var(--muted)]"
+                  placeholder={!to ? 'Lead sem telefone cadastrado' : undefined}
+                />
+              )}
             </div>
 
-            {/* Body */}
-            <div className="flex flex-1 flex-col space-y-1">
+            {/* Template selector — above message field */}
+            {templates.length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-xs">Template</Label>
+                <Select
+                  value={currentTemplateId ?? 'none'}
+                  onValueChange={(val) => {
+                    if (val !== 'none') onTemplateChange(val);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((tpl) => (
+                      <SelectItem key={tpl.id} value={tpl.id}>
+                        {tpl.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Message textarea — always editable */}
+            <div className="flex flex-col space-y-1">
               <Label className="text-xs">Mensagem</Label>
               <Textarea
+                ref={textareaRef}
                 value={body}
                 onChange={(e) => onBodyChange(e.target.value)}
                 placeholder="Mensagem WhatsApp"
-                className="min-h-[200px] flex-1 resize-none"
+                className="min-h-[150px] resize-none"
               />
+            </div>
+
+            {/* Variable insert bar */}
+            <VariableInsertBar onInsert={handleInsertVariable} disabled={isSending} />
+
+            {/* Preview — always visible below */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Eye className="h-3 w-3 text-[var(--muted-foreground)]" />
+                <Label className="text-xs">Preview</Label>
+              </div>
+              <div className="min-h-[80px] overflow-auto rounded-lg bg-[#dcf8c6] p-3 text-sm whitespace-pre-wrap dark:bg-[#025144] dark:text-[#e9edef]">
+                {renderedPreview || <span className="italic text-[var(--muted-foreground)]">Sem conteúdo</span>}
+              </div>
             </div>
           </div>
 

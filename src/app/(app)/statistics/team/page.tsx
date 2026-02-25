@@ -1,3 +1,5 @@
+import { requireAuth } from '@/lib/auth/require-auth';
+
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { fetchTeamAnalytics } from '@/features/statistics/actions/fetch-team-analytics';
 import { TeamAnalyticsView } from '@/features/statistics/components/TeamAnalyticsView';
@@ -7,6 +9,7 @@ interface PageProps {
 }
 
 export default async function TeamAnalyticsPage({ searchParams }: PageProps) {
+  await requireAuth();
   const params = await searchParams;
   const period = params.period ?? '30d';
 

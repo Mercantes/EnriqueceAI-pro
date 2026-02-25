@@ -42,7 +42,7 @@ export function UserMenu() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <a href="/settings" className="flex items-center gap-2">
+          <a href="/settings/profile" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             Meu Perfil
           </a>

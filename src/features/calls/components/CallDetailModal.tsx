@@ -142,22 +142,40 @@ export function CallDetailModal({ call, open, onClose, onUpdated }: CallDetailMo
 
         {activeCall && (
           <div className="flex-1 overflow-y-auto">
-            {/* Audio Player Placeholder */}
+            {/* Audio Player */}
             <div className="border-b px-6 py-4">
-              <div className="flex items-center gap-3 rounded-lg bg-[var(--muted)] p-4">
-                <Mic className="h-5 w-5 text-[var(--muted-foreground)]" />
-                <div className="flex-1">
-                  <div className="h-2 rounded-full bg-[var(--border)]">
-                    <div className="h-2 w-0 rounded-full bg-[var(--primary)]" />
+              {activeCall.recording_url ? (
+                <div className="space-y-2 rounded-lg bg-[var(--muted)] p-4">
+                  <div className="flex items-center gap-2">
+                    <Mic className="h-4 w-4 text-[var(--primary)]" />
+                    <span className="text-xs font-medium">Gravação da ligação</span>
+                    <span className="ml-auto text-sm tabular-nums text-[var(--muted-foreground)]">
+                      {formatDuration(activeCall.duration_seconds)}
+                    </span>
                   </div>
-                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                    Gravação não disponível — integração VoIP futura
-                  </p>
+                  <audio
+                    controls
+                    src={activeCall.recording_url}
+                    className="w-full h-10"
+                    preload="metadata"
+                  />
                 </div>
-                <span className="text-sm tabular-nums text-[var(--muted-foreground)]">
-                  {formatDuration(activeCall.duration_seconds)}
-                </span>
-              </div>
+              ) : (
+                <div className="flex items-center gap-3 rounded-lg bg-[var(--muted)] p-4">
+                  <Mic className="h-5 w-5 text-[var(--muted-foreground)]" />
+                  <div className="flex-1">
+                    <div className="h-2 rounded-full bg-[var(--border)]">
+                      <div className="h-2 w-0 rounded-full bg-[var(--primary)]" />
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                      Gravação não disponível
+                    </p>
+                  </div>
+                  <span className="text-sm tabular-nums text-[var(--muted-foreground)]">
+                    {formatDuration(activeCall.duration_seconds)}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Metadata */}

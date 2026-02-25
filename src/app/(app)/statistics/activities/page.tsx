@@ -1,3 +1,5 @@
+import { requireAuth } from '@/lib/auth/require-auth';
+
 import { fetchActivityAnalytics } from '@/features/statistics/actions/fetch-activity-analytics';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { ActivityAnalyticsView } from '@/features/statistics/components/ActivityAnalyticsView';
@@ -7,6 +9,7 @@ interface PageProps {
 }
 
 export default async function ActivityAnalyticsPage({ searchParams }: PageProps) {
+  await requireAuth();
   const params = await searchParams;
   const period = params.period ?? '30d';
   const userIds = params.user ? [params.user] : undefined;

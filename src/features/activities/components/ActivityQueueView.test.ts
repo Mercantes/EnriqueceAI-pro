@@ -43,6 +43,15 @@ const baseLead = {
   uf: null as string | null,
   porte: null as string | null,
   primeiro_nome: null as string | null,
+  socios: null,
+  endereco: null,
+  instagram: null as string | null,
+  linkedin: null as string | null,
+  website: null as string | null,
+  status: null,
+  enrichment_status: null,
+  notes: null as string | null,
+  fit_score: null as number | null,
 };
 
 function makeActivity(overrides: Partial<PendingActivity> = {}): PendingActivity {

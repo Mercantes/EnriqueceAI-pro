@@ -115,6 +115,7 @@ export function HeroWithForm() {
               width={48}
               height={48}
               className="rounded-full"
+              unoptimized
             />
             <span className="text-xl font-bold">Enriquece AI</span>
           </div>

@@ -49,15 +49,6 @@ function makeAssigneeChain(found: boolean) {
   return { select: selectMock };
 }
 
-function makeDuplicateCheckChain(existing: boolean) {
-  const maybeSingleMock = vi.fn().mockResolvedValue({ data: existing ? { id: 'existing-id' } : null });
-  const isMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
-  const eqCnpjMock = vi.fn().mockReturnValue({ is: isMock });
-  const eqOrgMock = vi.fn().mockReturnValue({ eq: eqCnpjMock });
-  const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
-  return { select: selectMock };
-}
-
 function makeInsertChain(leadId: string | null, error: { message: string } | null = null) {
   const singleMock = vi.fn().mockResolvedValue({
     data: leadId ? { id: leadId } : null,
@@ -72,7 +63,13 @@ const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
 const CADENCE_UUID = '660e8400-e29b-41d4-a716-446655440000';
 
 const validInput = {
-  cnpj: '11222333000181',
+  first_name: 'João',
+  last_name: 'Silva',
+  email: 'joao@empresa.com',
+  telefone: '11999999999',
+  empresa: 'Acme Ltda',
+  job_title: 'Gerente Comercial',
+  lead_source: 'cold_outbound',
   assigned_to: VALID_UUID,
 };
 
@@ -83,13 +80,12 @@ describe('createLead', () => {
     mockEnrichLeadAction.mockResolvedValue({ success: true, data: undefined });
   });
 
-  it('should create a lead with minimal fields', async () => {
+  it('should create a lead with all required fields', async () => {
     let callCount = 0;
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeAssigneeChain(true);
-      if (callCount === 3) return makeDuplicateCheckChain(false);
       return makeInsertChain('new-lead-id');
     });
 
@@ -110,7 +106,6 @@ describe('createLead', () => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeAssigneeChain(true);
-      if (callCount === 3) return makeDuplicateCheckChain(false);
       return makeInsertChain('new-lead-id');
     });
 
@@ -124,42 +119,34 @@ describe('createLead', () => {
     expect(mockEnrollLeads).toHaveBeenCalledWith(CADENCE_UUID, ['new-lead-id'], 'active');
   });
 
-  it('should enroll in cadence with paused mode', async () => {
+  it('should enroll with scheduled start and update next_step_due', async () => {
+    const scheduledDate = '2026-03-01T09:00:00.000Z';
     let callCount = 0;
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    });
+
     mockFrom.mockImplementation(() => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeAssigneeChain(true);
-      if (callCount === 3) return makeDuplicateCheckChain(false);
-      return makeInsertChain('new-lead-id');
+      if (callCount === 3) return makeInsertChain('new-lead-id');
+      // 4th call: update enrollment next_step_due
+      return { update: updateMock };
     });
 
     const result = await createLead({
       ...validInput,
       cadence_id: CADENCE_UUID,
-      enrollment_mode: 'paused',
+      enrollment_mode: 'scheduled',
+      scheduled_start: scheduledDate,
     });
 
     expect(result.success).toBe(true);
-    expect(mockEnrollLeads).toHaveBeenCalledWith(CADENCE_UUID, ['new-lead-id'], 'paused');
-  });
-
-  it('should return error for duplicate CNPJ', async () => {
-    let callCount = 0;
-    mockFrom.mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) return makeOrgMemberChain('org-1');
-      if (callCount === 2) return makeAssigneeChain(true);
-      return makeDuplicateCheckChain(true);
-    });
-
-    const result = await createLead(validInput);
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toBe('Já existe um lead com este CNPJ');
-      expect(result.code).toBe('DUPLICATE_CNPJ');
-    }
+    expect(mockEnrollLeads).toHaveBeenCalledWith(CADENCE_UUID, ['new-lead-id'], 'active');
+    expect(updateMock).toHaveBeenCalledWith({ next_step_due: scheduledDate });
   });
 
   it('should return error when org not found', async () => {
@@ -189,17 +176,8 @@ describe('createLead', () => {
     }
   });
 
-  it('should return error for invalid input (missing CNPJ)', async () => {
+  it('should return error for invalid input (missing required fields)', async () => {
     const result = await createLead({ assigned_to: VALID_UUID });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toBeTruthy();
-    }
-  });
-
-  it('should return error for invalid input (missing assigned_to)', async () => {
-    const result = await createLead({ cnpj: '11222333000181' });
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -215,7 +193,6 @@ describe('createLead', () => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeAssigneeChain(true);
-      if (callCount === 3) return makeDuplicateCheckChain(false);
       return makeInsertChain('new-lead-id');
     });
 
@@ -235,7 +212,6 @@ describe('createLead', () => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeAssigneeChain(true);
-      if (callCount === 3) return makeDuplicateCheckChain(false);
       return makeInsertChain('new-lead-id');
     });
 
@@ -250,7 +226,6 @@ describe('createLead', () => {
       callCount++;
       if (callCount === 1) return makeOrgMemberChain('org-1');
       if (callCount === 2) return makeAssigneeChain(true);
-      if (callCount === 3) return makeDuplicateCheckChain(false);
       return makeInsertChain(null, { message: 'Insert failed' });
     });
 
@@ -260,5 +235,19 @@ describe('createLead', () => {
     if (!result.success) {
       expect(result.error).toBe('Erro ao criar lead');
     }
+  });
+
+  it('should pass is_inbound flag through', async () => {
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return makeOrgMemberChain('org-1');
+      if (callCount === 2) return makeAssigneeChain(true);
+      return makeInsertChain('new-lead-id');
+    });
+
+    const result = await createLead({ ...validInput, is_inbound: true });
+
+    expect(result.success).toBe(true);
   });
 });

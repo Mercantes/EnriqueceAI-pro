@@ -9,13 +9,13 @@ import { Button } from '@/shared/components/ui/button';
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
   SheetTitle,
 } from '@/shared/components/ui/sheet';
 
 import { executeActivity } from '../actions/execute-activity';
 import { skipActivity } from '../actions/skip-activity';
 import type { PendingActivity } from '../types';
+import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 
 import { ActivityLeadContext } from './ActivityLeadContext';
 import { ActivityExecutionSheetContent } from './ActivityExecutionSheetContent';
@@ -50,16 +50,17 @@ export function ActivityExecutionSheet({
     }
   }
 
-  const handleSend = (subject: string, body: string, aiGenerated: boolean) => {
+  const handleSend = (subject: string, body: string, aiGenerated: boolean, phone?: string) => {
     if (!activity || !activity.cadenceCreatedBy) {
       toast.error('Cadência sem usuário criador — não é possível enviar');
       return;
     }
 
     const isWhatsApp = activity.channel === 'whatsapp';
-    const to = isWhatsApp
-      ? (activity.lead.telefone ?? '')
-      : (activity.lead.email ?? '');
+    const to = phone
+      ?? (isWhatsApp
+        ? (resolveWhatsAppPhone(activity.lead)?.formatted ?? '')
+        : (activity.lead.email ?? ''));
 
     startSendTransition(async () => {
       const result = await executeActivity({
@@ -135,49 +136,13 @@ export function ActivityExecutionSheet({
   return (
     <Sheet open={selectedIndex !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="sm:max-w-full w-full p-0 flex flex-col" showCloseButton={false}>
-        {/* Header with navigation */}
-        <SheetHeader className="flex-row items-center justify-between border-b border-[var(--border)] px-6 py-4 space-y-0">
-          <SheetTitle className="text-base font-semibold">
-            Executar Atividade
-          </SheetTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              disabled={!hasPrev}
-              onClick={() => selectedIndex !== null && onNavigate(selectedIndex - 1)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm tabular-nums text-[var(--muted-foreground)]">
-              {selectedIndex !== null ? selectedIndex + 1 : 0} de {activities.length}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              disabled={!hasNext}
-              onClick={() => selectedIndex !== null && onNavigate(selectedIndex + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-2 h-8 w-8"
-              onClick={onClose}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </SheetHeader>
+        <SheetTitle className="sr-only">Executar Atividade</SheetTitle>
 
         {/* Split layout — key forces remount when activity changes */}
         {activity && (
           <div className="flex flex-1 overflow-hidden">
             {/* Left — Lead Context with tabs */}
-            <div className="w-[380px] shrink-0 border-r border-[var(--border)] overflow-y-auto p-5">
+            <div className="w-[400px] shrink-0 border-r border-[var(--border)] overflow-y-auto p-4">
               <ActivityLeadContext
                 lead={activity.lead}
                 cadenceName={activity.cadenceName}
@@ -187,7 +152,40 @@ export function ActivityExecutionSheet({
             </div>
 
             {/* Right — Activity panel (adapts by type) */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="relative flex-1 overflow-y-auto p-6">
+              {/* Navigation controls — centered, close button pinned right */}
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={!hasPrev}
+                  onClick={() => selectedIndex !== null && onNavigate(selectedIndex - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm tabular-nums text-[var(--muted-foreground)]">
+                  {selectedIndex !== null ? selectedIndex + 1 : 0} de {activities.length}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={!hasNext}
+                  onClick={() => selectedIndex !== null && onNavigate(selectedIndex + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-3 right-3 z-10 h-8 w-8"
+                onClick={onClose}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+
               <ActivityExecutionSheetContent
                 key={activity.enrollmentId}
                 activity={activity}

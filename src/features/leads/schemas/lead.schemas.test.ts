@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import { cnpjSchema, createLeadSchema, leadFiltersSchema } from './lead.schemas';
 
+const validUserId = '550e8400-e29b-41d4-a716-446655440000';
+const validCadenceId = '660e8400-e29b-41d4-a716-446655440000';
+
+const validInput = {
+  first_name: 'João',
+  last_name: 'Silva',
+  email: 'joao@empresa.com',
+  telefone: '11999999999',
+  empresa: 'Acme Ltda',
+  job_title: 'Gerente Comercial',
+  lead_source: 'cold_outbound',
+  assigned_to: validUserId,
+};
+
 describe('lead schemas', () => {
   describe('cnpjSchema', () => {
     it('should accept a valid CNPJ', () => {
@@ -28,62 +42,112 @@ describe('lead schemas', () => {
   });
 
   describe('createLeadSchema', () => {
-    const validUserId = '550e8400-e29b-41d4-a716-446655440000';
-
-    it('should accept valid input with only CNPJ and assigned_to', () => {
-      const result = createLeadSchema.safeParse({
-        cnpj: '11222333000181',
-        assigned_to: validUserId,
-      });
+    it('should accept valid input with all required fields', () => {
+      const result = createLeadSchema.safeParse(validInput);
       expect(result.success).toBe(true);
     });
 
-    it('should accept valid input with all fields', () => {
+    it('should accept valid input with cadence and scheduling', () => {
       const result = createLeadSchema.safeParse({
-        cnpj: '11.222.333/0001-81',
-        razao_social: 'Test Company Ltda',
-        nome_fantasia: 'TestCo',
-        email: 'contato@empresa.com',
-        telefone: '11999999999',
-        assigned_to: validUserId,
-        cadence_id: '660e8400-e29b-41d4-a716-446655440000',
-        enrollment_mode: 'paused',
+        ...validInput,
+        cadence_id: validCadenceId,
+        enrollment_mode: 'scheduled',
+        scheduled_start: '2026-03-01T09:00:00.000Z',
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.cnpj).toBe('11222333000181');
-        expect(result.data.enrollment_mode).toBe('paused');
+        expect(result.data.enrollment_mode).toBe('scheduled');
+        expect(result.data.scheduled_start).toBe('2026-03-01T09:00:00.000Z');
       }
     });
 
-    it('should reject without CNPJ', () => {
-      const result = createLeadSchema.safeParse({ assigned_to: validUserId });
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject without assigned_to', () => {
-      const result = createLeadSchema.safeParse({ cnpj: '11222333000181' });
-      expect(result.success).toBe(false);
-    });
-
     it('should default enrollment_mode to immediate', () => {
-      const result = createLeadSchema.safeParse({
-        cnpj: '11222333000181',
-        assigned_to: validUserId,
-      });
+      const result = createLeadSchema.safeParse(validInput);
       expect(result.success).toBe(true);
       if (result.success) expect(result.data.enrollment_mode).toBe('immediate');
     });
 
-    it('should accept empty string for optional email and telefone', () => {
-      const result = createLeadSchema.safeParse({
-        cnpj: '11222333000181',
-        assigned_to: validUserId,
-        email: '',
-        telefone: '',
-        cadence_id: '',
-      });
+    it('should default is_inbound to false', () => {
+      const result = createLeadSchema.safeParse(validInput);
       expect(result.success).toBe(true);
+      if (result.success) expect(result.data.is_inbound).toBe(false);
+    });
+
+    it('should accept is_inbound true', () => {
+      const result = createLeadSchema.safeParse({ ...validInput, is_inbound: true });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.is_inbound).toBe(true);
+    });
+
+    it('should reject without first_name', () => {
+      const { first_name: _, ...rest } = validInput;
+      const result = createLeadSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject without last_name', () => {
+      const { last_name: _, ...rest } = validInput;
+      const result = createLeadSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject without email', () => {
+      const { email: _, ...rest } = validInput;
+      const result = createLeadSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject invalid email', () => {
+      const result = createLeadSchema.safeParse({ ...validInput, email: 'not-email' });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject without telefone', () => {
+      const { telefone: _, ...rest } = validInput;
+      const result = createLeadSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject without empresa', () => {
+      const { empresa: _, ...rest } = validInput;
+      const result = createLeadSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject without job_title', () => {
+      const { job_title: _, ...rest } = validInput;
+      const result = createLeadSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject without lead_source', () => {
+      const { lead_source: _, ...rest } = validInput;
+      const result = createLeadSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject invalid lead_source value', () => {
+      const result = createLeadSchema.safeParse({ ...validInput, lead_source: 'invalid_source' });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject without assigned_to', () => {
+      const { assigned_to: _, ...rest } = validInput;
+      const result = createLeadSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
+
+    it('should accept empty string for optional cadence_id', () => {
+      const result = createLeadSchema.safeParse({ ...validInput, cadence_id: '' });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept all valid lead_source values', () => {
+      const sources = ['cold_outbound', 'inbound_marketing', 'indicacao', 'linkedin', 'evento', 'site', 'outro'];
+      for (const source of sources) {
+        const result = createLeadSchema.safeParse({ ...validInput, lead_source: source });
+        expect(result.success).toBe(true);
+      }
     });
   });
 

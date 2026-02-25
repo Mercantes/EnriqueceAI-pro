@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Radio, UserRound } from 'lucide-react';
+import { Briefcase, CalendarClock, Loader2, Radio, Search, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
+import { Checkbox } from '@/shared/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import {
 } from '@/shared/components/ui/select';
 import { Separator } from '@/shared/components/ui/separator';
 
+import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import { createLead } from '../actions/create-lead';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
 import { fetchOrgMembersAuth, type OrgMemberOption } from '../actions/fetch-org-members';
@@ -43,14 +45,18 @@ interface CreateLeadDialogProps {
 }
 
 const INITIAL_FORM = {
-  cnpj: '',
-  razao_social: '',
-  nome_fantasia: '',
+  first_name: '',
+  last_name: '',
   email: '',
   telefone: '',
+  empresa: '',
+  job_title: '',
+  lead_source: '',
+  is_inbound: false,
   assigned_to: '',
   cadence_id: '',
-  enrollment_mode: 'immediate' as 'immediate' | 'paused',
+  enrollment_mode: 'immediate' as 'immediate' | 'scheduled',
+  scheduled_start: '',
 };
 
 export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLeadDialogProps) {
@@ -62,6 +68,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
   const [members, setMembers] = useState<OrgMemberOption[]>([]);
   const [cadences, setCadences] = useState<ActiveCadence[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [cadenceSearch, setCadenceSearch] = useState('');
 
   const isLoading = open && !loaded;
 
@@ -84,8 +91,15 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
     };
   }, [open, loaded]);
 
+  const filteredCadences = useMemo(() => {
+    if (!cadenceSearch) return cadences;
+    const q = cadenceSearch.toLowerCase();
+    return cadences.filter((c) => c.name.toLowerCase().includes(q));
+  }, [cadences, cadenceSearch]);
+
   const resetForm = useCallback(() => {
     setForm({ ...INITIAL_FORM, assigned_to: currentUserId });
+    setCadenceSearch('');
   }, [currentUserId]);
 
   function handleOpenChange(value: boolean) {
@@ -94,21 +108,41 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
   }
 
   const hasCadence = form.cadence_id !== '';
-  const isFormValid = form.cnpj.trim() !== '' && form.assigned_to !== '';
+  const isScheduled = form.enrollment_mode === 'scheduled';
+
+  const isFormValid =
+    form.first_name.trim() !== '' &&
+    form.last_name.trim() !== '' &&
+    form.email.trim() !== '' &&
+    form.telefone.trim() !== '' &&
+    form.empresa.trim() !== '' &&
+    form.job_title.trim() !== '' &&
+    form.lead_source !== '' &&
+    form.assigned_to !== '' &&
+    (!isScheduled || !hasCadence || form.scheduled_start !== '');
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      const result = await createLead({
-        cnpj: form.cnpj,
-        razao_social: form.razao_social || undefined,
-        nome_fantasia: form.nome_fantasia || undefined,
-        email: form.email || undefined,
-        telefone: form.telefone || undefined,
+      const payload: Record<string, unknown> = {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        email: form.email,
+        telefone: form.telefone,
+        empresa: form.empresa,
+        job_title: form.job_title,
+        lead_source: form.lead_source,
+        is_inbound: form.is_inbound,
         assigned_to: form.assigned_to,
         cadence_id: form.cadence_id || undefined,
         enrollment_mode: form.enrollment_mode,
-      });
+      };
+
+      if (form.enrollment_mode === 'scheduled' && form.scheduled_start) {
+        payload.scheduled_start = new Date(form.scheduled_start).toISOString();
+      }
+
+      const result = await createLead(payload);
 
       if (result.success) {
         toast.success('Lead criado com sucesso');
@@ -126,7 +160,7 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
         <DialogHeader>
           <DialogTitle>Adicionar Lead</DialogTitle>
           <DialogDescription>
-            Preencha os dados do lead e configure a entrada na cadência.
+            Cadastre o lead e configure a entrada na cadência.
           </DialogDescription>
         </DialogHeader>
 
@@ -136,18 +170,27 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* SECTION 1: CONFIGURAÇÕES DE ENTRADA */}
+            {/* SECTION 1: CONFIGURACOES DE ENTRADA */}
             <div>
               <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                 Configurações de Entrada
               </h3>
               <div className="space-y-4">
-                {/* Modo de início */}
+                {/* Inbound flag */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={form.is_inbound}
+                    onCheckedChange={(v) => setForm({ ...form, is_inbound: v === true })}
+                  />
+                  <span className="text-sm font-medium">Lead inbound</span>
+                </label>
+
+                {/* Modo de inicio */}
                 <div className="space-y-3">
                   <RadioGroup
                     value={form.enrollment_mode}
                     onValueChange={(v) =>
-                      setForm({ ...form, enrollment_mode: v as 'immediate' | 'paused' })
+                      setForm({ ...form, enrollment_mode: v as 'immediate' | 'scheduled' })
                     }
                     className={!hasCadence ? 'opacity-50 pointer-events-none' : ''}
                   >
@@ -165,22 +208,38 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                         </div>
                       </label>
                       <label
-                        htmlFor="mode-paused"
+                        htmlFor="mode-scheduled"
                         className="flex cursor-pointer items-start gap-3"
                       >
-                        <RadioGroupItem value="paused" id="mode-paused" className="mt-0.5" />
+                        <RadioGroupItem value="scheduled" id="mode-scheduled" className="mt-0.5" />
                         <div>
-                          <span className="text-sm font-medium">Aguardar início</span>
+                          <span className="text-sm font-medium">Agendar início</span>
                           <p className="text-xs text-[var(--muted-foreground)]">
-                            O vendedor receberá esse lead ao iniciar a prospecção.
+                            O lead entrará na cadência na data e hora escolhidas.
                           </p>
                         </div>
                       </label>
                     </div>
                   </RadioGroup>
+
+                  {/* Date/time picker for scheduled start */}
+                  {hasCadence && isScheduled && (
+                    <div className="ml-7 space-y-2">
+                      <Label className="flex items-center gap-1.5">
+                        <CalendarClock className="h-4 w-4 text-[var(--muted-foreground)]" />
+                        Data e hora de início
+                      </Label>
+                      <Input
+                        type="datetime-local"
+                        value={form.scheduled_start}
+                        onChange={(e) => setForm({ ...form, scheduled_start: e.target.value })}
+                        min={new Date().toISOString().slice(0, 16)}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {/* Responsável + Cadência */}
+                {/* Responsavel + Cadencia */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-1.5">
@@ -211,16 +270,29 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                     </Label>
                     <Select
                       value={form.cadence_id || 'none'}
-                      onValueChange={(v) =>
-                        setForm({ ...form, cadence_id: v === 'none' ? '' : v })
-                      }
+                      onValueChange={(v) => {
+                        setForm({ ...form, cadence_id: v === 'none' ? '' : v });
+                        setCadenceSearch('');
+                      }}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Sem cadência (opcional)" />
                       </SelectTrigger>
                       <SelectContent>
+                        <div className="px-2 pb-2">
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                            <input
+                              className="w-full rounded-md border border-[var(--border)] bg-transparent py-1.5 pl-7 pr-2 text-sm outline-none placeholder:text-[var(--muted-foreground)]"
+                              placeholder="Buscar cadência..."
+                              value={cadenceSearch}
+                              onChange={(e) => setCadenceSearch(e.target.value)}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
                         <SelectItem value="none">Sem cadência</SelectItem>
-                        {cadences.map((c) => (
+                        {filteredCadences.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.name} ({c.total_steps} {c.total_steps === 1 ? 'passo' : 'passos'})
                           </SelectItem>
@@ -234,41 +306,36 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
 
             <Separator />
 
-            {/* SECTION 2: INFORMAÇÕES DO LEAD */}
+            {/* SECTION 2: INFORMACOES DO LEAD */}
             <div>
               <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                 Informações do Lead
               </h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <Label htmlFor="create-cnpj">
-                    CNPJ <span className="text-red-500">*</span>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-first-name">
+                    Primeiro nome <span className="text-red-500">*</span>
                   </Label>
                   <Input
-                    id="create-cnpj"
-                    placeholder="00.000.000/0000-00"
-                    value={form.cnpj}
-                    onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
+                    id="create-first-name"
+                    value={form.first_name}
+                    onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="create-razao">Razão Social</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-last-name">
+                    Sobrenome <span className="text-red-500">*</span>
+                  </Label>
                   <Input
-                    id="create-razao"
-                    value={form.razao_social}
-                    onChange={(e) => setForm({ ...form, razao_social: e.target.value })}
+                    id="create-last-name"
+                    value={form.last_name}
+                    onChange={(e) => setForm({ ...form, last_name: e.target.value })}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="create-fantasia">Nome Fantasia</Label>
-                  <Input
-                    id="create-fantasia"
-                    value={form.nome_fantasia}
-                    onChange={(e) => setForm({ ...form, nome_fantasia: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="create-email">Email</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-email">
+                    Email <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="create-email"
                     type="email"
@@ -277,14 +344,57 @@ export function CreateLeadDialog({ open, onOpenChange, currentUserId }: CreateLe
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="create-telefone">Telefone</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-telefone">
+                    Telefone <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="create-telefone"
                     placeholder="(11) 99999-9999"
                     value={form.telefone}
                     onChange={(e) => setForm({ ...form, telefone: e.target.value })}
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-empresa">
+                    Empresa <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="create-empresa"
+                    value={form.empresa}
+                    onChange={(e) => setForm({ ...form, empresa: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-job-title" className="flex items-center gap-1.5">
+                    <Briefcase className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                    Cargo <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="create-job-title"
+                    value={form.job_title}
+                    onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>
+                    Fonte do lead <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.lead_source || 'none'}
+                    onValueChange={(v) => setForm({ ...form, lead_source: v === 'none' ? '' : v })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecione a fonte" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LEAD_SOURCE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

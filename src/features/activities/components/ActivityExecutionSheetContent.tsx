@@ -1,10 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { toast } from 'sonner';
 
+import { buildLeadTemplateVariables } from '@/features/cadences/utils/build-template-variables';
+import { renderTemplate } from '@/features/cadences/utils/render-template';
+import { fetchVendorVariables } from '@/features/cadences/actions/fetch-vendor-variables';
+
 import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepare-activity-email';
+import { fetchWhatsAppTemplates, type WhatsAppTemplateOption } from '../actions/fetch-whatsapp-templates';
+import { resolveWhatsAppPhone, getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity } from '../types';
 
 import { ActivityEmailCompose } from './ActivityEmailCompose';
@@ -16,7 +22,7 @@ import { ActivityWhatsAppCompose } from './ActivityWhatsAppCompose';
 interface ActivityExecutionSheetContentProps {
   activity: PendingActivity;
   isSending: boolean;
-  onSend: (subject: string, body: string, aiGenerated: boolean) => void;
+  onSend: (subject: string, body: string, aiGenerated: boolean, phone?: string) => void;
   onSkip: () => void;
   onMarkDone: (notes: string) => void;
 }
@@ -32,11 +38,23 @@ export function ActivityExecutionSheetContent({
   const [subject, setSubject] = useState(activity.templateSubject ?? '');
   const [body, setBody] = useState(activity.templateBody ?? '');
   const [aiPersonalized, setAiPersonalized] = useState(false);
+
+  // Phone resolution for WhatsApp
+  const phones = activity.channel === 'whatsapp' ? getAllLeadPhones(activity.lead) : [];
+  const defaultPhone = activity.channel === 'whatsapp'
+    ? (resolveWhatsAppPhone(activity.lead)?.formatted ?? '')
+    : '';
+
   const [to, setTo] = useState(
     activity.channel === 'whatsapp'
-      ? (activity.lead.telefone ?? '')
+      ? defaultPhone
       : (activity.lead.email ?? ''),
   );
+
+  // WhatsApp templates
+  const [waTemplates, setWaTemplates] = useState<WhatsAppTemplateOption[]>([]);
+  const [currentTemplateId, setCurrentTemplateId] = useState<string | null>(activity.templateId);
+  const [vendorVars, setVendorVars] = useState<Record<string, string | null>>({});
 
   const leadName = activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj;
 
@@ -44,7 +62,19 @@ export function ActivityExecutionSheetContent({
   useEffect(() => {
     let cancelled = false;
 
+    // Fetch vendor variables for client-side template rendering
+    fetchVendorVariables().then((r) => {
+      if (!cancelled && r.success) setVendorVars({ ...r.data });
+    });
+
     if (activity.channel === 'whatsapp') {
+      // Fetch templates in parallel with preparing the message
+      fetchWhatsAppTemplates().then((result) => {
+        if (!cancelled && result.success) {
+          setWaTemplates(result.data);
+        }
+      });
+
       prepareActivityWhatsApp({
         lead: activity.lead,
         templateSubject: activity.templateSubject,
@@ -94,6 +124,28 @@ export function ActivityExecutionSheetContent({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activity.enrollmentId]);
 
+  // Compute template variables (lead + vendor)
+  const templateVariables = useMemo(
+    () => ({ ...buildLeadTemplateVariables(activity.lead), ...vendorVars }),
+    [activity.lead, vendorVars],
+  );
+
+  // Compute rendered preview by resolving any {{variables}} in the body
+  const renderedPreview = useMemo(
+    () => renderTemplate(body, templateVariables),
+    [body, templateVariables],
+  );
+
+  function handleTemplateChange(templateId: string) {
+    const tpl = waTemplates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    setCurrentTemplateId(templateId);
+
+    // Set raw template body (with {{variables}}) — preview will render them
+    setBody(tpl.body);
+    setAiPersonalized(false);
+  }
+
   // LinkedIn / Social Point
   if (activity.channel === 'linkedin') {
     return (
@@ -137,11 +189,17 @@ export function ActivityExecutionSheetContent({
       <ActivityWhatsAppCompose
         to={to}
         body={body}
+        renderedPreview={renderedPreview}
         aiPersonalized={aiPersonalized}
         isLoading={isLoading}
         isSending={isSending}
+        phones={phones}
+        templates={waTemplates}
+        currentTemplateId={currentTemplateId}
+        onPhoneChange={setTo}
         onBodyChange={setBody}
-        onSend={() => onSend('', body, aiPersonalized)}
+        onTemplateChange={handleTemplateChange}
+        onSend={() => onSend('', renderedPreview, aiPersonalized, to)}
         onSkip={onSkip}
       />
     );

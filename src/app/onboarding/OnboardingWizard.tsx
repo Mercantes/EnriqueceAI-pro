@@ -78,7 +78,7 @@ export function OnboardingWizard() {
         {step === 0 && (
           <div className="space-y-6">
             <div className="text-center">
-              <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={48} height={48} className="mx-auto rounded-full" />
+              <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={48} height={48} className="mx-auto rounded-full" unoptimized />
               <h1 className="mt-4 text-2xl font-bold">Bem-vindo ao Enriquece AI!</h1>
               <p className="mt-2 text-sm text-[var(--muted-foreground)]">
                 Primeiro, como se chama sua empresa?

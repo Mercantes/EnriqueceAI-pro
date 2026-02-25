@@ -83,6 +83,14 @@ export async function saveApi4ComConfig(
     }
   }
 
+  // Auto-register webhook for call events (best-effort, don't block on failure)
+  try {
+    const { registerApi4ComWebhook } = await import('./register-api4com-webhook');
+    await registerApi4ComWebhook();
+  } catch (err) {
+    console.warn('[api4com] Webhook registration failed (non-blocking):', err);
+  }
+
   revalidatePath('/settings/integrations');
   return { success: true, data: undefined };
 }

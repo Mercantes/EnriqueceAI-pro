@@ -5,11 +5,30 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
+import type { EnrichmentStatus, LeadAddress, LeadSocio, LeadStatus } from '@/features/leads/types';
 
-import type { ActivityLead, PendingActivity } from '../types';
+import type { PendingActivity } from '../types';
 
-interface RawLead extends Omit<ActivityLead, 'primeiro_nome'> {
-  socios: Array<{ nome: string }> | null;
+interface RawLead {
+  id: string;
+  org_id: string;
+  nome_fantasia: string | null;
+  razao_social: string | null;
+  cnpj: string;
+  email: string | null;
+  telefone: string | null;
+  municipio: string | null;
+  uf: string | null;
+  porte: string | null;
+  socios: LeadSocio[] | null;
+  endereco: LeadAddress | null;
+  instagram: string | null;
+  linkedin: string | null;
+  website: string | null;
+  status: LeadStatus | null;
+  enrichment_status: EnrichmentStatus | null;
+  notes: string | null;
+  fit_score: number | null;
 }
 
 interface EnrollmentRow {

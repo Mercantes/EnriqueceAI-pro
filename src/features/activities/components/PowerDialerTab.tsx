@@ -15,8 +15,12 @@ import {
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import { completeDialerCall } from '../actions/complete-dialer-call';
+import {
+  initiateApi4ComCall,
+  hangupApi4ComCall,
+} from '@/features/calls/actions/initiate-api4com-call';
 
-import { DialerCallPanel } from './DialerCallPanel';
+import { DialerCallPanel, type CallState } from './DialerCallPanel';
 import { DialerProgressBar } from './DialerProgressBar';
 import { DialerQueueList, type DialerItemStatus } from './DialerQueueList';
 
@@ -30,6 +34,10 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
   const [isActive, setIsActive] = useState(false);
   const [itemStatuses, setItemStatuses] = useState<Map<string, DialerItemStatus>>(new Map());
   const [isPending, startTransition] = useTransition();
+
+  // API4COM call state
+  const [callState, setCallState] = useState<CallState>('idle');
+  const [api4comCallId, setApi4comCallId] = useState<string | null>(null);
 
   const completedCount = [...itemStatuses.values()].filter((s) => s === 'completed').length;
   const skippedCount = [...itemStatuses.values()].filter((s) => s === 'skipped').length;
@@ -47,6 +55,11 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
     },
     [queue],
   );
+
+  function resetCallState() {
+    setCallState('idle');
+    setApi4comCallId(null);
+  }
 
   function handleStart() {
     setIsActive(true);
@@ -66,6 +79,7 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
     const newStatuses = new Map(itemStatuses);
     newStatuses.set(currentItem.enrollmentId, 'skipped');
     setItemStatuses(newStatuses);
+    resetCallState();
 
     const next = findNextPending(currentIndex, newStatuses);
     if (next >= 0) {
@@ -76,7 +90,46 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
     }
   }
 
-  function handleComplete(callStatus: string, notes: string) {
+  function handleInitiateCall() {
+    if (!currentItem?.phone) return;
+
+    startTransition(async () => {
+      setCallState('calling');
+
+      const result = await initiateApi4ComCall({
+        phone: currentItem.phone ?? '',
+        leadId: currentItem.leadId,
+      });
+
+      if (!result.success) {
+        toast.error(result.error);
+        setCallState('idle');
+        return;
+      }
+
+      setApi4comCallId(result.data.api4comId);
+      // Transition to connected — API4COM rings the ramal first, then the lead
+      // We consider "connected" once the API accepted the call
+      setCallState('connected');
+    });
+  }
+
+  function handleHangup() {
+    if (!api4comCallId) {
+      setCallState('ended');
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await hangupApi4ComCall(api4comCallId);
+      if (!result.success) {
+        toast.error(result.error);
+      }
+      setCallState('ended');
+    });
+  }
+
+  function handleComplete(callStatus: string, notes: string, durationSeconds: number) {
     if (!currentItem) return;
 
     startTransition(async () => {
@@ -88,6 +141,7 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
         phone: currentItem.phone ?? '',
         callStatus,
         notes,
+        durationSeconds,
       });
 
       if (!result.success) {
@@ -98,6 +152,7 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
       const newStatuses = new Map(itemStatuses);
       newStatuses.set(currentItem.enrollmentId, 'completed');
       setItemStatuses(newStatuses);
+      resetCallState();
 
       const next = findNextPending(currentIndex, newStatuses);
       if (next >= 0) {
@@ -111,6 +166,7 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
 
   function handleSelectIndex(index: number) {
     setCurrentIndex(index);
+    resetCallState();
     if (!isActive) setIsActive(true);
   }
 
@@ -197,8 +253,11 @@ export function PowerDialerTab({ initialQueue }: PowerDialerTabProps) {
               <DialerCallPanel
                 item={currentItem}
                 isSending={isPending}
+                callState={callState}
                 onComplete={handleComplete}
                 onSkip={handleSkip}
+                onInitiateCall={handleInitiateCall}
+                onHangup={handleHangup}
               />
             </div>
           ) : (

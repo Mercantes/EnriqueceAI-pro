@@ -18,6 +18,7 @@ export interface CallRow {
   recording_url: string | null;
   notes: string | null;
   is_important: boolean;
+  metadata: Record<string, string> | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,6 +47,7 @@ export interface CallInsert {
   recording_url?: string | null;
   notes?: string | null;
   is_important?: boolean;
+  metadata?: Record<string, string> | null;
 }
 
 // Call with detail (for modal)

@@ -4,9 +4,13 @@ import type { LeadRow, LeadAddress, LeadSocio, LeadStatus, EnrichmentStatus } fr
 
 export interface LeadInfoPanelData {
   id: string;
-  cnpj: string;
+  cnpj: string | null;
   nome_fantasia: string | null;
   razao_social: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  job_title: string | null;
+  lead_source: string | null;
   email: string | null;
   telefone: string | null;
   porte: string | null;
@@ -30,6 +34,10 @@ export function leadRowToInfoPanelData(lead: LeadRow): LeadInfoPanelData {
     cnpj: lead.cnpj,
     nome_fantasia: lead.nome_fantasia,
     razao_social: lead.razao_social,
+    first_name: lead.first_name,
+    last_name: lead.last_name,
+    job_title: lead.job_title,
+    lead_source: lead.lead_source,
     email: lead.email,
     telefone: lead.telefone,
     porte: lead.porte,
@@ -54,20 +62,24 @@ export function activityLeadToInfoPanelData(lead: ActivityLead): LeadInfoPanelDa
     cnpj: lead.cnpj,
     nome_fantasia: lead.nome_fantasia,
     razao_social: lead.razao_social,
+    first_name: (lead as ActivityLead & { first_name?: string | null }).first_name ?? null,
+    last_name: (lead as ActivityLead & { last_name?: string | null }).last_name ?? null,
+    job_title: (lead as ActivityLead & { job_title?: string | null }).job_title ?? null,
+    lead_source: (lead as ActivityLead & { lead_source?: string | null }).lead_source ?? null,
     email: lead.email,
     telefone: lead.telefone,
     porte: lead.porte,
     cnae: null,
     situacao_cadastral: null,
     faturamento_estimado: null,
-    endereco: lead.municipio || lead.uf ? { cidade: lead.municipio ?? undefined, uf: lead.uf ?? undefined } : null,
-    socios: null,
-    fit_score: null,
-    status: null,
-    enrichment_status: null,
-    notes: null,
-    instagram: null,
-    linkedin: null,
-    website: null,
+    endereco: lead.endereco ?? (lead.municipio || lead.uf ? { cidade: lead.municipio ?? undefined, uf: lead.uf ?? undefined } : null),
+    socios: lead.socios,
+    fit_score: lead.fit_score,
+    status: lead.status,
+    enrichment_status: lead.enrichment_status,
+    notes: lead.notes,
+    instagram: lead.instagram,
+    linkedin: lead.linkedin,
+    website: lead.website,
   };
 }

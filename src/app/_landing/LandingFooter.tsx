@@ -11,6 +11,7 @@ export function LandingFooter() {
             width={24}
             height={24}
             className="rounded-full"
+            unoptimized
           />
           <span className="text-sm font-medium">Enriquece AI</span>
         </div>

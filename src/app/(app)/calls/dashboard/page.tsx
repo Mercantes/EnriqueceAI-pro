@@ -1,3 +1,5 @@
+import { requireAuth } from '@/lib/auth/require-auth';
+
 import { fetchCallDashboard } from '@/features/statistics/actions/fetch-call-dashboard';
 import { fetchOrgMembers } from '@/features/statistics/actions/shared';
 import { CallDashboardView } from '@/features/statistics/components/CallDashboardView';
@@ -7,6 +9,7 @@ interface PageProps {
 }
 
 export default async function CallDashboardPage({ searchParams }: PageProps) {
+  await requireAuth();
   const params = await searchParams;
   const period = params.period ?? '30d';
   const userIds = params.user ? [params.user] : undefined;

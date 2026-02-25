@@ -67,6 +67,23 @@ export interface CadenceMetrics {
   bounced: number;
 }
 
+// Auto email cadence metrics (inline table)
+export interface AutoEmailCadenceMetrics {
+  cadenceId: string;
+  active: number;
+  paused: number;
+  completed: number;
+  replied: number;
+  bounced: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  failed: number;
+  meetings: number;
+  replyRate: number;
+  openRate: number;
+}
+
 // Interaction timeline entry
 export interface TimelineEntry {
   id: string;

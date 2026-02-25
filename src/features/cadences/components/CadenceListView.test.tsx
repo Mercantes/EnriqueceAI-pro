@@ -48,8 +48,7 @@ describe('CadenceListView', () => {
         tabCounts={defaultTabCounts}
       />,
     );
-    expect(screen.getByText('Cadências')).toBeInTheDocument();
-    expect(screen.getByText('Exibindo 1 cadência')).toBeInTheDocument();
+    expect(screen.getByText(/Exibindo 1 cadência/)).toBeInTheDocument();
   });
 
   it('should show plural count for multiple cadences', () => {
@@ -62,7 +61,7 @@ describe('CadenceListView', () => {
         tabCounts={defaultTabCounts}
       />,
     );
-    expect(screen.getByText('Exibindo 2 cadências')).toBeInTheDocument();
+    expect(screen.getByText(/Exibindo todas as 2 cadências/)).toBeInTheDocument();
   });
 
   it('should render cadence card with name', () => {
@@ -156,7 +155,7 @@ describe('CadenceListView', () => {
     expect(screen.getByText('Nenhuma cadência encontrada')).toBeInTheDocument();
   });
 
-  it('should show "Nova Cadência" button', () => {
+  it('should show "Criar nova" button', () => {
     render(
       <CadenceListView
         cadences={[createCadence()]}
@@ -166,7 +165,7 @@ describe('CadenceListView', () => {
         tabCounts={defaultTabCounts}
       />,
     );
-    expect(screen.getByText('Nova Cadência')).toBeInTheDocument();
+    expect(screen.getByText('Criar nova')).toBeInTheDocument();
   });
 
   it('should render tabs with badge counts', () => {
@@ -208,7 +207,8 @@ describe('CadenceListView', () => {
         tabCounts={defaultTabCounts}
       />,
     );
-    expect(screen.getByText('Todas prioridades')).toBeInTheDocument();
+    // Priority filter select renders with compact "Todas" default
+    expect(screen.getAllByText('Todas').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should render origin filter select', () => {
@@ -221,7 +221,8 @@ describe('CadenceListView', () => {
         tabCounts={defaultTabCounts}
       />,
     );
-    expect(screen.getByText('Todas origens')).toBeInTheDocument();
+    // Origin filter select also renders with compact "Todas" default
+    expect(screen.getAllByText('Todas').length).toBeGreaterThanOrEqual(2);
   });
 
   it('should render search input with search icon', () => {
@@ -260,6 +261,6 @@ describe('CadenceListView', () => {
         tabCounts={defaultTabCounts}
       />,
     );
-    expect(screen.getByText('Exibindo 3 cadências')).toBeInTheDocument();
+    expect(screen.getByText(/Exibindo todas as 3 cadências/)).toBeInTheDocument();
   });
 });

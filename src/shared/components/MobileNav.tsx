@@ -109,7 +109,7 @@ export function MobileNav() {
         <SheetContent side="left" className="w-72 p-0">
           <SheetHeader className="border-b px-4 py-3">
             <SheetTitle className="flex items-center gap-2 text-left text-xl font-bold text-primary">
-              <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={32} height={32} className="rounded-full" />
+              <Image src="/logos/logo-ea-red.png" alt="Enriquece AI" width={32} height={32} className="rounded-full" unoptimized />
               Enriquece AI
             </SheetTitle>
             <SheetDescription className="sr-only">

@@ -29,6 +29,8 @@ export {
   enrichmentStatusSchema,
   leadStatusValues,
   enrichmentStatusValues,
+  LEAD_SOURCE_OPTIONS,
+  leadSourceValues,
 } from './schemas/lead.schemas';
 export type { CreateLeadInput, LeadFilters } from './schemas/lead.schemas';
 

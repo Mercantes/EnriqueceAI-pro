@@ -34,11 +34,16 @@ export interface LeadSocio {
 export interface LeadRow {
   id: string;
   org_id: string;
-  cnpj: string;
+  cnpj: string | null;
   status: LeadStatus;
   enrichment_status: EnrichmentStatus;
   razao_social: string | null;
   nome_fantasia: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  job_title: string | null;
+  lead_source: string | null;
+  is_inbound: boolean;
   endereco: LeadAddress | null;
   porte: string | null;
   cnae: string | null;
@@ -106,11 +111,16 @@ export interface LeadCadenceInfo {
 // Insert types (without auto-generated fields)
 export interface LeadInsert {
   org_id: string;
-  cnpj: string;
+  cnpj?: string | null;
   status?: LeadStatus;
   enrichment_status?: EnrichmentStatus;
   razao_social?: string | null;
   nome_fantasia?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  job_title?: string | null;
+  lead_source?: string | null;
+  is_inbound?: boolean;
   endereco?: LeadAddress | null;
   porte?: string | null;
   cnae?: string | null;

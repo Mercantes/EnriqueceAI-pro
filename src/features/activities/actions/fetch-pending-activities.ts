@@ -5,11 +5,30 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
+import type { EnrichmentStatus, LeadAddress, LeadSocio, LeadStatus } from '@/features/leads/types';
 
-import type { ActivityLead, PendingActivity } from '../types';
+import type { PendingActivity } from '../types';
 
-interface RawLead extends Omit<ActivityLead, 'primeiro_nome'> {
-  socios: Array<{ nome: string }> | null;
+interface RawLead {
+  id: string;
+  org_id: string;
+  nome_fantasia: string | null;
+  razao_social: string | null;
+  cnpj: string;
+  email: string | null;
+  telefone: string | null;
+  municipio: string | null;
+  uf: string | null;
+  porte: string | null;
+  socios: LeadSocio[] | null;
+  endereco: LeadAddress | null;
+  instagram: string | null;
+  linkedin: string | null;
+  website: string | null;
+  status: LeadStatus | null;
+  enrichment_status: EnrichmentStatus | null;
+  notes: string | null;
+  fit_score: number | null;
 }
 
 interface EnrollmentRow {
@@ -20,21 +39,22 @@ interface EnrollmentRow {
   status: string;
   next_step_due: string | null;
   lead: RawLead;
-  cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by'>;
+  cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by' | 'type'>;
 }
 
 export async function fetchPendingActivities(): Promise<ActionResult<PendingActivity[]>> {
   await requireAuth();
   const supabase = await createServerSupabaseClient();
 
-  // 1. Fetch active enrollments with due steps, joined with lead + cadence
+  // 1. Fetch active enrollments with due steps (overdue + next 24h), joined with lead + cadence
+  const next24h = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const { data: enrollments, error: enrollError } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
-    .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads(*), cadence:cadences(id, name, total_steps, created_by)')
+    .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
-    .lte('next_step_due', new Date().toISOString())
+    .lte('next_step_due', next24h)
     .order('next_step_due', { ascending: true })
-    .limit(100)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
+    .limit(200)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
 
   if (enrollError) {
     console.error('[activities] Failed to fetch enrollments:', enrollError.message);
@@ -79,11 +99,20 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     templateMap.set(t.id, t);
   }
 
-  // 4. Map enrollments to PendingActivity[]
-  const activities: PendingActivity[] = [];
+  // 4. Build candidate activities (before filtering executed ones)
+  interface CandidateActivity {
+    activity: PendingActivity;
+    cadenceId: string;
+    stepId: string;
+    leadId: string;
+  }
+  const candidates: CandidateActivity[] = [];
 
   for (const enrollment of enrollments) {
     if (!enrollment.lead || !enrollment.cadence || !enrollment.next_step_due) continue;
+
+    // Skip auto_email cadences — they are managed via background job, not the manual queue
+    if (enrollment.cadence.type === 'auto_email') continue;
 
     const cadenceSteps = stepMap.get(enrollment.cadence_id) ?? [];
     const currentStep = cadenceSteps.find((s) => s.step_order === enrollment.current_step);
@@ -92,26 +121,54 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
 
     const template = currentStep.template_id ? templateMap.get(currentStep.template_id) : null;
 
-    activities.push({
-      enrollmentId: enrollment.id,
+    candidates.push({
       cadenceId: enrollment.cadence_id,
-      cadenceName: enrollment.cadence.name,
-      cadenceCreatedBy: enrollment.cadence.created_by,
       stepId: currentStep.id,
-      stepOrder: currentStep.step_order,
-      totalSteps: enrollment.cadence.total_steps,
-      channel: currentStep.channel,
-      templateId: currentStep.template_id,
-      templateSubject: template?.subject ?? null,
-      templateBody: template?.body ?? null,
-      aiPersonalization: currentStep.ai_personalization,
-      nextStepDue: enrollment.next_step_due,
-      lead: {
-        ...enrollment.lead,
-        primeiro_nome: enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0] ?? null,
+      leadId: enrollment.lead_id,
+      activity: {
+        enrollmentId: enrollment.id,
+        cadenceId: enrollment.cadence_id,
+        cadenceName: enrollment.cadence.name,
+        cadenceCreatedBy: enrollment.cadence.created_by,
+        stepId: currentStep.id,
+        stepOrder: currentStep.step_order,
+        totalSteps: enrollment.cadence.total_steps,
+        channel: currentStep.channel,
+        templateId: currentStep.template_id,
+        templateSubject: template?.subject ?? null,
+        templateBody: template?.body ?? null,
+        aiPersonalization: currentStep.ai_personalization,
+        nextStepDue: enrollment.next_step_due,
+        lead: {
+          ...enrollment.lead,
+          primeiro_nome: enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0] ?? null,
+        },
       },
     });
   }
+
+  if (candidates.length === 0) {
+    return { success: true, data: [] };
+  }
+
+  // 5. Filter out activities already executed (interaction exists for cadence+step+lead)
+  const stepIds = [...new Set(candidates.map((c) => c.stepId))];
+  const leadIds = [...new Set(candidates.map((c) => c.leadId))];
+
+  const { data: existingInteractions } = (await (supabase
+    .from('interactions') as ReturnType<typeof supabase.from>)
+    .select('cadence_id, step_id, lead_id')
+    .in('cadence_id', cadenceIds)
+    .in('step_id', stepIds)
+    .in('lead_id', leadIds)) as { data: { cadence_id: string; step_id: string; lead_id: string }[] | null };
+
+  const executedSet = new Set(
+    (existingInteractions ?? []).map((i) => `${i.cadence_id}:${i.step_id}:${i.lead_id}`),
+  );
+
+  const activities = candidates
+    .filter((c) => !executedSet.has(`${c.cadenceId}:${c.stepId}:${c.leadId}`))
+    .map((c) => c.activity);
 
   return { success: true, data: activities };
 }

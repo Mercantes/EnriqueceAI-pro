@@ -27,11 +27,11 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   { label: 'Atividades Diárias', href: '/settings/prospecting/daily-goals', icon: Activity },
   { label: 'Motivos de Perda', href: '/settings/prospecting/loss-reasons', icon: XCircle },
-  { label: 'Vendas Baseadas em Contas', href: '/settings/prospecting/abm', icon: Settings2, comingSoon: true },
-  { label: 'Acesso aos Leads', href: '/settings/prospecting/access', icon: Lock, comingSoon: true },
-  { label: 'Campos Personalizados', href: '/settings/prospecting/custom-fields', icon: Settings2, comingSoon: true },
-  { label: 'Blacklist de E-mails', href: '/settings/prospecting/blacklist', icon: Ban, comingSoon: true },
-  { label: 'Fit Score', href: '/settings/prospecting/fit-score', icon: Star, comingSoon: true },
+  { label: 'Vendas Baseadas em Contas', href: '/settings/prospecting/abm', icon: Settings2 },
+  { label: 'Acesso aos Leads', href: '/settings/prospecting/access', icon: Lock },
+  { label: 'Campos Personalizados', href: '/settings/prospecting/custom-fields', icon: Settings2 },
+  { label: 'Blacklist de E-mails', href: '/settings/prospecting/blacklist', icon: Ban },
+  { label: 'Fit Score', href: '/settings/prospecting/fit-score', icon: Star },
 ];
 
 export default function ProspectingSettingsLayout({

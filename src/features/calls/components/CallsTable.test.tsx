@@ -22,6 +22,7 @@ function createMockCall(overrides?: Partial<CallRow>): CallRow {
     recording_url: null,
     notes: null,
     is_important: false,
+    metadata: null,
     created_at: '2026-02-21T10:00:00Z',
     updated_at: '2026-02-21T10:00:00Z',
     ...overrides,

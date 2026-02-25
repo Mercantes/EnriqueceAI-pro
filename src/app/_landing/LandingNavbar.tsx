@@ -13,6 +13,7 @@ export function LandingNavbar() {
             width={32}
             height={32}
             className="rounded-full"
+            unoptimized
           />
           <span className="text-lg font-semibold">Enriquece AI</span>
         </a>

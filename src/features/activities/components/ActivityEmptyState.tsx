@@ -1,35 +1,49 @@
 'use client';
 
-import { CheckCircle2, UserPlus } from 'lucide-react';
+import { PlayCircle } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
+
+const quotes = [
+  { text: 'Acredite em milagres, mas não dependa deles.', author: 'Immanuel Kant' },
+  { text: 'A persistência é o caminho do êxito.', author: 'Charles Chaplin' },
+  { text: 'Grandes resultados requerem grandes ambições.', author: 'Heráclito' },
+  { text: 'O sucesso nasce do querer, da determinação e persistência.', author: 'José de Alencar' },
+  { text: 'Não espere por uma crise para descobrir o que é importante.', author: 'John F. Kennedy' },
+];
+
+function getDailyQuote() {
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000,
+  );
+  return quotes[dayOfYear % quotes.length]!;
+}
 
 interface ActivityEmptyStateProps {
   onStartActivities?: () => void;
 }
 
 export function ActivityEmptyState({ onStartActivities }: ActivityEmptyStateProps) {
+  const quote = getDailyQuote();
+
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="mb-4 rounded-full bg-emerald-500/10 p-5">
-        <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-      </div>
-      <h3 className="mb-2 text-lg font-semibold">Todas as atividades foram concluídas!</h3>
-      <p className="max-w-sm text-sm text-[var(--muted-foreground)]">
-        Novas atividades aparecerão conforme as cadências avançarem.
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <p className="max-w-lg text-2xl font-light text-[var(--muted-foreground)]">
+        {quote.text}
+      </p>
+      <p className="mt-3 text-sm text-[var(--muted-foreground)]/60">
+        — {quote.author}
       </p>
       {onStartActivities && (
         <Button
           onClick={onStartActivities}
-          className="mt-6 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+          size="lg"
+          className="mt-10 gap-2 bg-emerald-600 px-6 text-white hover:bg-emerald-700"
         >
-          <UserPlus className="h-4 w-4" />
           Iniciar atividades
+          <PlayCircle className="h-4 w-4" />
         </Button>
       )}
-      <p className="mt-8 max-w-md text-xs italic text-[var(--muted-foreground)]">
-        &quot;A persistência é o caminho do êxito.&quot; — Charles Chaplin
-      </p>
     </div>
   );
 }

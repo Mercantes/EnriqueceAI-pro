@@ -248,9 +248,10 @@ export function LeadTable({ leads, cadenceInfo, userMap }: LeadTableProps) {
               const isSelected = selected.has(lead.id);
               const info = cadenceInfo[lead.id];
               const firstSocio = lead.socios?.[0];
-              const personName = firstSocio?.nome ?? null;
+              const contactName = lead.first_name ? `${lead.first_name} ${lead.last_name ?? ''}`.trim() : null;
+              const personName = contactName ?? firstSocio?.nome ?? null;
               const companyName = lead.nome_fantasia ?? lead.razao_social ?? null;
-              const primaryName = personName ?? companyName ?? formatCnpj(lead.cnpj);
+              const primaryName = personName ?? companyName ?? (lead.cnpj ? formatCnpj(lead.cnpj) : 'Lead sem nome');
               const secondaryName = personName ? companyName : null;
               const responsible = userMap[lead.assigned_to ?? ''] ?? userMap[lead.created_by ?? ''] ?? null;
 

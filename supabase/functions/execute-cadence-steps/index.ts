@@ -29,7 +29,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${CRON_SECRET}`,
         'Content-Type': 'application/json',
       },
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(55_000),
     });
 
     const body = await response.json();

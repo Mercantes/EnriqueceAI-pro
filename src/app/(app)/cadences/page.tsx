@@ -7,6 +7,7 @@ import { EmptyState } from '@/shared/components/EmptyState';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 
 import { fetchCadences, fetchCadenceTabCounts } from '@/features/cadences/actions/fetch-cadences';
+import { fetchAutoEmailMetrics } from '@/features/cadences/actions/fetch-auto-email-metrics';
 import { CadenceListView } from '@/features/cadences/components/CadenceListView';
 
 interface CadencesPageProps {
@@ -24,8 +25,10 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
   const origin = typeof params.origin === 'string' ? params.origin : undefined;
   const page = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
 
+  const activeType = type || 'standard';
+
   const [result, countsResult] = await Promise.all([
-    fetchCadences({ status, search, type: type || 'standard', priority, origin, page }),
+    fetchCadences({ status, search, type: activeType, priority, origin, page }),
     fetchCadenceTabCounts(),
   ]);
 
@@ -43,6 +46,16 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
     ? countsResult.data
     : { standard: 0, auto_email: 0 };
 
+  // Fetch metrics for auto_email tab
+  let metrics: Record<string, import('@/features/cadences/cadences.contract').AutoEmailCadenceMetrics> | undefined;
+  if (activeType === 'auto_email' && result.data.data.length > 0) {
+    const cadenceIds = result.data.data.map((c) => c.id);
+    const metricsResult = await fetchAutoEmailMetrics(cadenceIds);
+    if (metricsResult.success) {
+      metrics = metricsResult.data;
+    }
+  }
+
   return (
     <Suspense fallback={<Skeleton className="h-96 w-full" />}>
       <CadenceListView
@@ -51,6 +64,7 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
         page={result.data.page}
         perPage={result.data.per_page}
         tabCounts={tabCounts}
+        metrics={metrics}
       />
     </Suspense>
   );

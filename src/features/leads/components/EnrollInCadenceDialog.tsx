@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -38,15 +38,17 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds }: EnrollInC
   const isBulk = count > 1;
 
   // Load cadences when dialog becomes visible
-  if (open && !loaded && !isPending) {
-    startTransition(async () => {
-      const result = await fetchActiveCadences();
-      if (result.success) {
-        setCadences(result.data);
-      }
-      setLoaded(true);
-    });
-  }
+  useEffect(() => {
+    if (open && !loaded) {
+      startTransition(async () => {
+        const result = await fetchActiveCadences();
+        if (result.success) {
+          setCadences(result.data);
+        }
+        setLoaded(true);
+      });
+    }
+  }, [open, loaded]);
 
   function handleOpenChange(nextOpen: boolean) {
     onOpenChange(nextOpen);

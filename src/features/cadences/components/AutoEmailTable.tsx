@@ -1,0 +1,255 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
+import {
+  Archive,
+  Copy,
+  ExternalLink,
+  MoreHorizontal,
+  Pause,
+  Pencil,
+  Play,
+  Trash2,
+  Zap,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Button } from '@/shared/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+import { Switch } from '@/shared/components/ui/switch';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/shared/components/ui/table';
+
+import type { AutoEmailCadenceMetrics } from '../cadences.contract';
+import { activateCadence, createCadence, updateCadence } from '../actions/manage-cadences';
+import type { CadenceRow } from '../types';
+
+interface AutoEmailTableProps {
+  cadences: CadenceRow[];
+  metrics: Record<string, AutoEmailCadenceMetrics>;
+  onDeleteRequest: (id: string) => void;
+}
+
+function getInitials(userId: string | null): string {
+  if (!userId) return '-';
+  // Show first 2 chars of UUID as fallback initials
+  return userId.substring(0, 2).toUpperCase();
+}
+
+function MetricCell({ value, isPercent = false }: { value: number; isPercent?: boolean }) {
+  const display = isPercent ? `${value.toFixed(1)}%` : value;
+  return (
+    <TableCell className={`text-right tabular-nums ${value === 0 ? 'text-muted-foreground' : ''}`}>
+      {display}
+    </TableCell>
+  );
+}
+
+export function AutoEmailTable({ cadences, metrics, onDeleteRequest }: AutoEmailTableProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function handleToggleStatus(cadence: CadenceRow) {
+    startTransition(async () => {
+      if (cadence.status === 'draft') {
+        const result = await activateCadence(cadence.id);
+        if (result.success) {
+          toast.success('Cadência ativada');
+          router.refresh();
+        } else {
+          toast.error(result.error);
+        }
+        return;
+      }
+      const newStatus = cadence.status === 'active' ? 'paused' : 'active';
+      const result = await updateCadence(cadence.id, { status: newStatus });
+      if (result.success) {
+        toast.success(newStatus === 'active' ? 'Cadência ativada' : 'Cadência pausada');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleArchive(cadence: CadenceRow) {
+    startTransition(async () => {
+      const result = await updateCadence(cadence.id, { status: 'archived' });
+      if (result.success) {
+        toast.success('Cadência arquivada');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleDuplicate(cadence: CadenceRow) {
+    startTransition(async () => {
+      const result = await createCadence({
+        name: `${cadence.name} (cópia)`,
+        description: cadence.description,
+      });
+      if (result.success) {
+        toast.success('Cadência duplicada');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  if (cadences.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+    <Table>
+      <TableHeader>
+        <TableRow className="bg-[var(--muted)]/50">
+          <TableHead className="w-12">Ativar</TableHead>
+          <TableHead className="min-w-[200px]">Nome</TableHead>
+          <TableHead className="w-16">Criador</TableHead>
+          <TableHead className="w-16 text-right">Ativo</TableHead>
+          <TableHead className="w-16 text-right">Pausado</TableHead>
+          <TableHead className="w-16 text-right">Enviados</TableHead>
+          <TableHead className="w-20 text-right">Rejeitado</TableHead>
+          <TableHead className="w-20 text-right">Bloqueado</TableHead>
+          <TableHead className="w-20 text-right">Finalizado</TableHead>
+          <TableHead className="w-20 text-right">Respondido</TableHead>
+          <TableHead className="w-20 text-right">Responder %</TableHead>
+          <TableHead className="w-24 text-right">Interessados %</TableHead>
+          <TableHead className="w-16">Fluxo</TableHead>
+          <TableHead className="w-12">Ações</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {cadences.map((cadence) => {
+          const m = metrics[cadence.id];
+          const isActive = cadence.status === 'active';
+          const canToggle = cadence.status !== 'archived';
+
+          return (
+            <TableRow key={cadence.id}>
+              {/* Toggle */}
+              <TableCell>
+                <Switch
+                  size="sm"
+                  checked={isActive}
+                  disabled={!canToggle || isPending}
+                  onCheckedChange={() => handleToggleStatus(cadence)}
+                  aria-label={`${isActive ? 'Pausar' : 'Ativar'} ${cadence.name}`}
+                />
+              </TableCell>
+
+              {/* Name */}
+              <TableCell>
+                <button
+                  type="button"
+                  className="max-w-[250px] truncate text-left font-medium hover:underline"
+                  onClick={() => router.push(`/cadences/${cadence.id}`)}
+                >
+                  {cadence.name}
+                </button>
+              </TableCell>
+
+              {/* Created by */}
+              <TableCell className="text-center text-xs text-muted-foreground">
+                {getInitials(cadence.created_by)}
+              </TableCell>
+
+              {/* Metrics */}
+              <MetricCell value={m?.active ?? 0} />
+              <MetricCell value={m?.paused ?? 0} />
+              <MetricCell value={m?.sent ?? 0} />
+              <MetricCell value={m?.bounced ?? 0} />
+              <MetricCell value={m?.failed ?? 0} />
+              <MetricCell value={m?.completed ?? 0} />
+              <MetricCell value={m?.replied ?? 0} />
+              <MetricCell value={m?.replyRate ?? 0} isPercent />
+              <MetricCell value={m?.openRate ?? 0} isPercent />
+
+              {/* Workflow link */}
+              <TableCell>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => router.push(`/cadences/${cadence.id}`)}
+                  aria-label={`Ver fluxo de ${cadence.name}`}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </TableCell>
+
+              {/* Actions */}
+              <TableCell>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={`Ações para ${cadence.name}`}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => router.push(`/cadences/${cadence.id}`)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Editar
+                    </DropdownMenuItem>
+                    {cadence.status === 'draft' && cadence.total_steps >= 2 && (
+                      <DropdownMenuItem onClick={() => handleToggleStatus(cadence)}>
+                        <Zap className="mr-2 h-4 w-4" />
+                        Ativar
+                      </DropdownMenuItem>
+                    )}
+                    {(cadence.status === 'active' || cadence.status === 'paused') && (
+                      <DropdownMenuItem onClick={() => handleToggleStatus(cadence)}>
+                        {cadence.status === 'active' ? (
+                          <><Pause className="mr-2 h-4 w-4" />Pausar</>
+                        ) : (
+                          <><Play className="mr-2 h-4 w-4" />Ativar</>
+                        )}
+                      </DropdownMenuItem>
+                    )}
+                    {cadence.status !== 'archived' && (
+                      <DropdownMenuItem onClick={() => handleArchive(cadence)}>
+                        <Archive className="mr-2 h-4 w-4" />
+                        Arquivar
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => handleDuplicate(cadence)}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Duplicar
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-red-600"
+                      onClick={() => onDeleteRequest(cadence.id)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Deletar
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+    </div>
+  );
+}

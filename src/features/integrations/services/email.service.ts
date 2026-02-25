@@ -49,6 +49,15 @@ function injectClickTracking(html: string, interactionId: string): string {
 }
 
 /**
+ * Encodes a subject line with RFC 2047 for non-ASCII characters.
+ */
+function encodeSubject(subject: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(subject)) return subject;
+  return `=?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`;
+}
+
+/**
  * Builds a raw RFC 2822 email message for Gmail API.
  */
 function buildRawEmail(from: string, to: string, subject: string, htmlBody: string): string {
@@ -56,7 +65,7 @@ function buildRawEmail(from: string, to: string, subject: string, htmlBody: stri
   const message = [
     `From: ${from}`,
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodeSubject(subject)}`,
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
@@ -165,8 +174,27 @@ export class EmailService {
       accessToken = refreshResult.accessToken;
     }
 
+    // Fetch Gmail signature and append to body
+    let signature = '';
+    try {
+      const sigResponse = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs/${encodeURIComponent(connection.email_address)}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (sigResponse.ok) {
+        const sigData = (await sigResponse.json()) as { signature?: string };
+        if (sigData.signature) {
+          signature = sigData.signature;
+        }
+      }
+    } catch {
+      // Signature fetch failed — send without it
+    }
+
     // Apply tracking
-    let html = params.htmlBody;
+    let html = signature
+      ? `${params.htmlBody}<br/><div class="gmail_signature">${signature}</div>`
+      : params.htmlBody;
     if (interactionId) {
       if (params.trackOpens !== false) {
         html = injectOpenTracking(html, interactionId);
