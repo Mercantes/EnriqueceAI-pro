@@ -62,6 +62,7 @@ function makeActivity(channel: string, overrides: Partial<PendingActivity> = {})
     templateBody: 'Template Body',
     aiPersonalization: false,
     nextStepDue: new Date().toISOString(),
+    isCurrentStep: true,
     lead: baseLead,
     ...overrides,
   };

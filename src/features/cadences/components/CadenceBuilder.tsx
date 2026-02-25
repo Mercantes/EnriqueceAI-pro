@@ -426,7 +426,7 @@ function StepsCard({ steps, isEditable, onAddStep, onRemoveStep }: StepsCardProp
                   className="flex items-center gap-3 rounded-lg border bg-[var(--card)] px-3 py-2.5"
                 >
                   <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${config.bgColor}`}>
-                    <span className="text-xs font-bold">{index + 1}</span>
+                    <span className={`text-xs font-bold ${config.color}`}>{index + 1}</span>
                   </div>
                   <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${config.bgColor}`}>
                     <Icon className={`h-3.5 w-3.5 ${config.color}`} />

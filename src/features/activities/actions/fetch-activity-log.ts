@@ -156,6 +156,7 @@ export async function fetchActivityLog(
       templateBody: template?.body ?? null,
       aiPersonalization: currentStep.ai_personalization,
       nextStepDue: enrollment.next_step_due,
+      isCurrentStep: true,
       lead: {
         ...enrollment.lead,
         primeiro_nome: enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0] ?? null,

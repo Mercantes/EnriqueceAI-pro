@@ -69,6 +69,7 @@ function makeActivity(overrides: Partial<PendingActivity> = {}): PendingActivity
     cadenceCreatedBy: null,
     aiPersonalization: false,
     nextStepDue: new Date(Date.now() - 30 * 60000).toISOString(), // 30 min ago (not overdue)
+    isCurrentStep: true,
     lead: baseLead,
     ...overrides,
   };

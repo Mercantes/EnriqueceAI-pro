@@ -33,6 +33,7 @@ function createMockActivity(overrides: Partial<PendingActivity> = {}): PendingAc
     templateBody: null,
     aiPersonalization: false,
     nextStepDue: new Date(Date.now() - 3600000 * 2).toISOString(), // 2h ago
+    isCurrentStep: true,
     lead: {
       id: 'lead-1',
       org_id: 'org-1',

@@ -25,7 +25,7 @@ interface ActivityExecutionSheetProps {
   selectedIndex: number | null;
   onClose: () => void;
   onNavigate: (index: number) => void;
-  onActivityDone: (enrollmentId: string) => void;
+  onActivityDone: (enrollmentId: string, stepId: string) => void;
 }
 
 export function ActivityExecutionSheet({
@@ -40,8 +40,8 @@ export function ActivityExecutionSheet({
   const activity = selectedIndex !== null ? activities[selectedIndex] : null;
 
   // Advance to next activity or close if last
-  function advanceOrClose(enrollmentId: string) {
-    onActivityDone(enrollmentId);
+  function advanceOrClose(enrollmentId: string, stepId: string) {
+    onActivityDone(enrollmentId, stepId);
 
     if (selectedIndex !== null && selectedIndex < activities.length - 1) {
       onNavigate(selectedIndex);
@@ -57,10 +57,15 @@ export function ActivityExecutionSheet({
     }
 
     const isWhatsApp = activity.channel === 'whatsapp';
+    const resolvedEmail = (activity.lead.socios ?? [])
+      .flatMap((s) => s.emails ?? [])
+      .sort((a, b) => a.ranking - b.ranking)[0]?.email
+      ?? activity.lead.email
+      ?? '';
     const to = phone
       ?? (isWhatsApp
         ? (resolveWhatsAppPhone(activity.lead)?.formatted ?? '')
-        : (activity.lead.email ?? ''));
+        : resolvedEmail);
 
     startSendTransition(async () => {
       const result = await executeActivity({
@@ -80,7 +85,7 @@ export function ActivityExecutionSheet({
 
       if (result.success) {
         toast.success(isWhatsApp ? 'WhatsApp enviado com sucesso!' : 'Email enviado com sucesso!');
-        advanceOrClose(activity.enrollmentId);
+        advanceOrClose(activity.enrollmentId, activity.stepId);
       } else {
         toast.error(result.error);
       }
@@ -108,7 +113,7 @@ export function ActivityExecutionSheet({
 
       if (result.success) {
         toast.success('Atividade marcada como feita!');
-        advanceOrClose(activity.enrollmentId);
+        advanceOrClose(activity.enrollmentId, activity.stepId);
       } else {
         toast.error(result.error);
       }
@@ -123,7 +128,7 @@ export function ActivityExecutionSheet({
 
       if (result.success) {
         toast.success('Atividade adiada em 2 horas');
-        advanceOrClose(activity.enrollmentId);
+        advanceOrClose(activity.enrollmentId, activity.stepId);
       } else {
         toast.error(result.error);
       }
@@ -152,7 +157,7 @@ export function ActivityExecutionSheet({
             </div>
 
             {/* Right — Activity panel (adapts by type) */}
-            <div className="relative flex-1 overflow-y-auto p-6">
+            <div className="relative flex flex-1 flex-col overflow-y-auto p-6">
               {/* Navigation controls — centered, close button pinned right */}
               <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
                 <Button
@@ -187,7 +192,7 @@ export function ActivityExecutionSheet({
               </Button>
 
               <ActivityExecutionSheetContent
-                key={activity.enrollmentId}
+                key={`${activity.enrollmentId}:${activity.stepId}`}
                 activity={activity}
                 isSending={isSending}
                 onSend={handleSend}

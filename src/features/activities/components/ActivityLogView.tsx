@@ -77,18 +77,21 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
   const [cadenceFilter, setCadenceFilter] = useState('all');
   const [stepFilter, setStepFilter] = useState('all');
 
+  // Only current-step activities are shown; future steps stay in state for promotion
+  const visibleActivities = useMemo(() => activities.filter((a) => a.isCurrentStep), [activities]);
+
   const cadenceOptions = useMemo(
-    () => [...new Set(activities.map((a) => a.cadenceName))].sort(),
-    [activities],
+    () => [...new Set(visibleActivities.map((a) => a.cadenceName))].sort(),
+    [visibleActivities],
   );
 
   const filtered = useMemo(() => {
-    return activities.filter((a) => {
+    return visibleActivities.filter((a) => {
       if (cadenceFilter !== 'all' && a.cadenceName !== cadenceFilter) return false;
       if (stepFilter !== 'all' && String(a.stepOrder) !== stepFilter) return false;
       return true;
     });
-  }, [activities, cadenceFilter, stepFilter]);
+  }, [visibleActivities, cadenceFilter, stepFilter]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -106,8 +109,23 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
     setPage(1);
   }, []);
 
-  const handleActivityDone = useCallback((enrollmentId: string) => {
-    setActivities((prev) => prev.filter((a) => a.enrollmentId !== enrollmentId));
+  const handleActivityDone = useCallback((enrollmentId: string, stepId: string) => {
+    setActivities((prev) => {
+      const updated = prev.filter(
+        (a) => !(a.enrollmentId === enrollmentId && a.stepId === stepId),
+      );
+      const nextStep = updated.find(
+        (a) => a.enrollmentId === enrollmentId && !a.isCurrentStep,
+      );
+      if (nextStep) {
+        return updated.map((a) =>
+          a.enrollmentId === enrollmentId && a.stepId === nextStep.stepId
+            ? { ...a, isCurrentStep: true }
+            : a,
+        );
+      }
+      return updated;
+    });
   }, []);
 
   const handleClose = useCallback(() => {
@@ -119,7 +137,9 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
   }, []);
 
   function findGlobalIndex(activity: PendingActivity) {
-    return activities.findIndex((a) => a.enrollmentId === activity.enrollmentId);
+    return visibleActivities.findIndex(
+      (a) => a.enrollmentId === activity.enrollmentId && a.stepId === activity.stepId,
+    );
   }
 
   return (
@@ -259,11 +279,11 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
         <div className="space-y-2">
           {paginatedActivities.map((activity) => (
             <ActivityRow
-              key={activity.enrollmentId}
+              key={`${activity.enrollmentId}:${activity.stepId}`}
               activity={activity}
               onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
               onSkip={() => {
-                handleActivityDone(activity.enrollmentId);
+                handleActivityDone(activity.enrollmentId, activity.stepId);
                 import('../actions/skip-activity').then(({ skipActivity }) =>
                   skipActivity(activity.enrollmentId),
                 );
@@ -282,7 +302,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
 
       {/* Execution Sheet */}
       <ActivityExecutionSheet
-        activities={activities}
+        activities={visibleActivities}
         selectedIndex={selectedIndex}
         onClose={handleClose}
         onNavigate={handleNavigate}

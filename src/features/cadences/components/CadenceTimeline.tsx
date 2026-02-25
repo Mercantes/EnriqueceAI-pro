@@ -94,7 +94,7 @@ function SortableStepItem({
         <GripVertical className="h-4 w-4" />
       </button>
       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${config.bgColor}`}>
-        <span className="text-xs font-bold">{globalNumber}</span>
+        <span className={`text-xs font-bold ${config.color}`}>{globalNumber}</span>
       </div>
       <div className={`flex h-6 w-6 items-center justify-center rounded ${config.bgColor}`}>
         <Icon className={`h-3.5 w-3.5 ${config.color}`} />

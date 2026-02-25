@@ -44,7 +44,12 @@ export async function prepareActivityEmail(
 
   const { lead, templateSubject, templateBody, aiPersonalization, channel } = input;
 
-  const toEmail = lead.email ?? '';
+  // Resolve email: socios enriched emails (by ranking) → lead.email fallback
+  const toEmail = (lead.socios ?? [])
+    .flatMap((s) => s.emails ?? [])
+    .sort((a, b) => a.ranking - b.ranking)[0]?.email
+    ?? lead.email
+    ?? '';
 
   if (!templateBody) {
     return {
@@ -59,8 +64,9 @@ export async function prepareActivityEmail(
   }
 
   const vendorVars = await resolveVendorVariables(user.id);
+  const socioNome = (lead.socios ?? [])[0]?.nome ?? null;
   const variables: Record<string, string | null> = {
-    ...buildLeadTemplateVariables(lead),
+    ...buildLeadTemplateVariables(lead, socioNome),
     ...vendorVars,
   };
 
@@ -124,8 +130,9 @@ export async function prepareActivityWhatsApp(
   }
 
   const vendorVars = await resolveVendorVariables(user.id);
+  const socioNome = (lead.socios ?? [])[0]?.nome ?? null;
   const variables: Record<string, string | null> = {
-    ...buildLeadTemplateVariables(lead),
+    ...buildLeadTemplateVariables(lead, socioNome),
     ...vendorVars,
   };
 

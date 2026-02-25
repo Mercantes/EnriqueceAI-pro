@@ -41,6 +41,7 @@ export interface PendingActivity {
   templateBody: string | null;
   aiPersonalization: boolean;
   nextStepDue: string;
+  isCurrentStep: boolean;
   lead: ActivityLead;
 }
 

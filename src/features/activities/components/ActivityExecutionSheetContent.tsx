@@ -8,6 +8,7 @@ import { buildLeadTemplateVariables } from '@/features/cadences/utils/build-temp
 import { renderTemplate } from '@/features/cadences/utils/render-template';
 import { fetchVendorVariables } from '@/features/cadences/actions/fetch-vendor-variables';
 
+import { fetchGmailSignature } from '../actions/fetch-gmail-signature';
 import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepare-activity-email';
 import { fetchWhatsAppTemplates, type WhatsAppTemplateOption } from '../actions/fetch-whatsapp-templates';
 import { resolveWhatsAppPhone, getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
@@ -38,6 +39,7 @@ export function ActivityExecutionSheetContent({
   const [subject, setSubject] = useState(activity.templateSubject ?? '');
   const [body, setBody] = useState(activity.templateBody ?? '');
   const [aiPersonalized, setAiPersonalized] = useState(false);
+  const [signature, setSignature] = useState('');
 
   // Phone resolution for WhatsApp
   const phones = activity.channel === 'whatsapp' ? getAllLeadPhones(activity.lead) : [];
@@ -45,10 +47,19 @@ export function ActivityExecutionSheetContent({
     ? (resolveWhatsAppPhone(activity.lead)?.formatted ?? '')
     : '';
 
+  // Resolve email: socios enriched emails (by ranking) → lead.email fallback
+  const resolvedEmail = activity.channel !== 'whatsapp'
+    ? ((activity.lead.socios ?? [])
+        .flatMap((s) => s.emails ?? [])
+        .sort((a, b) => a.ranking - b.ranking)[0]?.email
+      ?? activity.lead.email
+      ?? '')
+    : '';
+
   const [to, setTo] = useState(
     activity.channel === 'whatsapp'
       ? defaultPhone
-      : (activity.lead.email ?? ''),
+      : resolvedEmail,
   );
 
   // WhatsApp templates
@@ -95,6 +106,11 @@ export function ActivityExecutionSheetContent({
         if (!cancelled) setIsLoading(false);
       });
     } else if (activity.channel === 'email') {
+      // Fetch signature in parallel with preparing the email
+      fetchGmailSignature().then((r) => {
+        if (!cancelled && r.success && r.data) setSignature(r.data);
+      });
+
       prepareActivityEmail({
         lead: activity.lead,
         templateSubject: activity.templateSubject,
@@ -104,7 +120,7 @@ export function ActivityExecutionSheetContent({
       }).then((result) => {
         if (cancelled) return;
         if (result.success) {
-          setTo(result.data.to);
+          if (result.data.to) setTo(result.data.to);
           setSubject(result.data.subject);
           setBody(result.data.body);
           setAiPersonalized(result.data.aiPersonalized);
@@ -124,16 +140,22 @@ export function ActivityExecutionSheetContent({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activity.enrollmentId]);
 
-  // Compute template variables (lead + vendor)
+  // Compute template variables (lead + vendor), passing socioNome for primeiro_nome fallback
+  const socioNome = (activity.lead.socios ?? [])[0]?.nome ?? null;
   const templateVariables = useMemo(
-    () => ({ ...buildLeadTemplateVariables(activity.lead), ...vendorVars }),
-    [activity.lead, vendorVars],
+    () => ({ ...buildLeadTemplateVariables(activity.lead, socioNome), ...vendorVars }),
+    [activity.lead, socioNome, vendorVars],
   );
 
-  // Compute rendered preview by resolving any {{variables}} in the body
+  // Compute rendered preview by resolving any {{variables}} in body and subject
   const renderedPreview = useMemo(
     () => renderTemplate(body, templateVariables),
     [body, templateVariables],
+  );
+
+  const renderedSubject = useMemo(
+    () => renderTemplate(subject, templateVariables),
+    [subject, templateVariables],
   );
 
   function handleTemplateChange(templateId: string) {
@@ -211,12 +233,13 @@ export function ActivityExecutionSheetContent({
       to={to}
       subject={subject}
       body={body}
+      signature={signature}
       aiPersonalized={aiPersonalized}
       isLoading={isLoading}
       isSending={isSending}
       onSubjectChange={setSubject}
       onBodyChange={setBody}
-      onSend={() => onSend(subject, body, aiPersonalized)}
+      onSend={() => onSend(renderedSubject, renderedPreview, aiPersonalized)}
       onSkip={onSkip}
     />
   );

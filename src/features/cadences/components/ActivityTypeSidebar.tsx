@@ -77,11 +77,11 @@ function DraggableItem({ item }: { item: ActivityTypeItem }) {
 }
 
 export const channelConfig: Record<ChannelType, { icon: typeof Mail; color: string; bgColor: string; label: string }> = {
-  email: { icon: Mail, color: 'text-blue-500', bgColor: 'bg-blue-50', label: 'E-mail' },
-  whatsapp: { icon: MessageSquare, color: 'text-green-600', bgColor: 'bg-green-50', label: 'WhatsApp' },
-  phone: { icon: Phone, color: 'text-green-500', bgColor: 'bg-green-50', label: 'Ligação' },
-  linkedin: { icon: Linkedin, color: 'text-purple-500', bgColor: 'bg-purple-50', label: 'LinkedIn' },
-  research: { icon: Search, color: 'text-orange-500', bgColor: 'bg-orange-50', label: 'Pesquisa' },
+  email: { icon: Mail, color: 'text-blue-500', bgColor: 'bg-blue-50 dark:bg-blue-950', label: 'E-mail' },
+  whatsapp: { icon: MessageSquare, color: 'text-green-600', bgColor: 'bg-green-50 dark:bg-green-950', label: 'WhatsApp' },
+  phone: { icon: Phone, color: 'text-green-500', bgColor: 'bg-green-50 dark:bg-green-950', label: 'Ligação' },
+  linkedin: { icon: Linkedin, color: 'text-purple-500', bgColor: 'bg-purple-50 dark:bg-purple-950', label: 'LinkedIn' },
+  research: { icon: Search, color: 'text-orange-500', bgColor: 'bg-orange-50 dark:bg-orange-950', label: 'Pesquisa' },
 };
 
 export function ActivityTypeSidebar() {

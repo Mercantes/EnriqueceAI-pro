@@ -101,6 +101,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   }
 
   // 4. Build candidate activities (before filtering executed ones)
+  // For each enrollment, generate activities for ALL steps within 24h cumulative delay
   interface CandidateActivity {
     activity: PendingActivity;
     cadenceId: string;
@@ -115,39 +116,59 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     // Skip auto_email cadences — they are managed via background job, not the manual queue
     if (enrollment.cadence.type === 'auto_email') continue;
 
-    const cadenceSteps = stepMap.get(enrollment.cadence_id) ?? [];
-    const currentStep = cadenceSteps.find((s) => s.step_order === enrollment.current_step);
+    const cadenceSteps = (stepMap.get(enrollment.cadence_id) ?? [])
+      .slice()
+      .sort((a, b) => a.step_order - b.step_order);
 
-    if (!currentStep) continue;
+    const currentStepOrder = enrollment.current_step;
 
-    const template = currentStep.template_id ? templateMap.get(currentStep.template_id) : null;
+    // Build lead data once per enrollment
+    const leadData = {
+      ...enrollment.lead,
+      primeiro_nome: enrollment.lead.first_name
+        ?? enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0]
+        ?? null,
+    };
 
-    candidates.push({
-      cadenceId: enrollment.cadence_id,
-      stepId: currentStep.id,
-      leadId: enrollment.lead_id,
-      activity: {
-        enrollmentId: enrollment.id,
+    let cumulativeHours = 0;
+
+    for (const step of cadenceSteps) {
+      if (step.step_order < currentStepOrder) continue;
+
+      // Accumulate delay for steps beyond the current one
+      if (step.step_order > currentStepOrder) {
+        cumulativeHours += step.delay_days * 24 + step.delay_hours;
+      }
+
+      // Stop if cumulative delay exceeds 24h
+      if (cumulativeHours > 24) break;
+
+      const isCurrentStep = step.step_order === currentStepOrder;
+      const template = step.template_id ? templateMap.get(step.template_id) : null;
+
+      candidates.push({
         cadenceId: enrollment.cadence_id,
-        cadenceName: enrollment.cadence.name,
-        cadenceCreatedBy: enrollment.cadence.created_by,
-        stepId: currentStep.id,
-        stepOrder: currentStep.step_order,
-        totalSteps: enrollment.cadence.total_steps,
-        channel: currentStep.channel,
-        templateId: currentStep.template_id,
-        templateSubject: template?.subject ?? null,
-        templateBody: template?.body ?? null,
-        aiPersonalization: currentStep.ai_personalization,
-        nextStepDue: enrollment.next_step_due,
-        lead: {
-          ...enrollment.lead,
-          primeiro_nome: enrollment.lead.first_name
-            ?? enrollment.lead.socios?.[0]?.nome?.trim().split(/\s+/)[0]
-            ?? null,
+        stepId: step.id,
+        leadId: enrollment.lead_id,
+        activity: {
+          enrollmentId: enrollment.id,
+          cadenceId: enrollment.cadence_id,
+          cadenceName: enrollment.cadence.name,
+          cadenceCreatedBy: enrollment.cadence.created_by,
+          stepId: step.id,
+          stepOrder: step.step_order,
+          totalSteps: enrollment.cadence.total_steps,
+          channel: step.channel,
+          templateId: step.template_id,
+          templateSubject: template?.subject ?? null,
+          templateBody: template?.body ?? null,
+          aiPersonalization: step.ai_personalization,
+          nextStepDue: enrollment.next_step_due,
+          isCurrentStep,
+          lead: leadData,
         },
-      },
-    });
+      });
+    }
   }
 
   if (candidates.length === 0) {
@@ -171,7 +192,15 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
 
   const activities = candidates
     .filter((c) => !executedSet.has(`${c.cadenceId}:${c.stepId}:${c.leadId}`))
-    .map((c) => c.activity);
+    .map((c) => c.activity)
+    .sort((a, b) => {
+      // Current steps first (sorted by nextStepDue), then future steps (sorted by stepOrder)
+      if (a.isCurrentStep !== b.isCurrentStep) return a.isCurrentStep ? -1 : 1;
+      if (a.isCurrentStep) {
+        return new Date(a.nextStepDue).getTime() - new Date(b.nextStepDue).getTime();
+      }
+      return a.stepOrder - b.stepOrder;
+    });
 
   return { success: true, data: activities };
 }

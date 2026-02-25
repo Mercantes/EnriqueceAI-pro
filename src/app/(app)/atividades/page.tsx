@@ -63,7 +63,6 @@ export default async function AtividadesPage() {
         pendingCalls={pendingCalls}
         dialerQueue={dialerQueue}
         availableLeadsCount={availableLeads.count}
-        availableLeadIds={availableLeads.leadIds}
       />
     </div>
   );

@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { ChevronDown, ListChecks, UserPlus, Users, Zap } from 'lucide-react';
+import { ChevronDown, ListChecks, Zap } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
-
-import { EnrollInCadenceDialog } from '@/features/leads/components/EnrollInCadenceDialog';
 
 import type { PendingCallLead } from '../actions/fetch-pending-calls';
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
@@ -34,7 +32,6 @@ interface ActivityQueueViewProps {
   dialerQueue?: DialerQueueItem[];
   showPowerDialer?: boolean;
   availableLeadsCount?: number;
-  availableLeadIds?: string[];
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -80,20 +77,36 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
   });
 }
 
-export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], showPowerDialer = true, availableLeadsCount = 0, availableLeadIds = [] }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, pendingCalls, dialerQueue = [], showPowerDialer = true, availableLeadsCount = 0 }: ActivityQueueViewProps) {
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'execution' | 'dialer'>('execution');
   const [quickMode, setQuickMode] = useState(false);
   const [filters, setFilters] = useState<ActivityFilterValues>(defaultFilters);
-  const [enrollOpen, setEnrollOpen] = useState(false);
 
   // Pagination state
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
 
-  const handleActivityDone = useCallback((enrollmentId: string) => {
-    setActivities((prev) => prev.filter((a) => a.enrollmentId !== enrollmentId));
+  const handleActivityDone = useCallback((enrollmentId: string, stepId: string) => {
+    setActivities((prev) => {
+      // Remove the completed activity
+      const updated = prev.filter(
+        (a) => !(a.enrollmentId === enrollmentId && a.stepId === stepId),
+      );
+      // Promote the next step of the same enrollment to isCurrentStep
+      const nextStep = updated.find(
+        (a) => a.enrollmentId === enrollmentId && !a.isCurrentStep,
+      );
+      if (nextStep) {
+        return updated.map((a) =>
+          a.enrollmentId === enrollmentId && a.stepId === nextStep.stepId
+            ? { ...a, isCurrentStep: true }
+            : a,
+        );
+      }
+      return updated;
+    });
   }, []);
 
   const handleClose = useCallback(() => {
@@ -104,8 +117,11 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
     setSelectedIndex(index);
   }, []);
 
-  // Filtered activities
-  const filtered = useMemo(() => applyFilters(activities, filters), [activities, filters]);
+  // Only current-step activities are shown in the list; future steps stay in state for promotion & counter
+  const visibleActivities = useMemo(() => activities.filter((a) => a.isCurrentStep), [activities]);
+
+  // Filtered activities (from visible only)
+  const filtered = useMemo(() => applyFilters(visibleActivities, filters), [visibleActivities, filters]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -123,10 +139,10 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
     setPage(1);
   }, []);
 
-  // Cadence options for filter
+  // Cadence options for filter (from visible activities only)
   const cadenceOptions = useMemo(
-    () => [...new Set(activities.map((a) => a.cadenceName))].sort(),
-    [activities],
+    () => [...new Set(visibleActivities.map((a) => a.cadenceName))].sort(),
+    [visibleActivities],
   );
 
   // Grouped by channel for quick mode (uses paginated slice)
@@ -153,46 +169,19 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
     });
   }
 
-  // Find index in full activities array for execution sheet
+  // Find index in visible activities array for execution sheet
   function findGlobalIndex(activity: PendingActivity) {
-    return activities.findIndex((a) => a.enrollmentId === activity.enrollmentId);
+    return visibleActivities.findIndex(
+      (a) => a.enrollmentId === activity.enrollmentId && a.stepId === activity.stepId,
+    );
   }
 
   return (
     <div className="space-y-6">
-      {/* Available leads banner */}
-      {availableLeadsCount > 0 && (
-        <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/20">
-          <div className="flex items-center gap-2 text-sm">
-            <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <span>
-              Prospectando <strong>{activities.length}</strong> leads
-              {' · '}
-              <strong>{availableLeadsCount}</strong> leads disponíveis para serem iniciados
-            </span>
-          </div>
-          <Button
-            size="sm"
-            onClick={() => setEnrollOpen(true)}
-            className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            Iniciar novos leads
-          </Button>
-        </div>
-      )}
-
-      {/* Enrollment dialog */}
-      <EnrollInCadenceDialog
-        open={enrollOpen}
-        onOpenChange={setEnrollOpen}
-        leadIds={availableLeadIds}
-      />
-
       {/* Progress cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <ProgressCard completed={progress.completed} total={progress.total} />
-        <DailyGoalCard target={progress.target} completed={progress.completed} onStartProspecting={availableLeadsCount > 0 ? () => setEnrollOpen(true) : undefined} />
+        <DailyGoalCard target={progress.target} completed={progress.completed} />
       </div>
 
       {/* Tabs */}
@@ -267,7 +256,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
           </div>
 
           {filtered.length === 0 ? (
-            <ActivityEmptyState onStartActivities={availableLeadsCount > 0 ? () => setEnrollOpen(true) : undefined} />
+            <ActivityEmptyState />
           ) : quickMode && grouped ? (
             /* Quick mode: grouped by channel */
             <div className="space-y-4">
@@ -285,11 +274,11 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                     <div className="space-y-2 p-2">
                       {items.map((activity) => (
                         <ActivityRow
-                          key={activity.enrollmentId}
+                          key={`${activity.enrollmentId}:${activity.stepId}`}
                           activity={activity}
                           onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
                           onSkip={() => {
-                            handleActivityDone(activity.enrollmentId);
+                            handleActivityDone(activity.enrollmentId, activity.stepId);
                             import('../actions/skip-activity').then(({ skipActivity }) =>
                               skipActivity(activity.enrollmentId),
                             );
@@ -313,11 +302,11 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             <div className="space-y-2">
               {paginatedActivities.map((activity) => (
                 <ActivityRow
-                  key={activity.enrollmentId}
+                  key={`${activity.enrollmentId}:${activity.stepId}`}
                   activity={activity}
                   onExecute={() => setSelectedIndex(findGlobalIndex(activity))}
                   onSkip={() => {
-                    handleActivityDone(activity.enrollmentId);
+                    handleActivityDone(activity.enrollmentId, activity.stepId);
                     import('../actions/skip-activity').then(({ skipActivity }) =>
                       skipActivity(activity.enrollmentId),
                     );
@@ -336,7 +325,7 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
 
           {/* Execution Sheet */}
           <ActivityExecutionSheet
-            activities={activities}
+            activities={visibleActivities}
             selectedIndex={selectedIndex}
             onClose={handleClose}
             onNavigate={handleNavigate}

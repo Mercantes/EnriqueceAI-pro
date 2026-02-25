@@ -1,14 +1,15 @@
 'use client';
 
+import Link from 'next/link';
+
 import { Rocket, Trophy } from 'lucide-react';
 
 interface DailyGoalCardProps {
   target: number;
   completed: number;
-  onStartProspecting?: () => void;
 }
 
-export function DailyGoalCard({ target, completed, onStartProspecting }: DailyGoalCardProps) {
+export function DailyGoalCard({ target, completed }: DailyGoalCardProps) {
   const isAchieved = completed >= target;
 
   return (
@@ -35,16 +36,13 @@ export function DailyGoalCard({ target, completed, onStartProspecting }: DailyGo
           </p>
         )}
       </div>
-      {onStartProspecting && (
-        <button
-          type="button"
-          onClick={onStartProspecting}
-          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline"
-        >
-          <Rocket className="h-3.5 w-3.5" />
-          Iniciar novas prospecções
-        </button>
-      )}
+      <Link
+        href="/leads"
+        className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline"
+      >
+        <Rocket className="h-3.5 w-3.5" />
+        Iniciar novas prospecções
+      </Link>
     </div>
   );
 }

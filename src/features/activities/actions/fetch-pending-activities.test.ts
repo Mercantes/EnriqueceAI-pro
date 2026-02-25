@@ -93,6 +93,7 @@ function createChainMock(finalResult: unknown) {
   chain.insert = vi.fn().mockReturnValue(chain);
   chain.update = vi.fn().mockReturnValue(chain);
   chain.eq = vi.fn().mockReturnValue(chain);
+  chain.not = vi.fn().mockReturnValue(chain);
   chain.lte = vi.fn().mockReturnValue(chain);
   chain.in = vi.fn().mockReturnValue(chain);
   chain.order = vi.fn().mockReturnValue(chain);
