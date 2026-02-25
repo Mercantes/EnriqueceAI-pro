@@ -117,12 +117,13 @@ export async function getCalendarConnection(
 ): Promise<CalendarConnectionTokens | null> {
   const supabase = await createServerSupabaseClient();
 
+  // Include 'error' status — ensureValidToken will attempt auto-refresh
   const { data } = (await (supabase
     .from('calendar_connections') as ReturnType<typeof supabase.from>)
     .select('id, access_token_encrypted, refresh_token_encrypted, token_expires_at, calendar_email')
     .eq('org_id', orgId)
     .eq('user_id', userId)
-    .eq('status', 'connected')
+    .in('status', ['connected', 'error'])
     .maybeSingle()) as { data: CalendarConnectionTokens | null };
 
   return data;

@@ -39,7 +39,7 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps }
     <LeadInfoPanel
       data={activityLeadToInfoPanelData(lead)}
       timeline={timeline}
-      showConfigTab
+      showLeadHeader
       cadenceConfig={{ cadenceName, stepOrder, totalSteps }}
     />
   );

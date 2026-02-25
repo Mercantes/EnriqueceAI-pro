@@ -35,9 +35,18 @@ export default async function AtividadesPage() {
     );
   }
 
-  const progress = progressResult.success
+  const progressRaw = progressResult.success
     ? progressResult.data
     : { completed: 0, pending: 0, total: 0, target: 20 };
+
+  // Use actual activities count as source of truth to prevent mismatch
+  // between progress counter and activity list
+  const activitiesCount = activitiesResult.data.length;
+  const progress = {
+    ...progressRaw,
+    pending: activitiesCount,
+    total: progressRaw.completed + activitiesCount,
+  };
 
   const pendingCalls = callsResult.success ? callsResult.data : [];
   const dialerQueue = dialerResult.success ? dialerResult.data : [];

@@ -151,22 +151,22 @@ export class EmailService {
   ): Promise<SendEmailResult> {
     const supabase = supabaseClient ?? (await createServerSupabaseClient());
 
-    // Fetch Gmail connection
+    // Fetch Gmail connection (include 'error' status — will attempt auto-refresh)
     const { data: connection } = (await (supabase
       .from('gmail_connections') as ReturnType<typeof supabase.from>)
       .select('*')
       .eq('org_id', orgId)
       .eq('user_id', userId)
-      .eq('status', 'connected')
+      .in('status', ['connected', 'error'])
       .single()) as { data: GmailConnection | null };
 
     if (!connection) {
       return { success: false, error: 'Nenhuma conexão Gmail ativa encontrada' };
     }
 
-    // Auto-refresh if token is expired
+    // Auto-refresh if token is expired or connection was in error state
     let accessToken = connection.access_token_encrypted;
-    if (new Date(connection.token_expires_at) < new Date()) {
+    if (connection.status === 'error' || new Date(connection.token_expires_at) < new Date()) {
       const refreshResult = await refreshAccessToken(connection, supabase);
       if ('error' in refreshResult) {
         return { success: false, error: refreshResult.error };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ChevronDown, ListChecks, UserPlus, Users, Zap } from 'lucide-react';
 
@@ -20,7 +20,8 @@ import {
   defaultFilters,
   type ActivityFilterValues,
 } from './ActivityFilters';
-import { ActivityRow } from './ActivityRow';
+import { ActivityPagination } from './ActivityPagination';
+import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
 import { DailyGoalCard } from './DailyGoalCard';
 import { PendingCallsSection } from './PendingCallsSection';
 import { PowerDialerTab } from './PowerDialerTab';
@@ -43,6 +44,8 @@ const channelGroupLabel: Record<string, string> = {
   linkedin: 'LinkedIn',
   research: 'Pesquisa',
 };
+
+const DEFAULT_PER_PAGE = 25;
 
 function applyFilters(activities: PendingActivity[], filters: ActivityFilterValues): PendingActivity[] {
   return activities.filter((a) => {
@@ -85,6 +88,10 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   const [filters, setFilters] = useState<ActivityFilterValues>(defaultFilters);
   const [enrollOpen, setEnrollOpen] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
+
   const handleActivityDone = useCallback((enrollmentId: string) => {
     setActivities((prev) => prev.filter((a) => a.enrollmentId !== enrollmentId));
   }, []);
@@ -100,23 +107,39 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
   // Filtered activities
   const filtered = useMemo(() => applyFilters(activities, filters), [activities, filters]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
+  // Paginated slice of filtered activities
+  const paginatedActivities = useMemo(() => {
+    const start = (page - 1) * perPage;
+    return filtered.slice(start, start + perPage);
+  }, [filtered, page, perPage]);
+
+  const handlePerPageChange = useCallback((newPerPage: number) => {
+    setPerPage(newPerPage);
+    setPage(1);
+  }, []);
+
   // Cadence options for filter
   const cadenceOptions = useMemo(
     () => [...new Set(activities.map((a) => a.cadenceName))].sort(),
     [activities],
   );
 
-  // Grouped by channel for quick mode
+  // Grouped by channel for quick mode (uses paginated slice)
   const grouped = useMemo(() => {
     if (!quickMode) return null;
     const groups = new Map<string, PendingActivity[]>();
-    for (const a of filtered) {
+    for (const a of paginatedActivities) {
       const list = groups.get(a.channel) ?? [];
       list.push(a);
       groups.set(a.channel, list);
     }
     return groups;
-  }, [quickMode, filtered]);
+  }, [quickMode, paginatedActivities]);
 
   // Collapsed state for quick mode groups
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -225,12 +248,22 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
             </Button>
           </div>
 
-          {/* Activity list header */}
-          <div className="flex items-center gap-2">
-            <ListChecks className="h-5 w-5 text-[var(--muted-foreground)]" />
-            <h2 className="text-lg font-semibold">
-              Atividades ({filtered.length})
-            </h2>
+          {/* Column headers */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <ListChecks className="h-5 w-5 text-[var(--muted-foreground)]" />
+              <h2 className="text-lg font-semibold">
+                Atividades das Cadências ({filtered.length})
+              </h2>
+            </div>
+            {filtered.length > 0 && (
+              <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 border-b border-[var(--border)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]`}>
+                <span>Atividade</span>
+                <span>Cadência</span>
+                <span>Lead</span>
+                <span />
+              </div>
+            )}
           </div>
 
           {filtered.length === 0 ? (
@@ -267,11 +300,18 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                   )}
                 </div>
               ))}
+              <ActivityPagination
+                total={filtered.length}
+                page={page}
+                perPage={perPage}
+                onPageChange={setPage}
+                onPerPageChange={handlePerPageChange}
+              />
             </div>
           ) : (
-            /* Normal mode: flat list */
+            /* Normal mode: flat list with pagination */
             <div className="space-y-2">
-              {filtered.map((activity) => (
+              {paginatedActivities.map((activity) => (
                 <ActivityRow
                   key={activity.enrollmentId}
                   activity={activity}
@@ -284,6 +324,13 @@ export function ActivityQueueView({ initialActivities, progress, pendingCalls, d
                   }}
                 />
               ))}
+              <ActivityPagination
+                total={filtered.length}
+                page={page}
+                perPage={perPage}
+                onPageChange={setPage}
+                onPerPageChange={handlePerPageChange}
+              />
             </div>
           )}
 

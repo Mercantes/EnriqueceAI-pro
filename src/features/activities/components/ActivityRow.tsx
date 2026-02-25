@@ -61,42 +61,43 @@ const channelLabel: Record<string, string> = {
   research: 'Pesquisa',
 };
 
+/** Grid column definition shared with ActivityQueueView header */
+export const ACTIVITY_GRID_COLS = 'grid grid-cols-[minmax(140px,1.2fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_auto]';
+
 export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
   const { text: timeText, isUrgent } = formatRelativeTime(activity.nextStepDue);
   const Icon = channelIcon[activity.channel] ?? Mail;
   const label = channelLabel[activity.channel] ?? activity.channel;
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:bg-[var(--accent)]/50">
-      {/* Time badge */}
-      <span
-        className={`shrink-0 min-w-[60px] text-xs font-bold uppercase tabular-nums ${
-          isUrgent ? 'text-red-500' : 'text-[var(--muted-foreground)]'
-        }`}
-      >
-        {timeText}
-      </span>
-
-      {/* Channel badge */}
-      <Badge variant="outline" className="shrink-0 gap-1">
-        <Icon className="h-3 w-3" />
-        {label}
-      </Badge>
-
-      {/* Cadence + step info */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">
-            {activity.cadenceName}
-          </span>
-          <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
-            Passo {activity.stepOrder} de {activity.totalSteps}
-          </span>
-        </div>
+    <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:bg-[var(--accent)]/50`}>
+      {/* Column 1: ATIVIDADE (tempo + canal) */}
+      <div className="flex items-center gap-2 min-w-0">
+        <span
+          className={`shrink-0 min-w-[50px] text-xs font-bold uppercase tabular-nums ${
+            isUrgent ? 'text-red-500' : 'text-[var(--muted-foreground)]'
+          }`}
+        >
+          {timeText}
+        </span>
+        <Badge variant="outline" className="shrink-0 gap-1">
+          <Icon className="h-3 w-3" />
+          {label}
+        </Badge>
       </div>
 
-      {/* Lead info */}
-      <div className="hidden min-w-0 max-w-[200px] shrink-0 text-right sm:block">
+      {/* Column 2: CADÊNCIA (nome + passo) */}
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">
+          {activity.cadenceName}
+        </p>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Passo {activity.stepOrder} de {activity.totalSteps}
+        </p>
+      </div>
+
+      {/* Column 3: LEAD (nome + email) */}
+      <div className="min-w-0">
         <p className="truncate text-sm font-medium">
           {activity.lead.nome_fantasia ?? activity.lead.razao_social ?? activity.lead.cnpj}
         </p>
@@ -105,7 +106,7 @@ export function ActivityRow({ activity, onExecute, onSkip }: ActivityRowProps) {
         </p>
       </div>
 
-      {/* Actions */}
+      {/* Column 4: AÇÕES */}
       <div className="flex shrink-0 items-center gap-1">
         <Button size="sm" onClick={onExecute} className="gap-1.5">
           <Play className="h-3.5 w-3.5" />

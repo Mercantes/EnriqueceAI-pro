@@ -48,15 +48,14 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   await requireAuth();
   const supabase = await createServerSupabaseClient();
 
-  // 1. Fetch active enrollments with due steps (overdue + next 24h), joined with lead + cadence
-  const next24h = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  // 1. Fetch ALL active enrollments with due steps (no time window — show everything pending)
   const { data: enrollments, error: enrollError } = (await (supabase
     .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
     .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
-    .lte('next_step_due', next24h)
+    .not('next_step_due', 'is', null)
     .order('next_step_due', { ascending: true })
-    .limit(200)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
+    .limit(500)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
 
   if (enrollError) {
     console.error('[activities] Failed to fetch enrollments:', enrollError.message);

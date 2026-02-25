@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ListChecks, X } from 'lucide-react';
@@ -17,7 +17,8 @@ import {
 
 import type { PendingActivity } from '../types';
 import { ActivityExecutionSheet } from './ActivityExecutionSheet';
-import { ActivityRow } from './ActivityRow';
+import { ActivityPagination } from './ActivityPagination';
+import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
 
 interface ActivityLogViewProps {
   activities: PendingActivity[];
@@ -26,6 +27,7 @@ interface ActivityLogViewProps {
 }
 
 const ALL_VALUE = '__all__';
+const DEFAULT_PER_PAGE = 25;
 
 const channelOptions = [
   { value: 'email', label: 'Email' },
@@ -67,6 +69,10 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
     router.push('/activities');
   }, [router]);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
+
   // Cadence filter (client-side since cadences come from the data)
   const [cadenceFilter, setCadenceFilter] = useState('all');
   const [stepFilter, setStepFilter] = useState('all');
@@ -83,6 +89,22 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
       return true;
     });
   }, [activities, cadenceFilter, stepFilter]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [cadenceFilter, stepFilter, currentStatus, currentChannel, currentSearch]);
+
+  // Paginated slice
+  const paginatedActivities = useMemo(() => {
+    const start = (page - 1) * perPage;
+    return filtered.slice(start, start + perPage);
+  }, [filtered, page, perPage]);
+
+  const handlePerPageChange = useCallback((newPerPage: number) => {
+    setPerPage(newPerPage);
+    setPage(1);
+  }, []);
 
   const handleActivityDone = useCallback((enrollmentId: string) => {
     setActivities((prev) => prev.filter((a) => a.enrollmentId !== enrollmentId));
@@ -209,23 +231,24 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
         </div>
       </div>
 
-      {/* Table header */}
-      <div className="border-b pb-2">
-        <div className="grid grid-cols-[80px_1fr_1fr_1fr_auto] gap-4 px-4 text-xs font-medium uppercase text-[var(--muted-foreground)]">
-          <span />
-          <span>Atividade</span>
-          <span>Cadência</span>
-          <span>Lead</span>
-          <span />
-        </div>
-      </div>
-
       {/* Section label */}
       <div className="rounded-lg bg-[var(--muted)]/50 px-4 py-2">
         <span className="text-sm font-semibold text-[var(--foreground)]">
           Atividades das Cadências ({filtered.length})
         </span>
       </div>
+
+      {/* Table header — must match ACTIVITY_GRID_COLS from ActivityRow */}
+      {filtered.length > 0 && (
+        <div className="border-b pb-2">
+          <div className={`${ACTIVITY_GRID_COLS} gap-4 px-4 text-xs font-medium uppercase text-[var(--muted-foreground)]`}>
+            <span>Atividade</span>
+            <span>Cadência</span>
+            <span>Lead</span>
+            <span />
+          </div>
+        </div>
+      )}
 
       {/* Activity list */}
       {filtered.length === 0 ? (
@@ -234,7 +257,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((activity) => (
+          {paginatedActivities.map((activity) => (
             <ActivityRow
               key={activity.enrollmentId}
               activity={activity}
@@ -247,6 +270,13 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
               }}
             />
           ))}
+          <ActivityPagination
+            total={filtered.length}
+            page={page}
+            perPage={perPage}
+            onPageChange={setPage}
+            onPerPageChange={handlePerPageChange}
+          />
         </div>
       )}
 

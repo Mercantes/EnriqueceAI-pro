@@ -108,6 +108,18 @@ export async function handleCalendarCallback(
   const userInfo = (await userInfoResponse.json()) as { email: string };
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
+  // Preserve existing refresh_token if Google didn't send a new one (happens on re-auth)
+  let refreshToken = tokens.refresh_token ?? '';
+  if (!refreshToken) {
+    const { data: existing } = (await (supabase
+      .from('calendar_connections') as ReturnType<typeof supabase.from>)
+      .select('refresh_token_encrypted')
+      .eq('org_id', member.org_id)
+      .eq('user_id', user.id)
+      .maybeSingle()) as { data: { refresh_token_encrypted: string } | null };
+    refreshToken = existing?.refresh_token_encrypted ?? '';
+  }
+
   // Upsert connection
   const { data, error } = (await (supabase
     .from('calendar_connections') as ReturnType<typeof supabase.from>)
@@ -116,7 +128,7 @@ export async function handleCalendarCallback(
         org_id: member.org_id,
         user_id: user.id,
         access_token_encrypted: tokens.access_token,
-        refresh_token_encrypted: tokens.refresh_token ?? '',
+        refresh_token_encrypted: refreshToken,
         token_expires_at: expiresAt,
         calendar_email: userInfo.email,
         status: 'connected',

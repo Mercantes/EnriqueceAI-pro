@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   Bell,
   Calendar,
+  CalendarDays,
   Check,
   ChevronDown,
   Clock,
@@ -21,8 +22,8 @@ import {
   Save,
   Search,
   Send,
-  Settings,
   User,
+  Video,
   X,
   XCircle,
   Zap,
@@ -37,6 +38,9 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import { Input } from '@/shared/components/ui/input';
+import { Label } from '@/shared/components/ui/label';
+
+import { scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
 
 import { updateLead } from '../actions/update-lead';
 import {
@@ -58,12 +62,12 @@ export interface LeadInfoPanelProps {
   data: LeadInfoPanelData;
   enrollment?: { cadence_name: string; enrolled_by_email: string | null } | null;
   timeline?: TimelineEntry[];
-  showConfigTab?: boolean;
+  showLeadHeader?: boolean;
   cadenceConfig?: { cadenceName: string; stepOrder: number; totalSteps: number };
   kpis?: { completed: number; open: number; conversations: number };
 }
 
-type TabId = 'dados' | 'timeline' | 'notas' | 'config';
+type TabId = 'dados' | 'timeline' | 'notas' | 'agendar';
 
 const typeConfig: Record<InteractionType, { label: string; icon: typeof Send; className: string }> = {
   sent: { label: 'Enviado', icon: Send, className: 'text-blue-500' },
@@ -131,7 +135,7 @@ export function LeadInfoPanel({
   data: initialData,
   enrollment,
   timeline,
-  showConfigTab = false,
+  showLeadHeader = false,
   cadenceConfig,
   kpis,
 }: LeadInfoPanelProps) {
@@ -152,11 +156,20 @@ export function LeadInfoPanel({
     { id: 'dados', icon: User, label: 'Dados' },
     { id: 'timeline', icon: Clock, label: 'Timeline' },
     { id: 'notas', icon: FileText, label: 'Notas' },
-    ...(showConfigTab ? [{ id: 'config' as const, icon: Settings, label: 'Config' }] : []),
+    { id: 'agendar', icon: CalendarDays, label: 'Agendar' },
   ];
 
   const [activeTab, setActiveTab] = useState<TabId>('dados');
   const [isEditing, setIsEditing] = useState(false);
+
+  // Meeting scheduling states
+  const [meetingDate, setMeetingDate] = useState('');
+  const [meetingTime, setMeetingTime] = useState('09:00');
+  const [meetingDuration, setMeetingDuration] = useState('30');
+  const [meetingTitle, setMeetingTitle] = useState('');
+  const [meetingAttendee, setMeetingAttendee] = useState('');
+  const [meetingMeetLink, setMeetingMeetLink] = useState(true);
+  const [isMeetingPending, startMeetingTransition] = useTransition();
 
   // Primary contact (first socio)
   const primarySocio = data.socios?.[0] ?? null;
@@ -258,7 +271,7 @@ export function LeadInfoPanel({
   return (
     <div className="flex h-full w-full shrink-0 flex-col">
       {/* Lead header — avatar + name + actions shown only in activity execution */}
-      {showConfigTab && (
+      {showLeadHeader && (
       <div className="mb-20 flex items-center gap-3">
         <div className="relative">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--primary)]/10 text-lg font-semibold text-[var(--primary)]">
@@ -403,9 +416,6 @@ export function LeadInfoPanel({
         {/* Tab Dados */}
         {activeTab === 'dados' && (
           <div className="space-y-4">
-            <p className="text-[10px] italic text-[var(--muted-foreground)]">
-              *Mostrando apenas campos preenchidos.
-            </p>
 
             {/* GERAL — contact principal */}
             <div className="space-y-2">
@@ -565,15 +575,6 @@ export function LeadInfoPanel({
 
             {/* STATUS — metadados internos */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                Status
-              </h4>
-              {data.status && (
-                <MeetimeFieldRow label="Status" value={<LeadStatusBadge status={data.status} variant="meetime" />} />
-              )}
-              {data.enrichment_status && (
-                <MeetimeFieldRow label="Enriquecimento" value={<EnrichmentStatusBadge status={data.enrichment_status} />} />
-              )}
               {enrollment && (
                 <MeetimeFieldRow
                   label="Cadência"
@@ -633,9 +634,15 @@ export function LeadInfoPanel({
                         )}
                       </div>
                       {entry.message_content ? (
-                        <p className="mt-1 whitespace-pre-line text-xs text-[var(--muted-foreground)] line-clamp-4">
-                          {entry.message_content}
-                        </p>
+                        <div
+                          className="mt-1 whitespace-pre-line text-xs text-[var(--muted-foreground)] [&_a]:text-[var(--primary)] [&_a]:underline"
+                          dangerouslySetInnerHTML={{
+                            __html: entry.message_content
+                              .replace(/\{\{[^}]+\}\}/g, '')
+                              .replace(/\s{2,}/g, ' ')
+                              .trim(),
+                          }}
+                        />
                       ) : (
                         <p className="mt-1 text-xs italic text-[var(--muted-foreground)]/60">
                           Nenhuma anotação
@@ -654,19 +661,113 @@ export function LeadInfoPanel({
           <LeadNotes leadId={data.id} notes={data.notes} variant="inline" />
         )}
 
-        {/* Tab Config */}
-        {activeTab === 'config' && cadenceConfig && (
-          <div className="space-y-3">
+        {/* Tab Agendar */}
+        {activeTab === 'agendar' && (
+          <div className="space-y-4">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-              Cadência Atual
+              Agendar Reunião
             </h4>
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-              <span className="text-sm font-medium">{cadenceConfig.cadenceName}</span>
+
+            <div>
+              <Label className="text-xs">Título</Label>
+              <Input
+                value={meetingTitle}
+                onChange={(e) => setMeetingTitle(e.target.value)}
+                placeholder={`Reunião com ${data.nome_fantasia ?? data.razao_social ?? 'Lead'}`}
+                className="mt-1"
+              />
             </div>
-            <p className="pl-6 text-xs text-[var(--muted-foreground)]">
-              Passo {cadenceConfig.stepOrder} de {cadenceConfig.totalSteps}
-            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Data</Label>
+                <Input
+                  type="date"
+                  value={meetingDate}
+                  onChange={(e) => setMeetingDate(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Hora</Label>
+                <Input
+                  type="time"
+                  value={meetingTime}
+                  onChange={(e) => setMeetingTime(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Duração</Label>
+              <select
+                className="mt-1 flex h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1 text-sm"
+                value={meetingDuration}
+                onChange={(e) => setMeetingDuration(e.target.value)}
+              >
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+                <option value="60">1 hora</option>
+                <option value="90">1h30</option>
+              </select>
+            </div>
+
+            <div>
+              <Label className="text-xs">Email do closer (participante)</Label>
+              <Input
+                type="email"
+                value={meetingAttendee}
+                onChange={(e) => setMeetingAttendee(e.target.value)}
+                placeholder="closer@empresa.com"
+                className="mt-1"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={meetingMeetLink}
+                onChange={(e) => setMeetingMeetLink(e.target.checked)}
+                className="rounded"
+              />
+              <Video className="h-3.5 w-3.5" />
+              Gerar link do Google Meet
+            </label>
+
+            <Button
+              className="w-full"
+              disabled={!meetingDate || !meetingTime || isMeetingPending}
+              onClick={() => {
+                const startDateTime = new Date(`${meetingDate}T${meetingTime}:00`);
+                const endDateTime = new Date(startDateTime.getTime() + parseInt(meetingDuration, 10) * 60 * 1000);
+                const title = meetingTitle || `Reunião com ${data.nome_fantasia ?? data.razao_social ?? 'Lead'}`;
+
+                startMeetingTransition(async () => {
+                  const result = await scheduleMeeting(data.id, {
+                    title,
+                    startTime: startDateTime.toISOString(),
+                    endTime: endDateTime.toISOString(),
+                    attendeeEmail: meetingAttendee || data.email || undefined,
+                    generateMeetLink: meetingMeetLink,
+                  });
+
+                  if (result.success) {
+                    const meetInfo = result.data.meetLink ? ` | Meet: ${result.data.meetLink}` : '';
+                    toast.success(`Reunião agendada!${meetInfo}`);
+                    setMeetingDate('');
+                    setMeetingTitle('');
+                    router.refresh();
+                  } else {
+                    toast.error(result.error);
+                  }
+                });
+              }}
+            >
+              <Calendar className="mr-2 h-4 w-4" />
+              {isMeetingPending ? 'Agendando...' : 'Agendar Reunião'}
+            </Button>
           </div>
         )}
       </div>
