@@ -1,0 +1,43 @@
+'use server';
+
+import type { ActionResult } from '@/lib/actions/action-result';
+import { requireAuth } from '@/lib/auth/require-auth';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+
+import type { LeadNote } from './add-lead-note';
+
+export async function fetchLeadNotes(
+  leadId: string,
+): Promise<ActionResult<LeadNote[]>> {
+  await requireAuth();
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = (await (supabase
+    .from('interactions') as ReturnType<typeof supabase.from>)
+    .select('id, message_content, metadata, created_at')
+    .eq('lead_id', leadId)
+    .contains('metadata', { is_note: true })
+    .order('created_at', { ascending: false })
+    .limit(50)) as {
+      data: Array<{
+        id: string;
+        message_content: string | null;
+        metadata: Record<string, unknown> | null;
+        created_at: string;
+      }> | null;
+      error: { message: string } | null;
+    };
+
+  if (error) {
+    return { success: false, error: 'Erro ao buscar anotações' };
+  }
+
+  const notes: LeadNote[] = (data ?? []).map((row) => ({
+    id: row.id,
+    text: row.message_content ?? '',
+    created_at: row.created_at,
+    author_email: (row.metadata?.author as string) ?? null,
+  }));
+
+  return { success: true, data: notes };
+}

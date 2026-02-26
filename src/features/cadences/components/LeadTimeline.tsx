@@ -1,46 +1,61 @@
 'use client';
 
+import { useState } from 'react';
+
 import {
-  ArrowRight,
-  Calendar,
-  Check,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Linkedin,
   Mail,
   MessageSquare,
-  MousePointerClick,
   Phone,
-  Reply,
   Search,
-  Send,
-  XCircle,
+  StickyNote,
 } from 'lucide-react';
 
-import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 
 import type { TimelineEntry } from '../cadences.contract';
-import type { InteractionType } from '../types';
 
 interface LeadTimelineProps {
   entries: TimelineEntry[];
 }
 
-const typeConfig: Record<InteractionType, { label: string; icon: typeof Send; className: string }> = {
-  sent: { label: 'Enviado', icon: Send, className: 'text-blue-500' },
-  delivered: { label: 'Entregue', icon: Check, className: 'text-green-500' },
-  opened: { label: 'Aberto', icon: Mail, className: 'text-[var(--primary)]' },
-  clicked: { label: 'Clicou', icon: MousePointerClick, className: 'text-orange-500' },
-  replied: { label: 'Respondeu', icon: Reply, className: 'text-emerald-600' },
-  bounced: { label: 'Bounce', icon: XCircle, className: 'text-red-500' },
-  failed: { label: 'Falhou', icon: XCircle, className: 'text-red-600' },
-  meeting_scheduled: { label: 'Reunião', icon: Calendar, className: 'text-indigo-500' },
+const channelConfig: Record<string, { label: string; icon: typeof Mail; bg: string; text: string }> = {
+  email: { label: 'E-mail', icon: Mail, bg: 'bg-blue-100 dark:bg-blue-950', text: 'text-blue-600 dark:text-blue-400' },
+  whatsapp: { label: 'WhatsApp', icon: MessageSquare, bg: 'bg-green-100 dark:bg-green-950', text: 'text-green-600 dark:text-green-400' },
+  phone: { label: 'Ligação', icon: Phone, bg: 'bg-orange-100 dark:bg-orange-950', text: 'text-orange-600 dark:text-orange-400' },
+  linkedin: { label: 'LinkedIn', icon: MessageSquare, bg: 'bg-purple-100 dark:bg-purple-950', text: 'text-purple-600 dark:text-purple-400' },
+  research: { label: 'Pesquisa', icon: Search, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-400' },
 };
 
-const channelIcon: { [k: string]: typeof Mail } = { email: Mail, whatsapp: MessageSquare, phone: Phone, linkedin: Linkedin, research: Search };
-const channelLabel: { [k: string]: string } = { email: 'Email', whatsapp: 'WhatsApp', phone: 'Ligação', linkedin: 'LinkedIn', research: 'Pesquisa' };
+const noteConfig = { label: 'Anotação', icon: StickyNote, bg: 'bg-yellow-100 dark:bg-yellow-950', text: 'text-yellow-600 dark:text-yellow-400' };
+const defaultChannel = { label: 'Atividade', icon: Mail, bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-400' };
 
-function formatDate(dateStr: string): string {
+function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  if (diffMin < 5) return `AGORA, ${time}`;
+  if (diffMin < 60) return `${diffMin}min, ${time}`;
+  if (diffHours < 24) {
+    if (date.toDateString() === now.toDateString()) return `HOJE, ${time}`;
+    return `ONTEM, ${time}`;
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `ONTEM, ${time}`;
+
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + `, ${time}`;
+}
+
+function formatFullDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('pt-BR', {
     day: '2-digit',
@@ -49,6 +64,64 @@ function formatDate(dateStr: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function TimelineMessageContent({ entry }: { entry: TimelineEntry }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasHtml = !!entry.html_body;
+  const hasContent = hasHtml || !!entry.message_content;
+
+  if (!hasContent) {
+    return (
+      <p className="mt-2 text-sm text-[var(--muted-foreground)] italic">
+        Nenhuma anotação
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      {entry.subject && (
+        <p className="text-sm font-semibold text-[var(--foreground)]">
+          {entry.subject}
+        </p>
+      )}
+      {hasHtml ? (
+        <>
+          <div
+            className={`mt-1 overflow-hidden text-sm text-[var(--muted-foreground)] transition-all ${
+              expanded ? 'max-h-[800px]' : 'max-h-28'
+            }`}
+          >
+            <div
+              className="prose prose-sm max-w-none text-sm text-[var(--muted-foreground)] [&_p]:my-1 [&_br]:block"
+              dangerouslySetInnerHTML={{ __html: entry.html_body! }}
+            />
+          </div>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-1.5 flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="h-3 w-3" />
+                Recolher
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-3 w-3" />
+                Ver mensagem completa
+              </>
+            )}
+          </button>
+        </>
+      ) : (
+        <p className="mt-1 whitespace-pre-line text-sm text-[var(--muted-foreground)]">
+          {entry.message_content}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function LeadTimeline({ entries }: LeadTimelineProps) {
@@ -66,54 +139,49 @@ export function LeadTimeline({ entries }: LeadTimelineProps) {
             Nenhuma interação registrada ainda.
           </p>
         ) : (
-          <div className="space-y-4">
-            {entries.map((entry) => {
-              const config = typeConfig[entry.type];
-              const Icon = config.icon;
-              const ChannelIcon = channelIcon[entry.channel] ?? Mail;
+          <div className="relative">
+            {/* Vertical line */}
+            <div className="absolute left-[18px] top-0 bottom-0 w-px bg-[var(--border)]" />
 
-              return (
-                <div key={entry.id} className="flex gap-3">
-                  <div className="flex flex-col items-center">
-                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] ${config.className}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="mt-1 h-full w-px bg-[var(--border)]" />
-                  </div>
+            <div className="space-y-6">
+              {entries.map((entry) => {
+                const isNote = entry.is_note;
+                const channel = isNote ? noteConfig : (channelConfig[entry.channel] ?? defaultChannel);
+                const ChannelIcon = channel.icon;
+                const stepLabel = !isNote && entry.step_order != null ? ` ${entry.step_order}` : '';
+                const title = `${channel.label}${stepLabel}`;
 
-                  <div className="flex-1 pb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{config.label}</span>
-                      <Badge variant="outline" className="h-5 gap-1 text-xs">
-                        <ChannelIcon className="h-3 w-3" />
-                        {channelLabel[entry.channel] ?? entry.channel}
-                      </Badge>
-                      {entry.ai_generated && (
-                        <Badge variant="outline" className="h-5 text-xs">IA</Badge>
-                      )}
+                return (
+                  <div key={entry.id} className="relative flex gap-4">
+                    {/* Channel icon circle */}
+                    <div
+                      className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${channel.bg} ${channel.text}`}
+                    >
+                      <ChannelIcon className="h-4 w-4" />
                     </div>
 
-                    {entry.cadence_name && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
-                        <ArrowRight className="h-3 w-3" />
-                        {entry.cadence_name}
-                        {entry.step_order != null && ` — Passo ${entry.step_order}`}
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 pb-1">
+                      {/* Header: title + date */}
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-sm font-semibold text-[var(--foreground)]">
+                          {title}
+                        </span>
+                        <span
+                          className="shrink-0 text-xs text-[var(--muted-foreground)]"
+                          title={formatFullDate(entry.created_at)}
+                        >
+                          {formatRelativeDate(entry.created_at)}
+                        </span>
                       </div>
-                    )}
 
-                    {entry.message_content && (
-                      <p className="mt-1 line-clamp-2 text-xs text-[var(--muted-foreground)]">
-                        {entry.message_content}
-                      </p>
-                    )}
-
-                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                      {formatDate(entry.created_at)}
-                    </p>
+                      {/* Message content */}
+                      <TimelineMessageContent entry={entry} />
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>

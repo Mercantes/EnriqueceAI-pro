@@ -88,7 +88,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
 
         {/* Anotações Tab */}
         <TabsContent value="anotacoes" className="pt-4">
-          <LeadNotes leadId={lead.id} notes={lead.notes} />
+          <LeadNotes leadId={lead.id} notes={null} />
         </TabsContent>
 
         {/* Agendar reunião Tab */}

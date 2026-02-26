@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 
 import {
   CheckCircle2,
+  ChevronDown,
   Clock,
   FileText,
   Loader2,
@@ -37,12 +38,15 @@ import {
   hangupApi4ComCall,
 } from '@/features/calls/actions/initiate-api4com-call';
 
+import type { ResolvedPhone } from '../utils/resolve-whatsapp-phone';
+
 type CallState = 'idle' | 'calling' | 'connected' | 'ended';
 
 interface ActivityPhonePanelProps {
   leadName: string;
   leadId: string;
   phoneNumber: string | null;
+  phones: ResolvedPhone[];
   isSending: boolean;
   onMarkDone: (notes: string) => void;
   onSkip: () => void;
@@ -58,10 +62,14 @@ export function ActivityPhonePanel({
   leadName,
   leadId,
   phoneNumber,
+  phones,
   isSending,
   onMarkDone,
   onSkip,
 }: ActivityPhonePanelProps) {
+  // Use first resolved phone or fallback to lead.telefone
+  const initialPhone = phones[0]?.formatted ?? phoneNumber ?? '';
+  const [selectedPhone, setSelectedPhone] = useState(initialPhone);
   const [callState, setCallState] = useState<CallState>('idle');
   const [api4comCallId, setApi4comCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState('');
@@ -70,6 +78,9 @@ export function ActivityPhonePanel({
   const [callDuration, setCallDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const hasMultiplePhones = phones.length > 1;
+  const hasAnyPhone = selectedPhone !== '';
 
   // Timer for call duration
   useEffect(() => {
@@ -82,14 +93,14 @@ export function ActivityPhonePanel({
   }, [callState]);
 
   function handleInitiateCall() {
-    if (!phoneNumber) return;
+    if (!selectedPhone) return;
 
     setElapsed(0);
     startTransition(async () => {
       setCallState('calling');
 
       const result = await initiateApi4ComCall({
-        phone: phoneNumber,
+        phone: selectedPhone,
         leadId,
       });
 
@@ -131,7 +142,6 @@ export function ActivityPhonePanel({
   }
 
   function handleDismissModal() {
-    // Allow closing without completing — go back to idle
     setCallState('idle');
     setCallStatus('');
     setNotes('');
@@ -165,12 +175,33 @@ export function ActivityPhonePanel({
         </div>
       </div>
 
+      {/* Phone selector — only when multiple phones */}
+      {hasMultiplePhones && (
+        <div className="mt-4 space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+            Selecionar telefone
+          </Label>
+          <Select value={selectedPhone} onValueChange={setSelectedPhone} disabled={isInCall}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione um telefone..." />
+            </SelectTrigger>
+            <SelectContent>
+              {phones.map((p) => (
+                <SelectItem key={p.raw} value={p.formatted}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Call section — centered */}
       <div className="flex flex-1 flex-col items-center justify-center py-8">
-        {phoneNumber ? (
+        {hasAnyPhone ? (
           <>
             <p className="mb-1 text-2xl font-bold tabular-nums tracking-wide">
-              {phoneNumber}
+              {selectedPhone}
             </p>
 
             {/* Timer display during call */}
@@ -254,7 +285,7 @@ export function ActivityPhonePanel({
             <div className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-4 py-3">
               <div>
                 <p className="text-sm font-medium">{leadName}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">{phoneNumber}</p>
+                <p className="text-xs text-[var(--muted-foreground)]">{selectedPhone}</p>
               </div>
               <div className="text-right">
                 <p className="font-mono text-sm tabular-nums">{formatTimer(callDuration)}</p>

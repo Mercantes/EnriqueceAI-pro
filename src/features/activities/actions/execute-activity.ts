@@ -77,7 +77,10 @@ export async function executeActivity(
       channel: channel || 'email',
       type: 'sent',
       message_content: body ? toPlainText(body) : null,
-      metadata: subject ? { subject } : null,
+      metadata: {
+        ...(subject ? { subject } : {}),
+        ...(body ? { html_body: body } : {}),
+      },
       ai_generated: aiGenerated,
       original_template_id: templateId,
     } as Record<string, unknown>)

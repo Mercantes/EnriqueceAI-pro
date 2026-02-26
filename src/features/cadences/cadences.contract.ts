@@ -90,7 +90,10 @@ export interface TimelineEntry {
   type: InteractionRow['type'];
   channel: InteractionRow['channel'];
   message_content: string | null;
+  subject: string | null;
+  html_body: string | null;
   ai_generated: boolean;
+  is_note: boolean;
   created_at: string;
   cadence_name?: string;
   step_order?: number;

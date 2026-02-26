@@ -47,13 +47,14 @@ export function CadenceProgressBar({ steps, cadenceName }: CadenceProgressBarPro
           return (
             <div key={step.step_order} className="flex items-center">
               <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${statusColors[step.status]}`}
+                className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${statusColors[step.status]}`}
                 title={`Passo ${step.step_order} — ${step.channel}`}
               >
-                {step.status === 'completed' ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4" />
+                {step.status === 'completed' && (
+                  <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-green-600 text-white ring-2 ring-[var(--card)]">
+                    <Check className="h-2 w-2" />
+                  </div>
                 )}
               </div>
               {!isLast && (

@@ -658,7 +658,7 @@ export function LeadInfoPanel({
 
         {/* Tab Notas */}
         {activeTab === 'notas' && (
-          <LeadNotes leadId={data.id} notes={data.notes} variant="inline" />
+          <LeadNotes leadId={data.id} notes={null} />
         )}
 
         {/* Tab Agendar */}

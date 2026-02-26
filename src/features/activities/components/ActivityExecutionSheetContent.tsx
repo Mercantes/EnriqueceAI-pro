@@ -41,8 +41,8 @@ export function ActivityExecutionSheetContent({
   const [aiPersonalized, setAiPersonalized] = useState(false);
   const [signature, setSignature] = useState('');
 
-  // Phone resolution for WhatsApp
-  const phones = activity.channel === 'whatsapp' ? getAllLeadPhones(activity.lead) : [];
+  // Phone resolution for WhatsApp and Phone channels
+  const phones = (activity.channel === 'whatsapp' || activity.channel === 'phone') ? getAllLeadPhones(activity.lead) : [];
   const defaultPhone = activity.channel === 'whatsapp'
     ? (resolveWhatsAppPhone(activity.lead)?.formatted ?? '')
     : '';
@@ -199,6 +199,7 @@ export function ActivityExecutionSheetContent({
         leadName={leadName}
         leadId={activity.lead.id}
         phoneNumber={activity.lead.telefone}
+        phones={phones}
         isSending={isSending}
         onMarkDone={onMarkDone}
         onSkip={onSkip}

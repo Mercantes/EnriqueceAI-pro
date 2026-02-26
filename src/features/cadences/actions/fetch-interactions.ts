@@ -67,16 +67,22 @@ export async function fetchLeadTimeline(
     }
   }
 
-  const timeline: TimelineEntry[] = (interactions ?? []).map((i) => ({
-    id: i.id,
-    type: i.type,
-    channel: i.channel,
-    message_content: i.message_content,
-    ai_generated: i.ai_generated,
-    created_at: i.created_at,
-    cadence_name: i.cadence_id ? cadenceMap[i.cadence_id] : undefined,
-    step_order: i.step_id ? stepMap[i.step_id] : undefined,
-  }));
+  const timeline: TimelineEntry[] = (interactions ?? []).map((i) => {
+    const meta = i.metadata as Record<string, unknown> | null;
+    return {
+      id: i.id,
+      type: i.type,
+      channel: i.channel,
+      message_content: i.message_content,
+      subject: (meta?.subject as string) ?? null,
+      html_body: (meta?.html_body as string) ?? null,
+      ai_generated: i.ai_generated,
+      is_note: (meta?.is_note as boolean) ?? false,
+      created_at: i.created_at,
+      cadence_name: i.cadence_id ? cadenceMap[i.cadence_id] : undefined,
+      step_order: i.step_id ? stepMap[i.step_id] : undefined,
+    };
+  });
 
   return { success: true, data: timeline };
 }

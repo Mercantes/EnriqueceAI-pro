@@ -10,7 +10,10 @@ function createEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
     type: 'sent',
     channel: 'email',
     message_content: 'Olá, tudo bem?',
+    subject: null,
+    html_body: null,
     ai_generated: false,
+    is_note: false,
     created_at: '2026-02-15T10:00:00Z',
     ...overrides,
   };
@@ -27,34 +30,23 @@ describe('LeadTimeline', () => {
     expect(screen.getByText('Timeline de Atividades')).toBeInTheDocument();
   });
 
-  it('should show sent interaction', () => {
-    render(<LeadTimeline entries={[createEntry({ type: 'sent' })]} />);
-    expect(screen.getByText('Enviado')).toBeInTheDocument();
-  });
-
-  it('should show delivered interaction', () => {
-    render(<LeadTimeline entries={[createEntry({ type: 'delivered' })]} />);
-    expect(screen.getByText('Entregue')).toBeInTheDocument();
-  });
-
-  it('should show opened interaction', () => {
-    render(<LeadTimeline entries={[createEntry({ type: 'opened' })]} />);
-    expect(screen.getByText('Aberto')).toBeInTheDocument();
-  });
-
-  it('should show replied interaction', () => {
-    render(<LeadTimeline entries={[createEntry({ type: 'replied' })]} />);
-    expect(screen.getByText('Respondeu')).toBeInTheDocument();
-  });
-
-  it('should show channel badge for email', () => {
+  it('should show channel name as title for email', () => {
     render(<LeadTimeline entries={[createEntry({ channel: 'email' })]} />);
-    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('E-mail')).toBeInTheDocument();
   });
 
-  it('should show channel badge for whatsapp', () => {
+  it('should show channel name as title for whatsapp', () => {
     render(<LeadTimeline entries={[createEntry({ channel: 'whatsapp' })]} />);
     expect(screen.getByText('WhatsApp')).toBeInTheDocument();
+  });
+
+  it('should show channel name with step number', () => {
+    render(
+      <LeadTimeline
+        entries={[createEntry({ channel: 'email', step_order: 2 })]}
+      />,
+    );
+    expect(screen.getByText('E-mail 2')).toBeInTheDocument();
   });
 
   it('should show message content', () => {
@@ -62,30 +54,39 @@ describe('LeadTimeline', () => {
     expect(screen.getByText('Olá, tudo bem?')).toBeInTheDocument();
   });
 
-  it('should show cadence name and step', () => {
-    render(
-      <LeadTimeline
-        entries={[createEntry({ cadence_name: 'Follow Up', step_order: 2 })]}
-      />,
-    );
-    expect(screen.getByText(/Follow Up/)).toBeInTheDocument();
-    expect(screen.getByText(/Passo 2/)).toBeInTheDocument();
+  it('should show "Nenhuma anotação" when no content', () => {
+    render(<LeadTimeline entries={[createEntry({ message_content: null })]} />);
+    expect(screen.getByText('Nenhuma anotação')).toBeInTheDocument();
   });
 
-  it('should show AI badge when ai_generated', () => {
-    render(<LeadTimeline entries={[createEntry({ ai_generated: true })]} />);
-    expect(screen.getByText('IA')).toBeInTheDocument();
+  it('should show subject when available', () => {
+    render(
+      <LeadTimeline
+        entries={[createEntry({ subject: 'Assunto do email' })]}
+      />,
+    );
+    expect(screen.getByText('Assunto do email')).toBeInTheDocument();
+  });
+
+  it('should show "Anotação" for note entries', () => {
+    render(
+      <LeadTimeline
+        entries={[createEntry({ is_note: true, channel: 'research', message_content: 'Caixa postal' })]}
+      />,
+    );
+    expect(screen.getByText('Anotação')).toBeInTheDocument();
+    expect(screen.getByText('Caixa postal')).toBeInTheDocument();
   });
 
   it('should render multiple entries', () => {
     const entries = [
-      createEntry({ id: 'int-1', type: 'sent' }),
-      createEntry({ id: 'int-2', type: 'opened' }),
-      createEntry({ id: 'int-3', type: 'replied' }),
+      createEntry({ id: 'int-1', channel: 'email', step_order: 1 }),
+      createEntry({ id: 'int-2', channel: 'linkedin', step_order: 2 }),
+      createEntry({ id: 'int-3', channel: 'whatsapp', step_order: 3 }),
     ];
     render(<LeadTimeline entries={entries} />);
-    expect(screen.getByText('Enviado')).toBeInTheDocument();
-    expect(screen.getByText('Aberto')).toBeInTheDocument();
-    expect(screen.getByText('Respondeu')).toBeInTheDocument();
+    expect(screen.getByText('E-mail 1')).toBeInTheDocument();
+    expect(screen.getByText('LinkedIn 2')).toBeInTheDocument();
+    expect(screen.getByText('WhatsApp 3')).toBeInTheDocument();
   });
 });
