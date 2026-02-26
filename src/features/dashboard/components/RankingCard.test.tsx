@@ -22,7 +22,12 @@ function createCardData(overrides: Partial<RankingCardData> = {}): RankingCardDa
 describe('RankingCard', () => {
   it('should render title and total', () => {
     render(
-      <RankingCard title="Leads Finalizados" icon={Users} data={createCardData()} />,
+      <RankingCard
+        title="Leads Finalizados"
+        icon={Users}
+        data={createCardData()}
+        primaryColumnLabel="finalizados"
+      />,
     );
     expect(screen.getByText('Leads Finalizados')).toBeInTheDocument();
     expect(screen.getByText('25')).toBeInTheDocument();
@@ -30,9 +35,14 @@ describe('RankingCard', () => {
 
   it('should render target info', () => {
     render(
-      <RankingCard title="Atividades" icon={Activity} data={createCardData()} />,
+      <RankingCard
+        title="Atividades"
+        icon={Activity}
+        data={createCardData()}
+        primaryColumnLabel="atividades"
+      />,
     );
-    expect(screen.getByText(/Meta:/)).toBeInTheDocument();
+    expect(screen.getByText(/Meta mês:/)).toBeInTheDocument();
     expect(screen.getByText('50')).toBeInTheDocument();
   });
 
@@ -65,32 +75,46 @@ describe('RankingCard', () => {
     expect(screen.getByText('Sem meta definida')).toBeInTheDocument();
   });
 
-  it('should render SDR breakdown', () => {
+  it('should render SDR breakdown with avatars', () => {
     render(
-      <RankingCard title="Test" icon={Users} data={createCardData()} />,
+      <RankingCard
+        title="Test"
+        icon={Users}
+        data={createCardData()}
+        primaryColumnLabel="finalizados"
+      />,
     );
-    expect(screen.getByText('Por vendedor')).toBeInTheDocument();
     expect(screen.getByText('João Silva')).toBeInTheDocument();
     expect(screen.getByText('Maria Santos')).toBeInTheDocument();
+    // Avatars show initials
+    expect(screen.getByText('JS')).toBeInTheDocument();
+    expect(screen.getByText('MS')).toBeInTheDocument();
   });
 
-  it('should render secondary label when provided', () => {
+  it('should render column headers when labels provided', () => {
     render(
       <RankingCard
         title="Leads"
         icon={Users}
         data={createCardData()}
-        secondaryLabel="prospectando"
+        primaryColumnLabel="finalizados"
+        secondaryColumnLabel="prospectando"
       />,
     );
-    expect(screen.getByText('(3 prospectando)')).toBeInTheDocument();
+    expect(screen.getByText('finalizados')).toBeInTheDocument();
+    expect(screen.getByText('prospectando')).toBeInTheDocument();
   });
 
-  it('should render average per SDR', () => {
+  it('should render average when averageLabel provided', () => {
     render(
-      <RankingCard title="Test" icon={Users} data={createCardData()} />,
+      <RankingCard
+        title="Test"
+        icon={Users}
+        data={createCardData()}
+        averageLabel="média finalizados/vendedor"
+      />,
     );
-    expect(screen.getByText(/Média\/vendedor/)).toBeInTheDocument();
+    expect(screen.getByText('média finalizados/vendedor')).toBeInTheDocument();
     expect(screen.getByText('12.5')).toBeInTheDocument();
   });
 
@@ -101,6 +125,7 @@ describe('RankingCard', () => {
         icon={TrendingUp}
         unit="%"
         data={createCardData({ total: 42 })}
+        primaryColumnLabel="oportunidades"
       />,
     );
     expect(screen.getByText('42%')).toBeInTheDocument();
@@ -114,6 +139,6 @@ describe('RankingCard', () => {
         data={createCardData({ sdrBreakdown: [] })}
       />,
     );
-    expect(screen.queryByText('Por vendedor')).not.toBeInTheDocument();
+    expect(screen.queryByText('JS')).not.toBeInTheDocument();
   });
 });

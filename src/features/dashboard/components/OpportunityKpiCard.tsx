@@ -56,9 +56,9 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
 
   return (
     <div className="rounded-lg border bg-card p-6">
-      <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="grid grid-cols-1 lg:grid-cols-2">
         {/* Left side — KPI info */}
-        <div className="flex shrink-0 flex-col justify-center lg:w-[280px]">
+        <div className="flex flex-col justify-center">
           {/* Big number */}
           <p className="text-5xl font-bold">{kpi.totalOpportunities}</p>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -67,11 +67,11 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
 
           {/* Meta row */}
           {kpi.monthTarget > 0 && (
-            <div className="mt-5 flex items-start gap-3">
+            <div className="mt-6 flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <CalendarDays className="h-4 w-4 text-primary" />
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 Meta de oportunidades para {monthNameLower}:{' '}
                 <span className="font-semibold text-foreground">{kpi.monthTarget}</span>
               </p>
@@ -108,9 +108,9 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
         </div>
 
         {/* Right side — Chart */}
-        <div className="min-h-[240px] flex-1">
+        <div className="flex items-center">
           {kpi.dailyData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={340}>
               <AreaChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                 <defs>
                   <linearGradient id="gradientOpp" x1="0" y1="0" x2="0" y2="1">
@@ -168,7 +168,7 @@ export function OpportunityKpiCard({ kpi, month }: OpportunityKpiCardProps) {
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-full items-center justify-center">
+            <div className="flex h-[340px] w-full items-center justify-center">
               <p className="text-sm text-muted-foreground">Sem dados para exibir</p>
             </div>
           )}

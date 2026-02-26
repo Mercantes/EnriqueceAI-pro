@@ -53,19 +53,31 @@ export function DashboardView({ data, filters, ranking, insights }: DashboardVie
           <RankingCard
             title="Leads Finalizados"
             icon={Users}
+            iconColor="bg-blue-500/10"
+            iconTextColor="text-blue-500"
             data={ranking.leadsFinished}
-            secondaryLabel="prospectando"
+            primaryColumnLabel="finalizados"
+            secondaryColumnLabel="prospectando"
+            averageLabel="média finalizados/vendedor"
           />
           <RankingCard
             title="Atividades Realizadas"
             icon={Activity}
+            iconColor="bg-amber-500/10"
+            iconTextColor="text-amber-500"
             data={ranking.activitiesDone}
+            primaryColumnLabel="atividades"
+            averageLabel="média atividades/vendedor"
           />
           <RankingCard
             title="Taxa de Conversão"
             icon={TrendingUp}
+            iconColor="bg-emerald-500/10"
+            iconTextColor="text-emerald-500"
             unit="%"
             data={ranking.conversionRate}
+            primaryColumnLabel="oportunidades"
+            averageLabel="média conversão/vendedor"
           />
         </div>
       )}
