@@ -26,14 +26,16 @@ export async function addLeadNote(
 
   const { data: member } = (await supabase
     .from('organization_members')
-    .select('org_id, user_email')
+    .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
-    .single()) as { data: { org_id: string; user_email: string | null } | null };
+    .single()) as { data: { org_id: string } | null };
 
   if (!member) {
     return { success: false, error: 'Organização não encontrada' };
   }
+
+  const authorEmail = user.email ?? null;
 
   const { data: interaction, error } = (await (supabase
     .from('interactions') as ReturnType<typeof supabase.from>)
@@ -45,7 +47,7 @@ export async function addLeadNote(
       channel: 'research',
       type: 'sent',
       message_content: text.trim(),
-      metadata: { is_note: true, author: member.user_email },
+      metadata: { is_note: true, author: authorEmail },
       ai_generated: false,
       original_template_id: null,
     } as Record<string, unknown>)
@@ -64,7 +66,7 @@ export async function addLeadNote(
       id: interaction.id,
       text: text.trim(),
       created_at: interaction.created_at,
-      author_email: member.user_email,
+      author_email: authorEmail,
     },
   };
 }
