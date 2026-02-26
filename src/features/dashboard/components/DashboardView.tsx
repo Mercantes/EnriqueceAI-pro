@@ -12,7 +12,6 @@ import { ConversionByOriginChart } from './ConversionByOriginChart';
 import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilters';
 import { GoalsModal } from './GoalsModal';
 import { LossReasonsChart } from './LossReasonsChart';
-import { OpportunityChart } from './OpportunityChart';
 import { OpportunityKpiCard } from './OpportunityKpiCard';
 import { RankingCard } from './RankingCard';
 
@@ -45,14 +44,8 @@ export function DashboardView({ data, filters, ranking, insights }: DashboardVie
 
       <GoalsModal open={goalsOpen} onOpenChange={setGoalsOpen} month={filters.month} />
 
-      {/* KPI + Chart */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <OpportunityKpiCard kpi={data.kpi} month={filters.month} />
-        <OpportunityChart
-          data={data.kpi.dailyData}
-          currentDay={data.kpi.currentDay}
-        />
-      </div>
+      {/* KPI + Chart (unified card) */}
+      <OpportunityKpiCard kpi={data.kpi} month={filters.month} />
 
       {/* Ranking Cards (Story 3.3) */}
       {ranking && (
