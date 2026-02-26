@@ -78,6 +78,7 @@ export interface InsightsData {
 export interface UserGoalRow {
   userId: string;
   userName: string;
+  avatarUrl?: string;
   opportunityTarget: number;
   previousTarget: number | null; // previous month reference
 }

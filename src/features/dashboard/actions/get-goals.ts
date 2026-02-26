@@ -57,8 +57,8 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
     };
   }
 
-  // Fetch emails via admin client (service_role can access auth.users)
-  let emailMap = new Map<string, string>();
+  // Fetch user info via admin client (service_role can access auth.users)
+  const userInfoMap = new Map<string, { name: string; avatarUrl?: string }>();
   try {
     const adminClient = createAdminSupabaseClient();
     const userIds = sdrs.map((s) => s.user_id);
@@ -66,7 +66,11 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
     if (usersData?.users) {
       for (const u of usersData.users) {
         if (userIds.includes(u.id)) {
-          emailMap.set(u.id, u.email ?? '');
+          const meta = u.user_metadata as Record<string, unknown> | undefined;
+          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
+          const avatarUrl = (meta?.avatar_url ?? meta?.picture ?? '') as string;
+          const displayName = fullName || (u.email ? u.email.split('@')[0]! : u.id.slice(0, 8));
+          userInfoMap.set(u.id, { name: displayName, avatarUrl: avatarUrl || undefined });
         }
       }
     }
@@ -98,11 +102,11 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
       opportunityTarget: orgGoal?.opportunity_target ?? 0,
       conversionTarget: orgGoal?.conversion_target ?? 0,
       userGoals: sdrs.map((sdr) => {
-        const email = emailMap.get(sdr.user_id);
-        const userName = email ? email.split('@')[0]! : sdr.user_id.slice(0, 8);
+        const info = userInfoMap.get(sdr.user_id);
         return {
           userId: sdr.user_id,
-          userName,
+          userName: info?.name ?? sdr.user_id.slice(0, 8),
+          avatarUrl: info?.avatarUrl,
           opportunityTarget: currentMap.get(sdr.user_id) ?? 0,
           previousTarget: prevMap.get(sdr.user_id) ?? null,
         };

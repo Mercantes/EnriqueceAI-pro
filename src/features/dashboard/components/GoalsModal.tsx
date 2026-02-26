@@ -2,13 +2,15 @@
 
 import { useEffect, useState, useTransition } from 'react';
 
-import { Loader2, Lock, Plus, User, X } from 'lucide-react';
+import { Loader2, Lock, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 
@@ -115,7 +117,8 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl gap-0 overflow-hidden p-0" showCloseButton={false}>
+      <DialogContent className="sm:max-w-5xl gap-0 overflow-hidden p-0" showCloseButton={false}>
+        <DialogTitle className="sr-only">Metas {monthName}</DialogTitle>
         {/* Banner header */}
         <div className="flex items-center justify-between bg-[var(--primary)] px-6 py-5">
           <h2 className="text-lg font-bold text-[var(--primary-foreground)]">
@@ -136,7 +139,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
             <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)]" />
           </div>
         ) : (
-          <div className="max-h-[70vh] space-y-6 overflow-y-auto px-6 py-6">
+          <div className="min-h-[60vh] max-h-[80vh] space-y-6 overflow-y-auto px-6 py-6">
             {/* Meta de Oportunidades */}
             <div className="rounded-lg border bg-[var(--card)] p-5">
               <div className="flex items-center justify-between gap-6">
@@ -211,9 +214,12 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                       className="flex items-center gap-4 rounded-lg border bg-[var(--card)] px-4 py-3"
                     >
                       {/* Avatar */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--muted)]">
-                        <User className="h-5 w-5 text-[var(--muted-foreground)]" />
-                      </div>
+                      <Avatar>
+                        {ug.avatarUrl && <AvatarImage src={ug.avatarUrl} alt={ug.userName} />}
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                          {ug.userName.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
 
                       {/* Nome */}
                       <span className="flex-1 text-sm font-medium">{ug.userName}</span>
