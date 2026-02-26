@@ -26,8 +26,10 @@ export async function fetchUserMap(
     if (usersData?.users) {
       for (const u of usersData.users) {
         if (targetIds.has(u.id)) {
+          const meta = u.user_metadata as Record<string, unknown> | undefined;
+          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
           const email = u.email ?? '';
-          result[u.id] = email.split('@')[0] || u.id.slice(0, 8);
+          result[u.id] = fullName || email.split('@')[0] || u.id.slice(0, 8);
         }
       }
     }

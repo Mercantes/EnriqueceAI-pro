@@ -5,6 +5,9 @@ import { enrichLead, enrichLeadFull } from '@/features/leads/services/enrichment
 import { LemitCpfProvider } from '@/features/leads/services/lemit-cpf-provider';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+// Allow long-running execution on Vercel (up to 5 minutes)
+export const maxDuration = 300;
+
 const BATCH_SIZE = 50;
 const LEMIT_DELAY_MS = 2_000;
 const CNPJWS_DELAY_MS = 20_000;
@@ -34,12 +37,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing importId' }, { status: 400 });
   }
 
-  // Fire-and-forget: process in background, return 202 immediately
-  processLeadsBatch(importId).catch((err) => {
-    console.error('[enrich-leads] Background processing error:', err);
-  });
-
-  return NextResponse.json({ ok: true, importId }, { status: 202 });
+  // Process synchronously — Vercel kills background tasks after response is sent
+  try {
+    await processLeadsBatch(importId);
+    return NextResponse.json({ ok: true, importId }, { status: 200 });
+  } catch (err) {
+    console.error('[enrich-leads] Processing error:', err);
+    return NextResponse.json(
+      { ok: false, importId, error: String(err) },
+      { status: 500 },
+    );
+  }
 }
 
 async function processLeadsBatch(importId: string): Promise<void> {
@@ -135,14 +143,16 @@ async function selfChain(importId: string): Promise<void> {
   }
 
   try {
-    await fetch(`${appUrl}/api/workers/enrich-leads`, {
+    // Fire-and-forget: trigger next batch without waiting for it to finish
+    fetch(`${appUrl}/api/workers/enrich-leads`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${serviceRoleKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ importId }),
-      signal: AbortSignal.timeout(10_000),
+    }).catch((err) => {
+      console.error('[enrich-leads] Auto-chain failed:', err);
     });
   } catch (err) {
     console.error('[enrich-leads] Auto-chain failed:', err);

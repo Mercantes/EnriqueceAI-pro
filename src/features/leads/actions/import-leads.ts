@@ -218,13 +218,17 @@ async function triggerAutoEnrichment(importId: string): Promise<void> {
     return;
   }
 
-  await fetch(`${appUrl}/api/workers/enrich-leads`, {
+  // Fire-and-forget: don't await the full processing, just ensure the request is sent.
+  // The worker processes synchronously (needed for Vercel serverless), but we don't
+  // need to wait for it to finish — the import response should return immediately.
+  fetch(`${appUrl}/api/workers/enrich-leads`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${serviceRoleKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ importId }),
-    signal: AbortSignal.timeout(10_000),
+  }).catch((err) => {
+    console.error('[import-leads] Enrichment trigger failed:', err);
   });
 }
