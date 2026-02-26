@@ -53,51 +53,56 @@ export function RankingCard({
   const absPercent = Math.abs(data.percentOfTarget);
 
   return (
-    <div className="rounded-lg border bg-card p-5">
-      {/* Icon Badge */}
-      <div className={cn('flex h-12 w-12 items-center justify-center rounded-xl', iconColor)}>
-        <Icon className={cn('h-6 w-6', iconTextColor)} />
+    <div className="flex flex-col rounded-lg border bg-card">
+      {/* Title */}
+      <div className="px-6 pt-6">
+        <h3 className="text-sm font-semibold">{title}</h3>
       </div>
 
-      {/* Big Number */}
-      <p className="mt-3 text-3xl font-bold">
-        {data.total}
-        {unit}
-      </p>
-      <p className="text-xs text-muted-foreground">{title}</p>
+      {/* Icon Badge + Big Number — centered */}
+      <div className="flex flex-col items-center px-6 pb-2 pt-5">
+        <div className={cn('flex h-14 w-14 items-center justify-center rounded-full', iconColor)}>
+          <Icon className={cn('h-7 w-7', iconTextColor)} />
+        </div>
 
-      {/* % + Meta inline */}
-      {data.monthTarget > 0 ? (
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <div
-            className={cn(
-              'flex items-center gap-1 text-xs font-medium',
-              isAbove ? 'text-emerald-600' : 'text-red-500',
-            )}
-          >
-            {isAbove ? (
-              <TrendingUp className="h-3.5 w-3.5" />
-            ) : (
-              <TrendingDown className="h-3.5 w-3.5" />
-            )}
-            <span>
-              {absPercent}% {isAbove ? 'acima' : 'abaixo'} do previsto
+        <p className="mt-4 text-4xl font-bold">
+          {data.total}
+          {unit}
+        </p>
+
+        {/* % + Meta inline */}
+        {data.monthTarget > 0 ? (
+          <div className="mt-3 flex items-center gap-3">
+            <div
+              className={cn(
+                'flex items-center gap-1 text-xs font-medium',
+                isAbove ? 'text-emerald-600' : 'text-red-500',
+              )}
+            >
+              {isAbove ? (
+                <TrendingUp className="h-3.5 w-3.5" />
+              ) : (
+                <TrendingDown className="h-3.5 w-3.5" />
+              )}
+              <span>
+                {absPercent}% do previsto
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Meta mês: <span className="font-semibold text-foreground">{data.monthTarget}{unit}</span>
             </span>
           </div>
-          <span className="text-xs text-muted-foreground">
-            Meta mês: <span className="font-medium text-foreground">{data.monthTarget}{unit}</span>
-          </span>
-        </div>
-      ) : (
-        <p className="mt-2 text-xs text-muted-foreground">Sem meta definida</p>
-      )}
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground">Sem meta definida</p>
+        )}
+      </div>
 
       {/* SDR Breakdown */}
       {data.sdrBreakdown.length > 0 && (
         <>
           {/* Column Headers */}
-          <div className="mt-4 border-t pt-3">
-            <div className="mb-2 flex items-center text-[11px] font-medium text-muted-foreground">
+          <div className="mx-6 mt-4 border-t pt-4">
+            <div className="mb-3 flex items-center text-[11px] font-medium text-muted-foreground">
               <span className="flex-1" />
               {secondaryColumnLabel && (
                 <span className="w-20 text-right">{secondaryColumnLabel}</span>
@@ -108,10 +113,10 @@ export function RankingCard({
             </div>
 
             {/* SDR List */}
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {data.sdrBreakdown.map((sdr, index) => (
                 <div key={sdr.userId} className="flex items-center">
-                  <Avatar size="sm" className="mr-2 shrink-0">
+                  <Avatar size="sm" className="mr-3 shrink-0">
                     <AvatarFallback
                       className={cn(
                         'text-[10px] font-medium',
@@ -142,16 +147,24 @@ export function RankingCard({
 
           {/* Footer — Average */}
           {averageLabel && (
-            <div className="mt-3 flex items-center justify-between border-t pt-2.5">
-              <span className="text-xs text-muted-foreground">{averageLabel}</span>
-              <span className="text-sm font-semibold">
-                {data.averagePerSdr}
-                {unit}
-              </span>
+            <div className="mt-auto border-t border-dashed mx-6 px-0 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-emerald-600">média</p>
+                  <p className="text-xs text-muted-foreground">{averageLabel}</p>
+                </div>
+                <span className="text-lg font-bold text-emerald-600">
+                  {data.averagePerSdr}
+                  {unit}
+                </span>
+              </div>
             </div>
           )}
         </>
       )}
+
+      {/* Bottom spacing when no breakdown */}
+      {data.sdrBreakdown.length === 0 && <div className="pb-6" />}
     </div>
   );
 }

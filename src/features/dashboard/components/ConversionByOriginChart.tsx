@@ -31,7 +31,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
   return (
     <div className="rounded-lg border bg-card p-4">
       <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-        Conversão por Cadência
+        Conversão por Origem
       </h3>
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>

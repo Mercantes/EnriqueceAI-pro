@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 
-import { Activity, Settings, TrendingUp, Users } from 'lucide-react';
+import { CheckCircle2, Settings, TrendingUp, Users } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 import { Skeleton } from '@/shared/components/ui/skeleton';
@@ -62,7 +62,7 @@ export function DashboardView({ data, filters, ranking, insights }: DashboardVie
           />
           <RankingCard
             title="Atividades Realizadas"
-            icon={Activity}
+            icon={CheckCircle2}
             iconColor="bg-amber-500/10"
             iconTextColor="text-amber-500"
             data={ranking.activitiesDone}
