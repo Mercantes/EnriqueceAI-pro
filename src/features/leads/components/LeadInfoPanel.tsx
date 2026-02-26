@@ -242,19 +242,43 @@ export function LeadInfoPanel({
     || primarySocio?.qualificacao
     || (primarySocio?.nome ? (primarySocio.nome.trim().split(/\s+/)[0]?.toLowerCase().endsWith('a') ? 'Sócia' : 'Sócio') : null);
 
-  // Gather all phones with type
+  // Gather all phones with type, deduplicating by normalized number
+  const seenPhones = new Set<string>();
   const allPhones: Array<{ tipo: string; numero: string; href: string; whatsapp: boolean; nome?: string }> = [];
-  if (data.telefone) {
-    allPhones.push({ tipo: 'Fixo', numero: data.telefone, href: `tel:${data.telefone}`, whatsapp: false });
-  }
+
+  // Helper: normalize phone to digits only for dedup
+  const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+
+  // Socios celulares first (more specific: has whatsapp flag, nome)
   for (const socio of data.socios ?? []) {
     for (const cel of socio.celulares ?? []) {
+      const formatted = `(${cel.ddd}) ${cel.numero}`;
+      const key = normalizePhone(formatted);
+      if (!seenPhones.has(key)) {
+        seenPhones.add(key);
+        allPhones.push({
+          tipo: 'Celular',
+          numero: formatted,
+          href: `tel:+55${cel.ddd}${cel.numero}`,
+          whatsapp: cel.whatsapp,
+          nome: socio.nome,
+        });
+      }
+    }
+  }
+
+  // Company-level phone (only add if not already seen)
+  if (data.telefone) {
+    const key = normalizePhone(data.telefone);
+    if (!seenPhones.has(key)) {
+      // Detect type: 9-digit local number = celular, else fixo
+      const digits = key.length > 2 ? key.slice(2) : key;
+      const isCelular = digits.length >= 9 && digits.startsWith('9');
       allPhones.push({
-        tipo: 'Celular',
-        numero: `(${cel.ddd}) ${cel.numero}`,
-        href: `tel:+55${cel.ddd}${cel.numero}`,
-        whatsapp: cel.whatsapp,
-        nome: socio.nome,
+        tipo: isCelular ? 'Celular' : 'Fixo',
+        numero: data.telefone,
+        href: `tel:${data.telefone}`,
+        whatsapp: false,
       });
     }
   }
