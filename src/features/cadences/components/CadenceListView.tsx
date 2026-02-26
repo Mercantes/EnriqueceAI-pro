@@ -64,6 +64,7 @@ interface CadenceListViewProps {
   perPage: number;
   tabCounts: CadenceTabCounts;
   metrics?: Record<string, AutoEmailCadenceMetrics>;
+  userMap?: Record<string, string>;
 }
 
 const ALL_VALUE = '__all__';
@@ -87,7 +88,7 @@ const statusConfig: Record<CadenceStatus, { label: string; className: string }> 
   },
 };
 
-export function CadenceListView({ cadences, total, page, perPage, tabCounts, metrics }: CadenceListViewProps) {
+export function CadenceListView({ cadences, total, page, perPage, tabCounts, metrics, userMap = {} }: CadenceListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -334,6 +335,7 @@ export function CadenceListView({ cadences, total, page, perPage, tabCounts, met
         <AutoEmailTable
           cadences={cadences}
           metrics={metrics}
+          userMap={userMap}
           onDeleteRequest={(id) => setDeleteId(id)}
         />
       ) : (

@@ -59,8 +59,8 @@ export async function getDailyGoals(): Promise<ActionResult<DailyGoalsData>> {
     data: Array<{ user_id: string; role: string }> | null;
   };
 
-  // Get emails via admin client (service_role can access auth.users)
-  const emailMap = new Map<string, string>();
+  // Get display names via admin client (service_role can access auth.users)
+  const nameMap = new Map<string, string>();
   try {
     const adminClient = createAdminSupabaseClient();
     const userIds = members?.map((m) => m.user_id) ?? [];
@@ -68,7 +68,10 @@ export async function getDailyGoals(): Promise<ActionResult<DailyGoalsData>> {
     if (usersData?.users) {
       for (const u of usersData.users) {
         if (userIds.includes(u.id)) {
-          emailMap.set(u.id, u.email ?? '');
+          const meta = u.user_metadata as Record<string, unknown> | undefined;
+          const fullName = (meta?.full_name ?? meta?.name ?? '') as string;
+          const email = u.email ?? '';
+          nameMap.set(u.id, fullName || email.split('@')[0] || u.id.slice(0, 8));
         }
       }
     }
@@ -77,8 +80,7 @@ export async function getDailyGoals(): Promise<ActionResult<DailyGoalsData>> {
   }
 
   const memberGoals: MemberGoal[] = (members ?? []).map((m) => {
-    const email = emailMap.get(m.user_id);
-    const userName = email ? email.split('@')[0]! : m.user_id.slice(0, 8);
+    const userName = nameMap.get(m.user_id) ?? m.user_id.slice(0, 8);
     const userGoal = goals?.find((g) => g.user_id === m.user_id);
 
     return {

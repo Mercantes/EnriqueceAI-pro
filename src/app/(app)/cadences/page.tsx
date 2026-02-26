@@ -9,6 +9,7 @@ import { Skeleton } from '@/shared/components/ui/skeleton';
 import { fetchCadences, fetchCadenceTabCounts } from '@/features/cadences/actions/fetch-cadences';
 import { fetchAutoEmailMetrics } from '@/features/cadences/actions/fetch-auto-email-metrics';
 import { CadenceListView } from '@/features/cadences/components/CadenceListView';
+import { fetchUserMap } from '@/features/leads/actions/fetch-user-map';
 
 interface CadencesPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -56,6 +57,11 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
     }
   }
 
+  // Resolve creator UUIDs to display names
+  const creatorIds = [...new Set(result.data.data.map((c) => c.created_by).filter(Boolean))] as string[];
+  const userMapResult = await fetchUserMap(creatorIds);
+  const userMap = userMapResult.success ? userMapResult.data : {};
+
   return (
     <Suspense fallback={<Skeleton className="h-96 w-full" />}>
       <CadenceListView
@@ -65,6 +71,7 @@ export default async function CadencesPage({ searchParams }: CadencesPageProps) 
         perPage={result.data.per_page}
         tabCounts={tabCounts}
         metrics={metrics}
+        userMap={userMap}
       />
     </Suspense>
   );

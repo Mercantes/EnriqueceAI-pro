@@ -40,13 +40,13 @@ import type { CadenceRow } from '../types';
 interface AutoEmailTableProps {
   cadences: CadenceRow[];
   metrics: Record<string, AutoEmailCadenceMetrics>;
+  userMap?: Record<string, string>;
   onDeleteRequest: (id: string) => void;
 }
 
-function getInitials(userId: string | null): string {
+function getCreatorName(userId: string | null, userMap: Record<string, string>): string {
   if (!userId) return '-';
-  // Show first 2 chars of UUID as fallback initials
-  return userId.substring(0, 2).toUpperCase();
+  return userMap[userId] ?? userId.substring(0, 2).toUpperCase();
 }
 
 function MetricCell({ value, isPercent = false }: { value: number; isPercent?: boolean }) {
@@ -58,7 +58,7 @@ function MetricCell({ value, isPercent = false }: { value: number; isPercent?: b
   );
 }
 
-export function AutoEmailTable({ cadences, metrics, onDeleteRequest }: AutoEmailTableProps) {
+export function AutoEmailTable({ cadences, metrics, userMap = {}, onDeleteRequest }: AutoEmailTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -168,8 +168,8 @@ export function AutoEmailTable({ cadences, metrics, onDeleteRequest }: AutoEmail
               </TableCell>
 
               {/* Created by */}
-              <TableCell className="text-center text-xs text-muted-foreground">
-                {getInitials(cadence.created_by)}
+              <TableCell className="max-w-[120px] truncate text-xs text-muted-foreground">
+                {getCreatorName(cadence.created_by, userMap)}
               </TableCell>
 
               {/* Metrics */}
