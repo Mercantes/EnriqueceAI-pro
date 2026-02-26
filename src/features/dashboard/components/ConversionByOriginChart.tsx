@@ -41,9 +41,7 @@ export function ConversionByOriginChart({ data }: ConversionByOriginChartProps) 
             tick={{ fontSize: 11 }}
             className="text-muted-foreground"
             interval={0}
-            angle={-20}
-            textAnchor="end"
-            height={60}
+            height={40}
           />
           <YAxis
             tick={{ fontSize: 12 }}
