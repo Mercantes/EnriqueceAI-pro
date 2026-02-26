@@ -269,7 +269,7 @@ export function LeadInfoPanel({
   const notableCount = notableEvents.length;
 
   return (
-    <div className="flex h-full w-full shrink-0 flex-col">
+    <div className={`flex h-full shrink-0 flex-col ${showLeadHeader ? 'w-full' : 'w-80'}`}>
       {/* Lead header — avatar + name + actions shown only in activity execution */}
       {showLeadHeader && (
       <div className="mb-20 flex items-center gap-3">
@@ -347,7 +347,7 @@ export function LeadInfoPanel({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onClick={() => window.open(`/leads?search=${encodeURIComponent(data.cnpj ?? '')}`, '_blank')}
+              onClick={() => window.open(`/leads/${data.id}`, '_blank')}
             >
               <ExternalLink className="mr-2 h-3.5 w-3.5" />
               Ver lead completo

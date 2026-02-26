@@ -53,6 +53,7 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
         <TabsList variant="line">
           <TabsTrigger value="historico">Histórico</TabsTrigger>
           <TabsTrigger value="atividade">Agendar atividade</TabsTrigger>
+          <TabsTrigger value="anotacoes">Anotações</TabsTrigger>
           <TabsTrigger value="reuniao">Agendar reunião</TabsTrigger>
         </TabsList>
 
@@ -76,9 +77,6 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
 
           {/* Timeline */}
           <LeadTimeline entries={filteredTimeline} />
-
-          {/* Inline Notes */}
-          <LeadNotes leadId={lead.id} notes={lead.notes} />
         </TabsContent>
 
         {/* Agendar atividade Tab */}
@@ -86,6 +84,11 @@ export function LeadDetailTabs({ lead, timeline, showMeeting, onShowMeetingChang
           <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-[var(--muted-foreground)]">
             Agendamento de atividades em breve
           </div>
+        </TabsContent>
+
+        {/* Anotações Tab */}
+        <TabsContent value="anotacoes" className="pt-4">
+          <LeadNotes leadId={lead.id} notes={lead.notes} />
         </TabsContent>
 
         {/* Agendar reunião Tab */}

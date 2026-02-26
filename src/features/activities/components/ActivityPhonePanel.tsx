@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 
 import {
   CheckCircle2,
+  Clock,
   FileText,
   Loader2,
   Phone,
@@ -14,6 +15,13 @@ import {
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import { Label } from '@/shared/components/ui/label';
 import {
   Select,
@@ -59,6 +67,7 @@ export function ActivityPhonePanel({
   const [callStatus, setCallStatus] = useState('');
   const [notes, setNotes] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  const [callDuration, setCallDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -69,13 +78,13 @@ export function ActivityPhonePanel({
       timerRef.current = id;
       return () => clearInterval(id);
     }
-    const resetId = setTimeout(() => setElapsed(0), 0);
-    return () => clearTimeout(resetId);
+    return undefined;
   }, [callState]);
 
   function handleInitiateCall() {
     if (!phoneNumber) return;
 
+    setElapsed(0);
     startTransition(async () => {
       setCallState('calling');
 
@@ -96,6 +105,8 @@ export function ActivityPhonePanel({
   }
 
   function handleHangup() {
+    setCallDuration(elapsed);
+
     if (!api4comCallId) {
       setCallState('ended');
       return;
@@ -108,6 +119,24 @@ export function ActivityPhonePanel({
       }
       setCallState('ended');
     });
+  }
+
+  function handleSubmitResult() {
+    onMarkDone(`[${callStatus}] ${notes}`.trim());
+    setCallStatus('');
+    setNotes('');
+    setCallState('idle');
+    setApi4comCallId(null);
+    setElapsed(0);
+  }
+
+  function handleDismissModal() {
+    // Allow closing without completing — go back to idle
+    setCallState('idle');
+    setCallStatus('');
+    setNotes('');
+    setApi4comCallId(null);
+    setElapsed(0);
   }
 
   const isInCall = callState === 'calling' || callState === 'connected';
@@ -137,7 +166,7 @@ export function ActivityPhonePanel({
       </div>
 
       {/* Call section — centered */}
-      <div className="flex flex-col items-center py-8">
+      <div className="flex flex-1 flex-col items-center justify-center py-8">
         {phoneNumber ? (
           <>
             <p className="mb-1 text-2xl font-bold tabular-nums tracking-wide">
@@ -190,19 +219,12 @@ export function ActivityPhonePanel({
                   <PhoneOff className="h-7 w-7" />
                 </button>
               )}
-
-              {callState === 'ended' && (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--muted)]">
-                  <Phone className="h-7 w-7 text-[var(--muted-foreground)]" />
-                </div>
-              )}
             </div>
 
             <p className="mt-2 text-xs text-[var(--muted-foreground)]">
               {callState === 'idle' && 'Clique para ligar via API4COM'}
               {callState === 'calling' && 'Chamando...'}
               {callState === 'connected' && 'Em chamada'}
-              {callState === 'ended' && 'Chamada encerrada — selecione o resultado'}
             </p>
           </>
         ) : (
@@ -212,60 +234,87 @@ export function ActivityPhonePanel({
         )}
       </div>
 
-      {/* Call status */}
-      <div className="space-y-1.5">
-        <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-          Status da Ligação
-        </Label>
-        <Select value={callStatus} onValueChange={setCallStatus}>
-          <SelectTrigger>
-            <SelectValue placeholder="Selecione o resultado..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="connected">Conectou — conversou com decisor</SelectItem>
-            <SelectItem value="gatekeeper">Conectou — falou com intermediário</SelectItem>
-            <SelectItem value="voicemail">Caixa postal</SelectItem>
-            <SelectItem value="no_answer">Não atendeu</SelectItem>
-            <SelectItem value="busy">Ocupado</SelectItem>
-            <SelectItem value="wrong_number">Número errado</SelectItem>
-            <SelectItem value="meeting_scheduled">Reunião agendada</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Notes */}
-      <div className="mt-5 flex-1 space-y-1.5">
-        <div className="flex items-center gap-1.5">
-          <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-            Bloco de Notas
-          </Label>
-        </div>
-        <Textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Faça anotações que possam auxiliar a sua comunicação com o cliente."
-          className="min-h-[140px] flex-1 resize-y"
-        />
-      </div>
-
-      {/* Actions */}
+      {/* Actions — skip only (result is handled via modal) */}
       <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
         <Button variant="outline" onClick={onSkip} disabled={isSending || isInCall}>
+          <Clock className="mr-2 h-4 w-4" />
           Pular
         </Button>
-        <Button
-          onClick={() => onMarkDone(`[${callStatus}] ${notes}`.trim())}
-          disabled={isSending || !callStatus || isInCall}
-        >
-          {isSending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-          )}
-          Marcar como feita
-        </Button>
       </div>
+
+      {/* Post-call result modal */}
+      <Dialog open={callState === 'ended'} onOpenChange={(open) => !open && handleDismissModal()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Resultado da Ligação</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Call duration summary */}
+            <div className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">{leadName}</p>
+                <p className="text-xs text-[var(--muted-foreground)]">{phoneNumber}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-mono text-sm tabular-nums">{formatTimer(callDuration)}</p>
+                <p className="text-xs text-[var(--muted-foreground)]">Duração</p>
+              </div>
+            </div>
+
+            {/* Call status */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                Status da Ligação
+              </Label>
+              <Select value={callStatus} onValueChange={setCallStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o resultado..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="connected">Conectou — conversou com decisor</SelectItem>
+                  <SelectItem value="gatekeeper">Conectou — falou com intermediário</SelectItem>
+                  <SelectItem value="voicemail">Caixa postal</SelectItem>
+                  <SelectItem value="no_answer">Não atendeu</SelectItem>
+                  <SelectItem value="busy">Ocupado</SelectItem>
+                  <SelectItem value="wrong_number">Número errado</SelectItem>
+                  <SelectItem value="meeting_scheduled">Reunião agendada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                  Anotações
+                </Label>
+              </div>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Faça anotações sobre a ligação..."
+                className="min-h-[100px] resize-y"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDismissModal}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSubmitResult} disabled={isSending || !callStatus}>
+              {isSending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Concluir ligação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
