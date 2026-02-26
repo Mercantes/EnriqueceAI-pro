@@ -19,6 +19,20 @@ import type { CadenceStepRow, InteractionRow, MessageTemplateRow } from '../type
 
 const BATCH_SIZE = 50;
 
+/** Mark an interaction as failed with error metadata */
+async function markInteractionFailed(
+  supabase: SupabaseClient,
+  interactionId: string,
+  errorReason: string,
+): Promise<void> {
+  await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+    .update({
+      type: 'failed',
+      metadata: { error: errorReason },
+    } as Record<string, unknown>)
+    .eq('id', interactionId);
+}
+
 /** Remove any leftover {{variable}} placeholders from rendered content */
 function stripUnresolvedVars(text: string): string {
   return text.replace(/\{\{[^}]+\}\}/g, '').replace(/\s{2,}/g, ' ').trim();
@@ -231,9 +245,12 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         continue;
       }
 
-      // Send email via Gmail API if channel is email
+      // Send via the appropriate channel
+      let sendSuccess = false;
+
       if (step.channel === 'email') {
         if (!enrollment.lead.email) {
+          await markInteractionFailed(supabase, interaction.id, 'no_lead_email');
           result.failed++;
           result.errors.push(`Lead ${enrollment.lead_id} sem email — não é possível enviar`);
           console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=no_lead_email duration_ms=${Date.now() - stepStart}`);
@@ -248,32 +265,47 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           .single()) as { data: { created_by: string | null } | null };
 
         if (!cadence?.created_by) {
-          console.error(`[cadence-engine] enrollment=${enrollment.id} no created_by on cadence — skipping email send`);
-        } else {
-          const emailResult = await EmailService.sendEmail(
-            cadence.created_by,
-            enrollment.lead.org_id,
-            {
-              to: enrollment.lead.email,
-              subject: subject ?? '',
-              htmlBody: messageContent,
-            },
-            interaction.id,
-            supabase,
-          );
+          await markInteractionFailed(supabase, interaction.id, 'no_cadence_creator');
+          result.failed++;
+          result.errors.push(`Cadência ${enrollment.cadence_id} sem created_by`);
+          console.error(`[cadence-engine] enrollment=${enrollment.id} status=failed reason=no_cadence_creator duration_ms=${Date.now() - stepStart}`);
+          continue;
+        }
 
-          if (emailResult.success && emailResult.messageId) {
-            await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
-              .update({ external_id: emailResult.messageId } as Record<string, unknown>)
-              .eq('id', interaction.id);
-            console.warn(`[cadence-engine] enrollment=${enrollment.id} email sent messageId=${emailResult.messageId}`);
-          } else {
-            console.error(`[cadence-engine] enrollment=${enrollment.id} email send failed: ${emailResult.error}`);
+        const emailResult = await EmailService.sendEmail(
+          cadence.created_by,
+          enrollment.lead.org_id,
+          {
+            to: enrollment.lead.email,
+            subject: subject ?? '',
+            htmlBody: messageContent,
+          },
+          interaction.id,
+          supabase,
+        );
+
+        if (emailResult.success && emailResult.messageId) {
+          // Save messageId and threadId for reply tracking
+          const updateData: Record<string, unknown> = { external_id: emailResult.messageId };
+          if (emailResult.threadId) {
+            updateData.metadata = { ...(subject ? { subject } : {}), thread_id: emailResult.threadId };
           }
+          await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
+            .update(updateData)
+            .eq('id', interaction.id);
+          sendSuccess = true;
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} email sent messageId=${emailResult.messageId} threadId=${emailResult.threadId ?? 'n/a'}`);
+        } else {
+          await markInteractionFailed(supabase, interaction.id, emailResult.error ?? 'unknown_email_error');
+          result.failed++;
+          result.errors.push(`Email falhou para lead ${enrollment.lead_id}: ${emailResult.error}`);
+          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=email_send_error error="${emailResult.error}" duration_ms=${Date.now() - stepStart}`);
+          continue;
         }
       } else if (step.channel === 'whatsapp') {
         const phone = enrollment.lead.telefone;
         if (!phone || !validateBrazilianPhone(phone)) {
+          await markInteractionFailed(supabase, interaction.id, 'invalid_phone');
           result.failed++;
           result.errors.push(`Lead ${enrollment.lead_id} sem telefone válido — não é possível enviar WhatsApp`);
           console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=invalid_phone duration_ms=${Date.now() - stepStart}`);
@@ -283,6 +315,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         // Check and deduct WhatsApp credit
         const creditResult = await WhatsAppCreditService.checkAndDeductCredit(enrollment.lead.org_id, supabase);
         if (!creditResult.allowed) {
+          await markInteractionFailed(supabase, interaction.id, creditResult.error ?? 'no_credits');
           result.failed++;
           result.errors.push(`Org ${enrollment.lead.org_id} sem créditos WhatsApp: ${creditResult.error}`);
           console.error(`[cadence-engine] enrollment=${enrollment.id} status=failed reason=no_credits duration_ms=${Date.now() - stepStart}`);
@@ -303,10 +336,20 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           await (supabase.from('interactions') as ReturnType<typeof supabase.from>)
             .update({ external_id: waResult.messageId } as Record<string, unknown>)
             .eq('id', interaction.id);
+          sendSuccess = true;
           console.warn(`[cadence-engine] enrollment=${enrollment.id} whatsapp sent messageId=${waResult.messageId}`);
         } else {
-          console.error(`[cadence-engine] enrollment=${enrollment.id} whatsapp send failed: ${waResult.error}`);
+          await markInteractionFailed(supabase, interaction.id, waResult.error ?? 'unknown_whatsapp_error');
+          result.failed++;
+          result.errors.push(`WhatsApp falhou para lead ${enrollment.lead_id}: ${waResult.error}`);
+          console.error(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=failed reason=whatsapp_send_error error="${waResult.error}" duration_ms=${Date.now() - stepStart}`);
+          continue;
         }
+      }
+
+      if (!sendSuccess) {
+        // Unknown channel or no send attempted
+        continue;
       }
 
       // Check if there's a next step
@@ -329,7 +372,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       }
 
       result.sent++;
-      console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} channel=${step.channel} status=sent ai=${aiGenerated} duration_ms=${Date.now() - stepStart}`);
+      console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} channel=${step.channel} status=sent ai=${aiGenerated} send_success=${sendSuccess} duration_ms=${Date.now() - stepStart}`);
     } catch (err) {
       result.failed++;
       const message = err instanceof Error ? err.message : String(err);

@@ -9,21 +9,24 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+function buildQueryChain(gmailData: Record<string, unknown> | null) {
+  const singleFn = () => Promise.resolve({ data: gmailData });
+  const inFn = () => ({ single: singleFn });
+  const eqChain = () => ({
+    eq: eqChain,
+    in: inFn,
+    single: singleFn,
+  });
+  return { eq: eqChain, in: inFn, single: singleFn };
+}
+
 function mockSupabase(gmailData: Record<string, unknown> | null) {
   const updateMock = vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnValue(Promise.resolve({ error: null })),
   });
   const supabase = {
     from: () => ({
-      select: () => ({
-        eq: () => ({
-          eq: () => ({
-            eq: () => ({
-              single: () => Promise.resolve({ data: gmailData }),
-            }),
-          }),
-        }),
-      }),
+      select: () => buildQueryChain(gmailData),
       update: updateMock,
     }),
     _updateMock: updateMock,
@@ -38,15 +41,7 @@ function createMockSupabaseClient(gmailData: Record<string, unknown> | null) {
   });
   return {
     from: () => ({
-      select: () => ({
-        eq: () => ({
-          eq: () => ({
-            eq: () => ({
-              single: () => Promise.resolve({ data: gmailData }),
-            }),
-          }),
-        }),
-      }),
+      select: () => buildQueryChain(gmailData),
       update: updateMock,
     }),
   };
@@ -110,7 +105,7 @@ describe('EmailService', () => {
       status: 'connected',
     });
 
-    // fetch calls: 1st = Google refresh, 2nd = Gmail send
+    // fetch calls: 1st = Google refresh, 2nd = signature, 3rd = Gmail send, 4th = threadId
     vi.mocked(global.fetch)
       .mockResolvedValueOnce({
         ok: true,
@@ -118,7 +113,15 @@ describe('EmailService', () => {
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
+        json: () => Promise.resolve({}),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
         json: () => Promise.resolve({ id: 'msg-refreshed' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ threadId: 'thread-1' }),
       } as Response);
 
     const result = await EmailService.sendEmail(
@@ -132,8 +135,8 @@ describe('EmailService', () => {
     expect(result.success).toBe(true);
     expect(result.messageId).toBe('msg-refreshed');
 
-    // Verify the Gmail send used the new token
-    const sendCall = vi.mocked(global.fetch).mock.calls[1]!;
+    // Verify the Gmail send used the new token (calls: refresh, signature, send, threadId)
+    const sendCall = vi.mocked(global.fetch).mock.calls[2]!;
     expect(sendCall[1]?.headers).toEqual(
       expect.objectContaining({ Authorization: 'Bearer new-fresh-token' }),
     );
@@ -265,7 +268,8 @@ describe('EmailService', () => {
 
     expect(global.fetch).toHaveBeenCalled();
     const calls = vi.mocked(global.fetch).mock.calls;
-    const fetchCall = calls[0]!;
+    // calls: [0]=signature, [1]=send, [2]=threadId
+    const fetchCall = calls[1]!;
     const body = JSON.parse(fetchCall[1]?.body as string) as { raw: string };
     // Decode the outer base64url to get the MIME message
     const mimeMessage = Buffer.from(body.raw.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();

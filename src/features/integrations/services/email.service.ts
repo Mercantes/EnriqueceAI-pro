@@ -13,10 +13,11 @@ interface SendEmailParams {
 interface SendEmailResult {
   success: boolean;
   messageId?: string;
+  threadId?: string;
   error?: string;
 }
 
-interface GmailConnection {
+export interface GmailConnection {
   id: string;
   access_token_encrypted: string;
   refresh_token_encrypted: string;
@@ -88,7 +89,7 @@ function buildRawEmail(from: string, to: string, subject: string, htmlBody: stri
  * Refreshes an expired Gmail token using the refresh_token grant.
  * Updates the connection in the database and returns the new access token.
  */
-async function refreshAccessToken(
+export async function refreshAccessToken(
   connection: GmailConnection,
   supabase: SupabaseClient,
 ): Promise<{ accessToken: string } | { error: string }> {
@@ -225,7 +226,25 @@ export class EmailService {
       };
     }
 
-    const result = (await response.json()) as { id: string };
-    return { success: true, messageId: result.id };
+    const result = (await response.json()) as { id: string; threadId?: string };
+
+    // Fetch threadId for reply tracking if not returned directly
+    let threadId = result.threadId;
+    if (!threadId && result.id) {
+      try {
+        const msgResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${result.id}?fields=threadId`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        if (msgResponse.ok) {
+          const msgData = (await msgResponse.json()) as { threadId?: string };
+          threadId = msgData.threadId;
+        }
+      } catch {
+        // threadId fetch failed — reply tracking will use fallback
+      }
+    }
+
+    return { success: true, messageId: result.id, threadId };
   }
 }
