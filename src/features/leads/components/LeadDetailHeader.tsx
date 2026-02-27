@@ -36,6 +36,7 @@ interface LeadDetailHeaderProps {
   onShowAI: () => void;
   onShowMeeting: () => void;
   onShowArchive: () => void;
+  onShowLost: () => void;
   onEnrich: () => void;
 }
 
@@ -46,6 +47,7 @@ export function LeadDetailHeader({
   onShowAI,
   onShowMeeting,
   onShowArchive,
+  onShowLost,
   onEnrich,
 }: LeadDetailHeaderProps) {
   const router = useRouter();
@@ -59,13 +61,12 @@ export function LeadDetailHeader({
 
   const isClosed = lead.status === 'qualified' || lead.status === 'unqualified';
 
-  const handleStatusChange = useCallback((status: 'qualified' | 'unqualified' | 'contacted') => {
+  const handleStatusChange = useCallback((status: 'qualified' | 'contacted') => {
     startTransition(async () => {
       const result = await updateLead(lead.id, { status });
       if (result.success) {
         const messages: Record<string, string> = {
           qualified: 'Lead marcado como ganho',
-          unqualified: 'Lead marcado como perdido',
           contacted: 'Lead reaberto',
         };
         toast.success(messages[status]);
@@ -128,7 +129,7 @@ export function LeadDetailHeader({
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => handleStatusChange('unqualified')}
+              onClick={onShowLost}
               disabled={isPending}
             >
               <ThumbsDown className="mr-1 h-4 w-4" />

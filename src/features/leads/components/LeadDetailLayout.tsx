@@ -13,14 +13,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { AIMessageGenerator } from '@/features/ai/components/AIMessageGenerator';
 import type { LeadContext } from '@/features/ai/types';
+import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
 
 import { enrichLeadAction } from '../actions/enrich-lead';
 import type { LeadEnrollmentData } from '../actions/fetch-lead-enrollment';
-import { archiveLead } from '../actions/update-lead';
+import { archiveLead, fetchLossReasons, markLeadAsLost } from '../actions/update-lead';
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -41,10 +51,16 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
 
   // Dialog state
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [showLostDialog, setShowLostDialog] = useState(false);
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [showEnrollCadence, setShowEnrollCadence] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
+
+  // Loss reason dialog state
+  const [lossReasons, setLossReasons] = useState<LossReasonRow[]>([]);
+  const [selectedReasonId, setSelectedReasonId] = useState<string | null>(null);
+  const [lossNotes, setLossNotes] = useState('');
 
   const handleArchive = useCallback(() => {
     startTransition(async () => {
@@ -71,6 +87,32 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
     });
   }, [lead.id, router]);
 
+  const handleOpenLostDialog = useCallback(async () => {
+    setShowLostDialog(true);
+    setSelectedReasonId(null);
+    setLossNotes('');
+    const result = await fetchLossReasons();
+    if (result.success) {
+      setLossReasons(result.data);
+    } else {
+      toast.error(result.error);
+    }
+  }, []);
+
+  const handleConfirmLost = useCallback(() => {
+    if (!selectedReasonId) return;
+    startTransition(async () => {
+      const result = await markLeadAsLost(lead.id, selectedReasonId, lossNotes.trim() || undefined);
+      if (result.success) {
+        toast.success('Lead marcado como perdido');
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+    setShowLostDialog(false);
+  }, [lead.id, selectedReasonId, lossNotes, router]);
+
   return (
     <div className="space-y-4">
       <LeadDetailHeader
@@ -80,6 +122,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
         onShowAI={() => setShowAIGenerator(true)}
         onShowMeeting={() => setShowMeeting(true)}
         onShowArchive={() => setShowArchiveDialog(true)}
+        onShowLost={handleOpenLostDialog}
         onEnrich={handleEnrich}
       />
 
@@ -110,6 +153,56 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData }: LeadDetailL
             </Button>
             <Button variant="destructive" onClick={handleArchive} disabled={isPending}>
               Arquivar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Loss reason dialog */}
+      <Dialog open={showLostDialog} onOpenChange={setShowLostDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Desqualificar lead</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Motivo da perda</Label>
+              <Select
+                value={selectedReasonId ?? undefined}
+                onValueChange={setSelectedReasonId}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione o motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lossReasons.map((reason) => (
+                    <SelectItem key={reason.id} value={reason.id}>
+                      {reason.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Razão da desqualificação</Label>
+              <Textarea
+                placeholder="Escreva aqui o que te levou a desqualificar esse lead."
+                value={lossNotes}
+                onChange={(e) => setLossNotes(e.target.value)}
+                rows={6}
+              />
+            </div>
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setShowLostDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmLost}
+              disabled={!selectedReasonId || isPending}
+            >
+              Desqualificar lead
             </Button>
           </DialogFooter>
         </DialogContent>

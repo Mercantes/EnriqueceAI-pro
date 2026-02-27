@@ -227,6 +227,17 @@ export async function enrollLeads(
   const errors: string[] = [];
 
   for (const leadId of leadIds) {
+    // Complete any existing active/paused enrollment for this lead in this cadence
+    await (supabase
+      .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      } as Record<string, unknown>)
+      .eq('cadence_id', cadenceId)
+      .eq('lead_id', leadId)
+      .in('status', ['active', 'paused']);
+
     const { error } = await (supabase
       .from('cadence_enrollments') as ReturnType<typeof supabase.from>)
       .insert({

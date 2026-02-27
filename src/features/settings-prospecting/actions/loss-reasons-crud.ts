@@ -14,12 +14,25 @@ export interface LossReasonRow {
 }
 
 const DEFAULT_REASONS = [
-  'Sem interesse',
+  'Adolescente/Criança',
+  'Blocklist',
+  'Cliente',
+  'Cliente oculto',
+  'Contatos inválidos',
+  'Deixou de responder',
+  'Duplicado',
+  'Engano/Não Lembra',
+  'Ex-cliente (detrator)',
+  'Não ICP',
+  'Nunca respondeu',
+  'Pessoa Física',
+  'Sem autoridade',
   'Sem budget',
-  'Timing ruim',
-  'Concorrente escolhido',
-  'Sem resposta',
-  'Outros',
+  'Sem interesse',
+  'Sem necessidade',
+  'Sem timing',
+  'Serviço fora de escopo',
+  'SPAM',
 ];
 
 // Helper: typed query builder for loss_reasons
