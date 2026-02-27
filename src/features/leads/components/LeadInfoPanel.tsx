@@ -39,9 +39,17 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 
 import { scheduleMeeting } from '@/features/integrations/actions/schedule-meeting';
 
+import { LEAD_SOURCE_OPTIONS } from '../schemas/lead.schemas';
 import { updateLead } from '../actions/update-lead';
 import {
   Tooltip,
@@ -599,6 +607,40 @@ export function LeadInfoPanel({
 
             {/* STATUS — metadados internos */}
             <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                Status
+              </h4>
+              <div className="space-y-1">
+                <p className="text-xs text-[var(--muted-foreground)]">Origem</p>
+                <Select
+                  value={data.lead_source ?? 'none'}
+                  onValueChange={(value) => {
+                    const newSource = value === 'none' ? null : value;
+                    setData((prev) => ({ ...prev, lead_source: newSource }));
+                    startTransition(async () => {
+                      const result = await updateLead(data.id, { lead_source: newSource ?? '' });
+                      if (result.success) {
+                        toast.success('Origem atualizada');
+                        router.refresh();
+                      } else {
+                        toast.error(result.error);
+                      }
+                    });
+                  }}
+                >
+                  <SelectTrigger className="w-full text-sm">
+                    <SelectValue placeholder="Selecione a origem" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {LEAD_SOURCE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               {enrollment && (
                 <MeetimeFieldRow
                   label="Cadência"
