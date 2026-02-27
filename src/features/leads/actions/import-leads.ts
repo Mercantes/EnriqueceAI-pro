@@ -89,6 +89,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         enrichment_status: 'pending',
         razao_social: row.razao_social ?? null,
         nome_fantasia: row.nome_fantasia ?? null,
+        lead_source: row.lead_source ?? null,
         created_by: user.id,
         import_id: importId,
       } as Record<string, unknown>);
@@ -111,9 +112,10 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
             deleted_at: null,
             import_id: importId,
           };
-          // Only overwrite name fields if the CSV actually provides them
+          // Only overwrite fields if the CSV actually provides them
           if (row.razao_social) restoreFields.razao_social = row.razao_social;
           if (row.nome_fantasia) restoreFields.nome_fantasia = row.nome_fantasia;
+          if (row.lead_source) restoreFields.lead_source = row.lead_source;
 
           const { error: restoreError } = await (supabase
             .from('leads') as ReturnType<typeof supabase.from>)

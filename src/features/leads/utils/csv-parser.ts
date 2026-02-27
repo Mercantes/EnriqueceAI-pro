@@ -16,6 +16,7 @@ export interface ParsedRow {
   cnpj: string;
   razao_social?: string;
   nome_fantasia?: string;
+  lead_source?: string;
 }
 
 export interface ParseError {
@@ -81,6 +82,7 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
   // Detect optional columns
   const razaoIndex = headers.findIndex((h) => ['razao_social', 'razao social', 'razão social', 'empresa', 'company'].includes(h));
   const fantasiaIndex = headers.findIndex((h) => ['nome_fantasia', 'nome fantasia', 'fantasia', 'trade_name'].includes(h));
+  const sourceIndex = headers.findIndex((h) => ['lead_source', 'origem', 'fonte', 'source'].includes(h));
 
   for (let i = 0; i < dataLines.length; i++) {
     const line = dataLines[i]!;
@@ -104,6 +106,7 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
       cnpj,
       razao_social: razaoIndex >= 0 ? cells[razaoIndex]?.trim() || undefined : undefined,
       nome_fantasia: fantasiaIndex >= 0 ? cells[fantasiaIndex]?.trim() || undefined : undefined,
+      lead_source: sourceIndex >= 0 ? cells[sourceIndex]?.trim() || undefined : undefined,
     });
   }
 
