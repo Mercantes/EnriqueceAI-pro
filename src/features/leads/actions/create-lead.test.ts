@@ -101,10 +101,11 @@ function makeDuplicateCheckChain(existing: { id: string; first_name: string; las
   return { select: selectMock };
 }
 
-// Phone duplicate check: select → eq(org_id) → is(deleted_at) → like(telefone) (awaited array)
+// Phone duplicate check: select → eq(org_id) → is(deleted_at) → not(telefone,is,null)
+// (awaited array; a comparação por dígitos é feita em JS na action)
 function makePhoneCheckChain(existing: Array<{ id: string; telefone: string | null; first_name: string | null; last_name: string | null }> = []) {
-  const likeMock = vi.fn().mockResolvedValue({ data: existing });
-  const isMock = vi.fn().mockReturnValue({ like: likeMock });
+  const notMock = vi.fn().mockResolvedValue({ data: existing });
+  const isMock = vi.fn().mockReturnValue({ not: notMock });
   const eqOrgMock = vi.fn().mockReturnValue({ is: isMock });
   const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
   return { select: selectMock };
@@ -131,6 +132,10 @@ describe('createLead', () => {
     mockCreateNotifications.mockClear();
     mockEnrollLeads.mockResolvedValue({ success: true, data: { enrolled: 1, errors: [] } });
     mockEnrichLeadAction.mockResolvedValue({ success: true, data: undefined });
+    // As checagens de duplicata rodam com service role (para ver a org inteira,
+    // não só os leads visíveis sob RLS). Aponta o service client para o mesmo
+    // mockFrom, preservando a sequência de callCount dos testes.
+    vi.mocked(createServiceRoleClient).mockReturnValue({ from: mockFrom } as never);
   });
 
   it('should create a lead with all required fields', async () => {
@@ -256,6 +261,29 @@ describe('createLead', () => {
     if (!result.success) {
       expect(result.error).toContain('Já existe um lead com o email');
       expect(result.error).toContain('Maria Santos');
+    }
+  });
+
+  it('traduz o 23505 do índice único de email em mensagem clara (rede de segurança)', async () => {
+    // A checagem passa (não vê o dup — ex.: lead de outro SDR sob RLS 'own'),
+    // mas o INSERT bate no índice único org-wide. Deve virar mensagem específica,
+    // não o genérico "Erro ao criar lead".
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return makeOrgMemberChain('org-1');
+      if (callCount === 2) return makeSubscriptionChain(null);
+      if (callCount === 3) return makeAssigneeChain(true);
+      if (callCount === 4) return makeDuplicateCheckChain(null);
+      if (callCount === 5) return makePhoneCheckChain();
+      return makeInsertChain(null, { code: '23505', message: 'duplicate key value' } as never);
+    });
+
+    const result = await createLead(validInput);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Já existe um lead com este email nesta organização.');
     }
   });
 
@@ -394,7 +422,13 @@ describe('createLead', () => {
       const eqTypeMock = vi.fn().mockReturnValue({ gte: gteMock });
       const eqOrgMock = vi.fn().mockReturnValue({ eq: eqTypeMock });
       const selectMock = vi.fn().mockReturnValue({ eq: eqOrgMock });
-      return { from: vi.fn().mockReturnValue({ select: selectMock }) };
+      const notifChain = { select: selectMock };
+      // O service client agora atende DOIS papéis: dedup do alerta ('notifications')
+      // e as checagens de duplicata ('leads'). Roteia por tabela — 'leads' segue o
+      // mockFrom sequencial dos testes; 'notifications' usa a chain de dedup.
+      return {
+        from: vi.fn((table: string) => (table === 'notifications' ? notifChain : mockFrom(table))),
+      };
     }
 
     it('should fire 80% threshold alert when crossing threshold', async () => {
