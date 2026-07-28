@@ -31,6 +31,14 @@ export async function createLead(
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
 
+  // As checagens de duplicata (email/telefone) DEVEM enxergar a organização
+  // inteira — igual ao índice único org-wide `leads_org_id_email_active_key`.
+  // Com `lead_visibility_mode='own'`, o `supabase` (RLS) só vê os leads do
+  // próprio usuário; um lead duplicado de OUTRO responsável passava despercebido
+  // na checagem e só era barrado pelo índice no INSERT, virando o erro genérico
+  // "Erro ao criar lead". O service role alinha a checagem ao índice.
+  const dupCheckClient = createServiceRoleClient();
+
   // Check lead limit
   let currentLeads = 0;
   let maxLeads = 0;
@@ -82,7 +90,7 @@ export async function createLead(
   // Check duplicate by email within same org (case-insensitive — providers
   // treat email as case-insensitive and we have legacy rows with mixed case)
   if (parsed.data.email) {
-    const { data: existingByEmail } = await from(supabase, 'leads')
+    const { data: existingByEmail } = await from(dupCheckClient, 'leads')
       .select('id, email, first_name, last_name')
       .eq('org_id', orgId)
       .ilike('email', parsed.data.email)
@@ -103,11 +111,19 @@ export async function createLead(
     const cleanPhone = parsed.data.telefone.replace(/\D/g, '');
     if (cleanPhone.length >= 8) {
       const phoneSuffix = cleanPhone.slice(-8);
-      const { data: existingByPhone } = (await from(supabase, 'leads')
+      // Puxa os telefones da org (service role — vê todos os responsáveis) e
+      // compara pelos DÍGITOS em JS. O telefone é salvo com formatação variável
+      // ("+55 69 99221-6392", "(69) 99221-6392"), então casar por LIKE no banco
+      // falhava com hífens/espaços — e o PostgREST não transforma a coluna no filtro.
+      const { data: orgPhones } = (await from(dupCheckClient, 'leads')
         .select('id, telefone, first_name, last_name')
         .eq('org_id', orgId)
         .is('deleted_at', null)
-        .like('telefone', `%${phoneSuffix}`)) as { data: Array<{ id: string; telefone: string | null; first_name: string | null; last_name: string | null }> | null };
+        .not('telefone', 'is', null)) as { data: Array<{ id: string; telefone: string | null; first_name: string | null; last_name: string | null }> | null };
+
+      const existingByPhone = (orgPhones ?? []).filter(
+        (l) => (l.telefone ?? '').replace(/\D/g, '').endsWith(phoneSuffix),
+      );
 
       if (existingByPhone && existingByPhone.length > 0) {
         const dup = existingByPhone[0]!;
@@ -143,6 +159,13 @@ export async function createLead(
     .single();
 
   if (error || !lead) {
+    // Rede de segurança: o índice único de email (`leads_org_id_email_active_key`)
+    // é org-wide. Uma corrida entre a checagem acima e o INSERT — ou qualquer dup
+    // residual — é barrada aqui pelo 23505; traduz para mensagem clara em vez do
+    // genérico "Erro ao criar lead".
+    if ((error as { code?: string } | null)?.code === '23505') {
+      return { success: false, error: 'Já existe um lead com este email nesta organização.' };
+    }
     return { success: false, error: 'Erro ao criar lead' };
   }
 
