@@ -7,6 +7,7 @@ import { requireAuthWithMember } from '@/lib/auth/require-auth-with-member';
 import { ERR_LEAD_LIMIT_EXCEEDED, ERR_LEAD_LIMIT_REACHED } from '@/lib/constants/error-codes';
 import { MAX_CSV_SIZE } from '@/lib/constants/limits';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { exceedsLimit, remainingSlots } from '@/lib/utils/plan-limits';
@@ -28,6 +29,13 @@ export interface ImportLeadsResult {
 export async function importLeads(formData: FormData): Promise<ActionResult<ImportLeadsResult>> {
   const { userId, orgId, role } = await requireAuthWithMember();
   const supabase = await createServerSupabaseClient();
+  // As checagens de duplicidade precisam ver a ORG inteira — igual aos índices
+  // únicos org-wide de email e CNPJ —, não só os leads visíveis ao importador sob
+  // RLS. Importar NÃO é restrito a manager; sob `lead_visibility_mode='own'` um
+  // SDR não veria o duplicado de outro SDR, a checagem passaria em branco e o
+  // INSERT bateria no índice, gerando um "duplicado por CNPJ" enganoso. Service
+  // role alinha a checagem aos índices.
+  const dupClient = createServiceRoleClient();
 
   // Lead source override from the import form. When the operator didn't
   // pick anything, every imported row falls back to Outbound / Prospecção
@@ -179,7 +187,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       let existing: { id: string; deleted_at: string | null } | null = null;
 
       if (row.email) {
-        const { data } = (await from(supabase, 'leads')
+        const { data } = (await from(dupClient, 'leads')
           .select('id, deleted_at')
           .eq('org_id', orgId)
           .ilike('email', row.email)
@@ -193,7 +201,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       // branches of the same company); matching by phone alone collides on
       // reception/main switchboard numbers.
       if (!existing && row.razao_social && row.telefone) {
-        const { data } = (await from(supabase, 'leads')
+        const { data } = (await from(dupClient, 'leads')
           .select('id, deleted_at')
           .eq('org_id', orgId)
           .ilike('razao_social', row.razao_social)
@@ -220,11 +228,17 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
             if (normRestore.canal) restoreFields.canal = normRestore.canal;
           }
 
-          const { error: restoreError } = await from(supabase, 'leads')
+          // Restaura sob RLS: só o próprio importador restaura seus leads. Se o
+          // lead detectado (via service role) for de OUTRO responsável, o UPDATE
+          // sob RLS não afeta linha nenhuma → `restored` null → não conta como
+          // sucesso; cai em duplicado (reportado corretamente), sem falso positivo.
+          const { data: restored, error: restoreError } = await from(supabase, 'leads')
             .update(restoreFields)
-            .eq('id', existing.id);
+            .eq('id', existing.id)
+            .select('id')
+            .maybeSingle();
 
-          if (!restoreError) {
+          if (!restoreError && restored) {
             successCount++;
             continue;
           }
@@ -275,12 +289,29 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       // SDR's in-progress work.
       let alreadyExistsStatus: string | null = null;
       if (isDuplicate) {
-        const { data: existingLead } = (await from(supabase, 'leads')
-          .select('id, deleted_at, status')
-          .eq('org_id', orgId)
-          .eq('cnpj', row.cnpj)
-          .limit(1)
-          .maybeSingle()) as { data: { id: string; deleted_at: string | null; status: string } | null };
+        // Re-resolve o lead em conflito pela coluna que causou a colisão: CNPJ
+        // quando a linha tem CNPJ, senão email (linha sem CNPJ só bate no índice
+        // único de email). Antes consultava sempre por CNPJ — null nas linhas sem
+        // CNPJ —, devolvendo null e rotulando erroneamente como "CNPJ duplicado".
+        // Service role para enxergar leads de outros responsáveis (RLS 'own').
+        let existingLead: { id: string; deleted_at: string | null; status: string } | null = null;
+        if (row.cnpj) {
+          const { data } = (await from(dupClient, 'leads')
+            .select('id, deleted_at, status')
+            .eq('org_id', orgId)
+            .eq('cnpj', row.cnpj)
+            .limit(1)
+            .maybeSingle()) as { data: { id: string; deleted_at: string | null; status: string } | null };
+          existingLead = data;
+        } else if (row.email) {
+          const { data } = (await from(dupClient, 'leads')
+            .select('id, deleted_at, status')
+            .eq('org_id', orgId)
+            .ilike('email', row.email)
+            .limit(1)
+            .maybeSingle()) as { data: { id: string; deleted_at: string | null; status: string } | null };
+          existingLead = data;
+        }
 
         if (existingLead) {
           alreadyExistsStatus = existingLead.status;
@@ -317,11 +348,13 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
               if (normRestore.canal) restoreFields.canal = normRestore.canal;
             }
 
-            const { error: restoreError } = await from(supabase, 'leads')
+            const { data: restored, error: restoreError } = await from(supabase, 'leads')
               .update(restoreFields)
-              .eq('id', existingLead.id);
+              .eq('id', existingLead.id)
+              .select('id')
+              .maybeSingle();
 
-            if (!restoreError) {
+            if (!restoreError && restored) {
               successCount++;
               continue;
             }
@@ -331,9 +364,11 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         duplicateCount++;
       }
 
+      // O campo do conflito reflete a linha: CNPJ quando há CNPJ, senão email.
+      const dupField = row.cnpj ? 'CNPJ' : 'email';
       const dupReason = alreadyExistsStatus
-        ? `CNPJ duplicado (lead já existe, status=${alreadyExistsStatus})`
-        : 'CNPJ duplicado nesta organização';
+        ? `${dupField} duplicado (lead já existe, status=${alreadyExistsStatus})`
+        : `${dupField} duplicado nesta organização`;
       const errorEntry = {
         id: '',
         import_id: importId,

@@ -337,6 +337,7 @@ export async function enrollLeads(
         status: 'completed',
         completed_at: new Date().toISOString(),
       } as Record<string, unknown>)
+      .eq('org_id', orgId)
       .eq('cadence_id', cadenceId)
       .eq('lead_id', leadId)
       .in('status', ['active', 'paused']);
