@@ -6,6 +6,9 @@ import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
 
+import type { ActionResult } from '@/lib/actions/action-result';
+
+import type { CallStatus } from '@/features/calls/types';
 import type { ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
 
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
@@ -82,6 +85,10 @@ export function ActivityWhatsAppCallPanel({
   const durationRef = useRef<number>(0);
   // O serviço (AstraCalls) não devolve URL de gravação pela API → null por ora.
   const recordingUrlRef = useRef<string | null>(null);
+  // Serializa as gravações de UMA tentativa: a base (encerramento) roda antes do
+  // enrich (Concluir/retry) — senão o enrich poderia inserir uma 2ª linha antes
+  // do INSERT-base terminar. Resetada a cada nova discagem.
+  const persistChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   const selected = phones.find((p) => p.raw === selectedPhone);
   const displayNumber = selected?.formatted ?? selectedPhone;
@@ -156,12 +163,56 @@ export function ActivityWhatsAppCallPanel({
     micRef.current = null;
   }
 
+  // Persiste a tentativa atual. Faz snapshot dos refs no momento da CHAMADA (não
+  // no momento em que a cadeia executa) — senão um enrich adiado leria os refs já
+  // sobrescritos pela próxima discagem. Idempotente no servidor por callId.
+  function persistAttempt(extra?: {
+    sdrOutcome?: CallStatus;
+    notes?: string;
+  }): Promise<ActionResult<{ callId: string }> | undefined> {
+    const callId = callIdRef.current;
+    if (!callId) return Promise.resolve(undefined);
+    const snapshot = {
+      stepId,
+      cadenceId,
+      leadId,
+      sid: sidRef.current ?? '',
+      callId,
+      destination: selectedPhone,
+      connected: !!answeredAtRef.current,
+      disposition: (answeredAtRef.current ? 'significant' : 'not_connected') as
+        | 'significant'
+        | 'not_connected',
+      durationSeconds: durationRef.current,
+      startedAt: callStartedAtRef.current ?? new Date().toISOString(),
+      answeredAt: answeredAtRef.current,
+      recordingUrl: recordingUrlRef.current,
+      sdrOutcome: extra?.sdrOutcome,
+      notes: extra?.notes,
+    };
+    const run = () => persistWhatsAppCall(snapshot);
+    const next = persistChainRef.current.then(run, run);
+    persistChainRef.current = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
   function handleDial() {
     if (!selectedPhone) {
       toast.error('Selecione um número');
       return;
     }
     setWasAnswered(false);
+    // Zera o estado da tentativa anterior — sem isto, answeredAtRef/durationRef
+    // vazariam de uma tentativa (ex.: atendida) para a próxima re-discagem e a
+    // gravação por tentativa registraria o desfecho errado. callStartedAt/sid/
+    // callId são sobrescritos logo abaixo pela nova chamada.
+    answeredAtRef.current = null;
+    durationRef.current = 0;
+    recordingUrlRef.current = null;
+    persistChainRef.current = Promise.resolve();
     dispatch({ type: 'DIAL' });
     startTransition(async () => {
       try {
@@ -245,7 +296,13 @@ export function ActivityWhatsAppCallPanel({
     return (
       <CallResultModal
         open
-        onClose={() => onResolved()}
+        // Cancelar/ESC/clicar fora: registra a tentativa mesmo assim (sem desfecho
+        // do SDR) — senão uma ligação não atendida que o SDR só dispensa some do
+        // histórico e a métrica de tentativas fica furada.
+        onClose={() => {
+          void persistAttempt().catch(() => {});
+          onResolved();
+        }}
         leadName={leadName}
         leadId={leadId}
         leadEmail={leadEmail}
@@ -254,31 +311,31 @@ export function ActivityWhatsAppCallPanel({
         durationSeconds={endedDuration}
         connected={wasAnswered}
         isSending={isPending}
-        onRetry={() => dispatch({ type: 'RESET' })}
-        onLeadLost={onLeadLost}
+        onRetry={(notes) => {
+          // Grava a tentativa (com as anotações já digitadas no modal) ANTES de
+          // re-discar — senão a retentativa evaporaria do histórico. A próxima
+          // discagem gera um callId novo → cada tentativa vira um registro distinto.
+          void persistAttempt({ notes }).catch(() => {});
+          dispatch({ type: 'RESET' });
+        }}
+        onLeadLost={
+          onLeadLost
+            ? () => {
+                // "Perdido" também encerra a tentativa — registra antes de sair.
+                void persistAttempt().catch(() => {});
+                onLeadLost();
+              }
+            : undefined
+        }
         onConclude={({ notes, returnSchedule, outcome }) => {
           startTransition(async () => {
             // `status` da ligação = SINAL TÉCNICO (atendeu ou não). O que o SDR
             // informou vai separado em `sdrOutcome` — sobrescrever o status com
             // leitura subjetiva foi o que gerou a divergência de BI em mai/2026.
-            const persistDisposition = answeredAtRef.current ? 'significant' : 'not_connected';
-            const persisted = await persistWhatsAppCall({
-              stepId,
-              cadenceId,
-              leadId,
-              sid: sidRef.current ?? '',
-              callId: callIdRef.current ?? '',
-              destination: selectedPhone,
-              disposition: persistDisposition,
-              sdrOutcome: outcome,
-              connected: !!answeredAtRef.current,
-              durationSeconds: durationRef.current,
-              startedAt: callStartedAtRef.current ?? new Date().toISOString(),
-              answeredAt: answeredAtRef.current,
-              recordingUrl: recordingUrlRef.current,
-              notes,
-            });
-            if (!persisted.success) {
+            // A linha da tentativa já nasceu no encerramento; aqui enriquecemos
+            // (upsert) com o desfecho do SDR + anotação.
+            const persisted = await persistAttempt({ sdrOutcome: outcome, notes });
+            if (persisted && !persisted.success) {
               toast.error('Não foi possível registrar a ligação no histórico.');
             }
 

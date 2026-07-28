@@ -7,6 +7,7 @@ import { requireAuth } from '@/lib/auth/require-auth';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { formatDuration } from '@/lib/utils/format';
 
 import { toE164BR } from '../phone';
 
@@ -44,15 +45,21 @@ const persistSchema = z.object({
 export type PersistWhatsAppCallInput = z.infer<typeof persistSchema>;
 
 /**
- * Persiste uma Ligação via WhatsApp encerrada (story 7.7):
+ * Persiste uma TENTATIVA de Ligação via WhatsApp (story 7.7):
  *  - 1 linha em `calls` com type='outbound' + metadata.provider='whatsapp' (o
  *    type='outbound' garante a contagem no BI — ver memória calls-bi-sync-path).
- *  - 1 `interaction` channel='phone', type='sent', ligada ao step/cadência.
+ *  - 1 `interaction` channel='phone', type='sent', ligada ao step/cadência, com
+ *    texto legível (atendida/não atendida) pra tentativa aparecer na timeline.
+ *
+ * Chamada em TODA saída do modal de resultado — Concluir (com desfecho do SDR +
+ * anotação), Tentar novamente, Cancelar/ESC e Perdido — garantindo rastro de
+ * cada tentativa (atendida ou não) no histórico do lead. Upsert idempotente por
+ * `service_call_id`: reenviar o mesmo callId ATUALIZA a linha (protege contra
+ * duplo clique / re-render); cada re-discagem tem um callId novo, então vira um
+ * registro distinto — assim retentativas ficam metrificáveis.
  *
  * NÃO avança a cadência (isso é 7.6) e NÃO dispara o webhook do n8n: a call em
  * `calls` é puxada pelo watchdog pg_cron existente → BI sem mudança no warehouse.
- *
- * Idempotente por `service_call_id` (re-submit não duplica a call).
  */
 export async function persistWhatsAppCall(
   input: PersistWhatsAppCallInput,
@@ -72,20 +79,12 @@ export async function persistWhatsAppCall(
   if (!member) return { success: false, error: 'Organização não encontrada' };
   const orgId = member.org_id;
 
-  // Idempotência: se já gravamos esta call do serviço, não duplica.
-  if (p.callId) {
-    const { data: existing } = (await from(supabase, 'calls')
-      .select('id')
-      .eq('org_id', orgId)
-      .eq('metadata->>service_call_id', p.callId)
-      .maybeSingle()) as { data: { id: string } | null };
-    if (existing) return { success: true, data: { callId: existing.id } };
-  }
-
   // Gravação: usa a URL passada ou consome o buffer (o webhook do AstraCalls pode
   // ter chegado antes desta call ser criada). Ver /api/webhooks/wacalls.
   // O buffer tem RLS habilitada SEM policies (acesso só via service role), então
   // o cliente do usuário não enxerga essas linhas — lemos com service role.
+  // Fica antes do upsert de propósito: no "Concluir" (2ª gravação da tentativa) a
+  // gravação pode já ter chegado, e o update preenche o recording_url que faltou.
   let recordingUrl = p.recordingUrl ?? null;
   if (!recordingUrl && p.callId) {
     const serviceClient = createServiceRoleClient();
@@ -96,13 +95,97 @@ export async function persistWhatsAppCall(
     if (pending) recordingUrl = pending.recording_url;
   }
 
+  // Texto legível na timeline mesmo sem anotação do SDR (espelha o "Ligação
+  // iniciada…" do discador API4COM) — sem isto, uma tentativa não atendida
+  // aparecia em branco no histórico do lead. A anotação, quando existe, tem
+  // prioridade: é o que o SDR quis registrar.
+  const description = p.connected
+    ? `Ligação WhatsApp — atendida (${formatDuration(p.durationSeconds)})`
+    : 'Ligação WhatsApp — não atendida';
+  const messageContent = p.notes?.trim() ? p.notes.trim() : description;
+  const interactionMeta: Record<string, unknown> = {
+    provider: 'whatsapp',
+    service_call_id: p.callId,
+    connected: p.connected,
+    disposition: p.disposition,
+  };
+  const destination = toE164BR(p.destination) || p.destination;
+
+  // Upsert idempotente por `service_call_id`: cada TENTATIVA é gravada assim que
+  // encerra (inclusive não atendida) e depois enriquecida no "Concluir" com o
+  // desfecho do SDR + anotação. Re-submeter o mesmo callId ATUALIZA a linha em
+  // vez de duplicar — é assim que retentativas viram registros distintos (cada
+  // discagem gera um callId novo) sem inflar o contador de atividades.
+  if (p.callId) {
+    const { data: existing } = (await from(supabase, 'calls')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('metadata->>service_call_id', p.callId)
+      .maybeSingle()) as { data: { id: string } | null };
+
+    if (existing) {
+      const callUpdates: Record<string, unknown> = {
+        duration_seconds: p.durationSeconds,
+        status: p.disposition,
+        connected: p.connected,
+        answered_at: p.answeredAt ?? null,
+        updated_at: new Date().toISOString(),
+      };
+      // sdr_outcome e recording_url só são setados quando temos o valor — a
+      // gravação-base do encerramento roda SEM eles; o "Concluir" chega depois
+      // com o desfecho, e a gravação pode ter chegado nesse meio-tempo. Nunca
+      // limpamos um desfecho já informado nem uma gravação já baixada.
+      if (p.sdrOutcome) callUpdates.sdr_outcome = p.sdrOutcome;
+      if (recordingUrl) callUpdates.recording_url = recordingUrl;
+      await from(supabase, 'calls').update(callUpdates).eq('id', existing.id).eq('org_id', orgId);
+
+      // Atualiza a interação espelho (achada por service_call_id) em vez de
+      // inserir outra — senão 1 tentativa viraria 2 no contador de atividades.
+      const { data: existingInteraction } = (await from(supabase, 'interactions')
+        .select('id, metadata')
+        .eq('lead_id', p.leadId)
+        .eq('channel', 'phone')
+        .contains('metadata', { service_call_id: p.callId })
+        .limit(1)
+        .maybeSingle()) as {
+        data: { id: string; metadata: Record<string, unknown> | null } | null;
+      };
+
+      if (existingInteraction) {
+        const interactionUpdates: Record<string, unknown> = {
+          metadata: { ...(existingInteraction.metadata ?? {}), ...interactionMeta },
+        };
+        // Só sobrescreve o texto quando o SDR de fato anotou — não apaga a
+        // descrição automática já gravada na base.
+        if (p.notes?.trim()) interactionUpdates.message_content = p.notes.trim();
+        await from(supabase, 'interactions').update(interactionUpdates).eq('id', existingInteraction.id);
+      } else {
+        // Fallback: a linha de calls existe mas a interação não (legado/raro).
+        await from(supabase, 'interactions').insert({
+          org_id: orgId,
+          lead_id: p.leadId,
+          cadence_id: p.cadenceId ?? null,
+          step_id: p.stepId ?? null,
+          channel: 'phone',
+          type: 'sent',
+          performed_by: user.id,
+          message_content: messageContent,
+          metadata: interactionMeta,
+        } as Record<string, unknown>);
+      }
+
+      return { success: true, data: { callId: existing.id } };
+    }
+  }
+
+  // INSERT: primeira gravação desta tentativa.
   const { data: call, error: callError } = (await from(supabase, 'calls')
     .insert({
       org_id: orgId,
       user_id: user.id,
       lead_id: p.leadId,
       origin: 'whatsapp',
-      destination: toE164BR(p.destination) || p.destination,
+      destination,
       started_at: p.startedAt,
       duration_seconds: p.durationSeconds,
       status: p.disposition,
@@ -129,8 +212,8 @@ export async function persistWhatsAppCall(
     channel: 'phone',
     type: 'sent',
     performed_by: user.id,
-    message_content: p.notes || null,
-    metadata: { provider: 'whatsapp', service_call_id: p.callId },
+    message_content: messageContent,
+    metadata: interactionMeta,
   } as Record<string, unknown>);
 
   return { success: true, data: { callId: call.id } };

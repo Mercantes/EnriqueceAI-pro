@@ -9,7 +9,7 @@ let inserts: Record<string, unknown[]>;
 
 function makeChain(table: string) {
   const chain: Record<string, unknown> = {};
-  for (const m of ['select', 'eq']) chain[m] = vi.fn(() => chain);
+  for (const m of ['select', 'eq', 'update', 'contains', 'limit']) chain[m] = vi.fn(() => chain);
   chain.insert = vi.fn((payload: unknown) => {
     (inserts[table] ??= []).push(payload);
     return chain;
@@ -107,13 +107,38 @@ describe('persistWhatsAppCall', () => {
     expect(interactionRow.channel).toBe('phone');
   });
 
-  it('is idempotent on the same service_call_id', async () => {
+  it('writes a descriptive interaction message for an unanswered attempt', async () => {
     queues.organization_members = [{ data: { org_id: 'org-1' } }];
-    queues.calls = [{ data: { id: 'existing-1' } }]; // dedup hit
+    queues.calls = [
+      { data: null }, // no existing call for this service_call_id
+      { data: { id: 'call-x' }, error: null }, // insert ... select single
+    ];
+    const { answeredAt: _a, ...rest } = baseInput;
+    const result = await persistWhatsAppCall({
+      ...rest,
+      connected: false,
+      disposition: 'not_connected',
+      durationSeconds: 0,
+    });
+    expect(result.success).toBe(true);
 
-    const result = await persistWhatsAppCall(baseInput);
+    const interactionRow = inserts.interactions?.[0] as Record<string, unknown>;
+    // Sem anotação do SDR, a timeline ainda precisa mostrar algo legível.
+    expect(interactionRow.message_content).toBe('Ligação WhatsApp — não atendida');
+    expect((interactionRow.metadata as Record<string, unknown>).connected).toBe(false);
+  });
+
+  it('upserts (updates, never duplicates) on the same service_call_id', async () => {
+    queues.organization_members = [{ data: { org_id: 'org-1' } }];
+    queues.calls = [{ data: { id: 'existing-1' } }]; // existing hit → update path
+    queues.interactions = [{ data: { id: 'int-1', metadata: {} } }]; // mirror exists → update
+
+    const result = await persistWhatsAppCall({ ...baseInput, sdrOutcome: 'significant', notes: 'ok' });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.callId).toBe('existing-1');
+    // A tentativa é ATUALIZADA, não reinserida — nada de linha duplicada.
+    expect(inserts.calls).toBeUndefined();
+    expect(inserts.interactions).toBeUndefined();
   });
 
   it('errors when the user has no organization', async () => {
