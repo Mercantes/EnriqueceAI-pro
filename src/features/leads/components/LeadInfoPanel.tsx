@@ -488,6 +488,13 @@ export function LeadInfoPanel({
         }));
         toast.success('Lead atualizado');
         setIsEditing(false);
+        // Avisa painéis irmãos (ex.: o discador da tela de execução de atividades) que
+        // os dados do lead mudaram, para re-buscarem telefones/campos sem depender de
+        // remontar a tela. O listener filtra pelo leadId. Sem isso, adicionar um telefone
+        // que faltava só era reconhecido ao sair e voltar da tarefa.
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('lead:updated', { detail: { leadId: data.id } }));
+        }
       } else {
         toast.error(result.error);
       }

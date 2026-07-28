@@ -101,6 +101,33 @@ export function ActivityPhonePanel({
     return undefined;
   }, [callState]);
 
+  // Quando o lead é editado em outro painel (ex.: o SDR adiciona um telefone que
+  // faltava), re-busca a lista de telefones para o discador refletir o número novo
+  // sem precisar sair e voltar da tarefa. Espelha o refetch já feito no retry
+  // pós-ligação (handleRetryAttempt); sem isto, availablePhones fica congelado no
+  // mount (useState(phones) só lê o argumento na primeira render).
+  useEffect(() => {
+    function handleLeadUpdated(e: Event) {
+      const detail = (e as CustomEvent<{ leadId?: string }>).detail;
+      if (detail?.leadId !== leadId) return;
+      import('@/features/leads/actions/fetch-lead-phones')
+        .then(({ fetchLeadPhones }) =>
+          fetchLeadPhones(leadId).then((result) => {
+            if (result.success && result.data.length > 0) {
+              setAvailablePhones(result.data);
+              const first = result.data[0];
+              // Só assume o primeiro número se ainda não havia seleção (caso do bug:
+              // lead sem telefone). Não sobrescreve uma escolha manual do SDR.
+              if (first) setSelectedPhone((prev) => (prev === '' ? first.formatted : prev));
+            }
+          }),
+        )
+        .catch(() => {});
+    }
+    window.addEventListener('lead:updated', handleLeadUpdated);
+    return () => window.removeEventListener('lead:updated', handleLeadUpdated);
+  }, [leadId]);
+
   function handleInitiateCall() {
     if (!selectedPhone) return;
     if (inFlightRef.current) return;
