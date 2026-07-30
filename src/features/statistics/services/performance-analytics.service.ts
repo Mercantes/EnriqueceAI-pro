@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 
 import type {
   DailyControlRow,
@@ -47,7 +48,7 @@ export async function fetchPerformanceAnalyticsData(
     .lte('created_at', periodEnd)
     .in('performed_by', filteredIds);
 
-  if (cadenceId) {
+  if (isUuid(cadenceId)) {
     intQuery = intQuery.eq('cadence_id', cadenceId);
   }
 

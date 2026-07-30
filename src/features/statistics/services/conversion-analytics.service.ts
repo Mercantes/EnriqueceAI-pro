@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 import { CONVERSION_COLORS } from '@/shared/constants/chart-colors';
 
 import type {
@@ -50,7 +51,7 @@ export async function fetchConversionAnalyticsData(
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
 
-  if (cadenceId) {
+  if (isUuid(cadenceId)) {
     intQuery = intQuery.eq('cadence_id', cadenceId);
   }
 

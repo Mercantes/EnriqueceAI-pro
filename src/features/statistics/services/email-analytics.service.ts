@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 import { formatDateLabel } from '@/lib/utils/format';
 import { INTERACTION_TYPE_COLORS } from '@/shared/constants/chart-colors';
 
@@ -50,7 +51,7 @@ export async function fetchEmailAnalyticsData(
       .eq('channel', 'email')
       .gte('created_at', periodStart)
       .lte('created_at', periodEnd);
-    if (cadenceId) q = q.eq('cadence_id', cadenceId);
+    if (isUuid(cadenceId)) q = q.eq('cadence_id', cadenceId);
     return q;
   };
 

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 import { safeRate } from '../types/shared';
 import type {
   FeedbackAnalyticsData,
@@ -38,7 +39,7 @@ export async function fetchFeedbackAnalyticsData(
     .order('sent_at', { ascending: false })
     .limit(10000);
 
-  if (closerId) {
+  if (isUuid(closerId)) {
     query = query.eq('closer_id', closerId);
   }
 
