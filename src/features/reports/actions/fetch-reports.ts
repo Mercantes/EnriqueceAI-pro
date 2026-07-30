@@ -4,6 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { resolveUserEmails } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 
 import type {
   RawCadence,
@@ -50,7 +51,7 @@ export async function fetchReportData(
     .select('id')
     .eq('org_id', orgId)
     .is('deleted_at', null)) as { data: { id: string }[] | null };
-  const orgCadenceIds = cadenceId ? [cadenceId] : (orgCadences ?? []).map((c) => c.id);
+  const orgCadenceIds = isUuid(cadenceId) ? [cadenceId] : (orgCadences ?? []).map((c) => c.id);
 
   // Build queries with optional upper bound for custom date ranges
   let enrollmentsQuery = from(supabase, 'cadence_enrollments')
@@ -58,15 +59,15 @@ export async function fetchReportData(
     .in('cadence_id', orgCadenceIds.length > 0 ? orgCadenceIds : ['__none__'])
     .gte('enrolled_at', sinceDate);
   if (untilDate) enrollmentsQuery = enrollmentsQuery.lte('enrolled_at', untilDate);
-  if (sdrId) enrollmentsQuery = enrollmentsQuery.eq('enrolled_by', sdrId);
+  if (isUuid(sdrId)) enrollmentsQuery = enrollmentsQuery.eq('enrolled_by', sdrId);
 
   let interactionsQuery = from(supabase, 'interactions')
     .select('type, cadence_id, lead_id, created_at, performed_by')
     .eq('org_id', orgId)
     .gte('created_at', sinceDate);
   if (untilDate) interactionsQuery = interactionsQuery.lte('created_at', untilDate);
-  if (sdrId) interactionsQuery = interactionsQuery.eq('performed_by', sdrId);
-  if (cadenceId) interactionsQuery = interactionsQuery.eq('cadence_id', cadenceId);
+  if (isUuid(sdrId)) interactionsQuery = interactionsQuery.eq('performed_by', sdrId);
+  if (isUuid(cadenceId)) interactionsQuery = interactionsQuery.eq('cadence_id', cadenceId);
 
   // Fetch all data in parallel
   const [cadencesResult, enrollmentsResult, interactionsResult, leadsResult, membersResult] =
@@ -77,7 +78,7 @@ export async function fetchReportData(
           .select('id, name')
           .eq('org_id', orgId)
           .is('deleted_at', null);
-        if (cadenceId) q = q.eq('id', cadenceId);
+        if (isUuid(cadenceId)) q = q.eq('id', cadenceId);
         return q;
       })() as unknown as Promise<{ data: RawCadence[] | null }>,
 

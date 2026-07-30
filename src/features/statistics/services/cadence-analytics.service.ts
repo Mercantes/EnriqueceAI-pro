@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 
 import type {
   CadenceAnalyticsData,
@@ -40,7 +41,7 @@ export async function fetchCadenceAnalyticsData(
     .eq('org_id', orgId)
     .is('deleted_at', null);
 
-  if (cadenceId) {
+  if (isUuid(cadenceId)) {
     cadenceQuery = cadenceQuery.eq('id', cadenceId);
   }
 
