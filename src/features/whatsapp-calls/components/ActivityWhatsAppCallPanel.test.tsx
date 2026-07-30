@@ -99,8 +99,8 @@ describe('ActivityWhatsAppCallPanel', () => {
     vi.mocked(persistWhatsAppCall).mockResolvedValue({ success: true, data: { callId: 'call-1' } });
     vi.mocked(applyCallDisposition).mockResolvedValue({
       success: true,
-      data: undefined,
-    } as Awaited<ReturnType<typeof applyCallDisposition>>);
+      data: { action: 'none' },
+    });
   });
 
   it('renders the idle state with the recording notice and dial button', () => {
