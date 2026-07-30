@@ -29,13 +29,18 @@ function Calendar({
         month_caption: "flex justify-center pt-1 relative items-center w-full",
         caption_label: "text-sm font-medium",
         nav: "flex items-center gap-1",
+        // `z-10` is required: react-day-picker v9 renders the Nav (these buttons)
+        // BEFORE the month in the DOM, while `month_caption` is `relative` + `w-full`
+        // and comes after — so the transparent caption paints on top of the
+        // absolutely-positioned arrows and swallows their clicks (arrows visible but
+        // dead). Lifting the buttons above the caption restores navigation.
         button_previous: cn(
           buttonVariants({ variant: "outline" }),
-          "absolute left-1 top-0 h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100"
+          "absolute left-1 top-0 z-10 h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100"
         ),
         button_next: cn(
           buttonVariants({ variant: "outline" }),
-          "absolute right-1 top-0 h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100"
+          "absolute right-1 top-0 z-10 h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100"
         ),
         month_grid: "w-full border-collapse space-x-1",
         weekdays: "flex",
