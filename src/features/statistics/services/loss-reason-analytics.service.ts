@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 import { CHART_FALLBACK_COLOR, CHART_SERIES_COLORS } from '@/shared/constants/chart-colors';
 
 import type {
@@ -43,7 +44,7 @@ export async function fetchLossReasonAnalyticsData(
   // existem independentemente de cadências. As views por cadência ficam vazias.
 
   // Fetch enrollments scoped to org cadences (cadence_enrollments has no org_id column)
-  const cadenceIds = cadenceId ? [cadenceId] : cadences.map((c) => c.id);
+  const cadenceIds = isUuid(cadenceId) ? [cadenceId] : cadences.map((c) => c.id);
 
   let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, status, loss_reason_id, enrolled_by')
@@ -87,7 +88,7 @@ export async function fetchLossReasonAnalyticsData(
   let lossByUserStacked: LossByUserStackedRow[];
   let totalLost: number;
 
-  if (cadenceId) {
+  if (isUuid(cadenceId)) {
     totalLost = enrollmentLost;
     reasonsRanking = buildReasonsRanking(lostEnrollments, reasons, totalLost);
     const lostLeadIds = [...new Set(lostEnrollments.map((e) => e.lead_id))];
@@ -138,7 +139,8 @@ async function fetchLostLeadRows(
     .not('loss_reason_id', 'is', null)
     .gte('lost_at', periodStart)
     .lte('lost_at', periodEnd);
-  if (userIds && userIds.length > 0) q = q.in('assigned_to', userIds);
+  const validUserIds = (userIds ?? []).filter(isUuid);
+  if (validUserIds.length > 0) q = q.in('assigned_to', validUserIds);
 
   const { data } = (await q.limit(10000)) as {
     data: Array<{ loss_reason_id: string | null; loss_notes: string | null; assigned_to: string | null }> | null;

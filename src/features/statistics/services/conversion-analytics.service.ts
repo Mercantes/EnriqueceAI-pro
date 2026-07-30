@@ -121,7 +121,7 @@ export async function fetchConversionAnalyticsData(
   // Fetch enrollments scoped via org cadences (cadence_enrollments has no org_id column).
   // Period-filtered: used by velocity calculation, which needs enrolled_at/updated_at
   // duration on enrollments started in the period.
-  const cadenceIds = cadenceId ? [cadenceId] : cadences.map((c) => c.id);
+  const cadenceIds = isUuid(cadenceId) ? [cadenceId] : cadences.map((c) => c.id);
   let enrQuery = from(supabase, 'cadence_enrollments')
     .select('cadence_id, lead_id, status, enrolled_by, enrolled_at, updated_at')
     .in('cadence_id', cadenceIds.length > 0 ? cadenceIds : ['__none__'])
