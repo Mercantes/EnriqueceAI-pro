@@ -4,6 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
+import { DEFAULT_DAILY_LIMIT } from '../constants';
 import { buildPersonalizationPrompt, buildPrompt } from '../prompts';
 import type {
   AIUsageInfo,
@@ -14,7 +15,6 @@ import type {
   LeadContext,
 } from '../types';
 
-const DEFAULT_DAILY_LIMIT = 50;
 const ALERT_THRESHOLD = 0.8;
 const MODEL = 'claude-sonnet-4-20250514';
 const MAX_TOKENS = 1024;
