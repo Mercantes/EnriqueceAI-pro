@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 import { businessDaysBetween } from '@/features/dashboard/utils/pacing';
 import {
   CHANNEL_COLORS,
@@ -140,7 +141,7 @@ async function fetchGoalTarget(
   orgId: string,
   userId?: string,
 ): Promise<number> {
-  if (userId) {
+  if (isUuid(userId)) {
     const { data: userGoal } = (await from(supabase, 'daily_activity_goals')
       .select('target')
       .eq('org_id', orgId)

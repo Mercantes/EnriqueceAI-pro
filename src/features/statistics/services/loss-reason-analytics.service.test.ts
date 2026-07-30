@@ -70,9 +70,9 @@ describe('fetchLossReasonAnalyticsData — cadence-filtered (enrollment-level)',
     const supabase = makeSupabase({
       cadences: [{ id: 'c1', name: 'Cad 1' }],
       cadence_enrollments: [
-        { cadence_id: 'c1', lead_id: 'l1', status: 'completed', loss_reason_id: 'r1', enrolled_by: 'u1' },
-        { cadence_id: 'c1', lead_id: 'l2', status: 'completed', loss_reason_id: 'r1', enrolled_by: 'u1' },
-        { cadence_id: 'c1', lead_id: 'l3', status: 'active', loss_reason_id: null, enrolled_by: 'u1' },
+        { cadence_id: 'c1111111-1111-4111-8111-111111111111', lead_id: 'l1', status: 'completed', loss_reason_id: 'r1', enrolled_by: 'u1' },
+        { cadence_id: 'c1111111-1111-4111-8111-111111111111', lead_id: 'l2', status: 'completed', loss_reason_id: 'r1', enrolled_by: 'u1' },
+        { cadence_id: 'c1111111-1111-4111-8111-111111111111', lead_id: 'l3', status: 'active', loss_reason_id: null, enrolled_by: 'u1' },
       ],
       loss_reasons: [{ id: 'r1', name: 'Preço' }],
       leads: [
@@ -81,7 +81,7 @@ describe('fetchLossReasonAnalyticsData — cadence-filtered (enrollment-level)',
       ],
     });
 
-    const data = await fetchLossReasonAnalyticsData(supabase, 'org-1', START, END, undefined, 'c1');
+    const data = await fetchLossReasonAnalyticsData(supabase, 'org-1', START, END, undefined, 'c1111111-1111-4111-8111-111111111111');
 
     expect(data.totalLost).toBe(2); // 2 enrollments perdidos
     expect(data.totalEnrolled).toBe(3);

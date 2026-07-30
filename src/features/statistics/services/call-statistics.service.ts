@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isConnectedCall } from '@/features/calls/connection';
 import type { CallStatus } from '@/features/calls/types';
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 import { CALL_STATUS_COLORS, CALL_STATUS_LABELS } from '@/shared/constants/chart-colors';
 
 import type {
@@ -49,8 +50,9 @@ export async function fetchCallStatisticsData(
     .gte('started_at', periodStart)
     .lte('started_at', periodEnd);
 
-  if (userIds && userIds.length > 0) {
-    query = query.in('user_id', userIds);
+  const validUserIds = (userIds ?? []).filter(isUuid);
+  if (validUserIds.length > 0) {
+    query = query.in('user_id', validUserIds);
   }
 
   const { data: rawCalls } = (await query.limit(10000)) as { data: CallRow[] | null };
