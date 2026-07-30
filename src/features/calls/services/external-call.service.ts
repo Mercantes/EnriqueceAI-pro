@@ -58,7 +58,7 @@ async function findActiveEnrollment(
     .select('id, cadence_id, current_step')
     .eq('lead_id', leadId)
     .eq('status', 'active')
-    .order('created_at', { ascending: false })
+    .order('enrolled_at', { ascending: false })
     .limit(1)
     .maybeSingle()) as {
     data: { id: string; cadence_id: string; current_step: number } | null;

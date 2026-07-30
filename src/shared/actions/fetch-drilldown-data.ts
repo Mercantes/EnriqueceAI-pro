@@ -101,8 +101,8 @@ export async function fetchDrilldownData(
         const { data: enrollmentLeads } = (await from(supabase, 'cadence_enrollments')
           .select('lead_id')
           .in('cadence_id', drillCadenceIds.length > 0 ? drillCadenceIds : ['__none__'])
-          .gte('created_at', fromDate)
-          .lte('created_at', toDate)) as { data: { lead_id: string }[] | null };
+          .gte('enrolled_at', fromDate)
+          .lte('enrolled_at', toDate)) as { data: { lead_id: string }[] | null };
 
         const leadIds = [
           ...new Set([
@@ -172,17 +172,19 @@ export async function fetchDrilldownData(
         const { data: enrCadences } = (await from(supabase, 'cadences').select('id').eq('org_id', orgId).is('deleted_at', null)) as { data: { id: string }[] | null };
         const enrCadenceIds = (enrCadences ?? []).map((c) => c.id);
         let query = from(supabase, 'cadence_enrollments')
-          .select('id, status, created_at, leads!inner(id, razao_social, nome_fantasia, email)', { count: 'exact' })
+          // enrolled_at is the enrollment's creation timestamp (cadence_enrollments
+          // has no created_at). Aliased so downstream `row.created_at` stays valid.
+          .select('id, status, created_at:enrolled_at, leads!inner(id, razao_social, nome_fantasia, email)', { count: 'exact' })
           .in('cadence_id', enrCadenceIds.length > 0 ? enrCadenceIds : ['__none__'])
-          .gte('created_at', fromDate)
-          .lte('created_at', toDate);
+          .gte('enrolled_at', fromDate)
+          .lte('enrolled_at', toDate);
 
         if (filters.cadenceId) {
           query = query.eq('cadence_id', filters.cadenceId);
         }
 
         const { data, count } = (await query
-          .order('created_at', { ascending: false })
+          .order('enrolled_at', { ascending: false })
           .range(rangeStart, rangeEnd)) as { data: any[] | null; count: number | null };
 
         return {

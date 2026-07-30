@@ -210,7 +210,7 @@ async function processIncomingMessage(
     .select('id, cadence_id, current_step, enrolled_by')
     .eq('lead_id', lead.id)
     .eq('status', 'active')
-    .order('created_at', { ascending: false })
+    .order('enrolled_at', { ascending: false })
     .limit(1)
     .maybeSingle()) as {
     data: { id: string; cadence_id: string; current_step: number; enrolled_by: string | null } | null;
