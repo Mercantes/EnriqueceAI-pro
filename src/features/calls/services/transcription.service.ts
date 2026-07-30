@@ -1,6 +1,7 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { DEFAULT_DAILY_LIMIT } from '@/features/ai/constants';
 import { buildBantAnalysisPrompt, mapBantResponseToDbNames, BANT_FIELD_NAMES, type BantLeadContext } from '@/features/ai/prompts/bant-analysis';
 import { TRANSCRIPTION_MIN_DURATION_SECONDS } from '../schemas/call.schemas';
 
@@ -394,6 +395,6 @@ async function incrementAiUsage(
       .eq('id', existing.id);
   } else {
     await from(supabase, 'ai_usage')
-      .insert({ org_id: orgId, usage_date: today, generation_count: 1 } as Record<string, unknown>);
+      .insert({ org_id: orgId, usage_date: today, generation_count: 1, daily_limit: DEFAULT_DAILY_LIMIT } as Record<string, unknown>);
   }
 }
