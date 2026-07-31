@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { logQueryError } from '@/lib/supabase/log-query-error';
 
 import type { LeadListResult } from '../leads.contract';
 import type { LeadFilters } from '../schemas/lead.schemas';
@@ -137,6 +138,7 @@ export async function fetchLeads(
   };
 
   if (error) {
+    logQueryError(error, 'fetchLeads', { orgId, filters });
     return { success: false, error: 'Erro ao buscar leads' };
   }
 
@@ -172,6 +174,7 @@ export async function fetchLeadStatusCounts(): Promise<ActionResult<LeadStatusCo
   };
 
   if (error) {
+    logQueryError(error, 'fetchLeadStatusCounts', { orgId });
     return { success: false, error: 'Erro ao buscar contagens' };
   }
 
@@ -250,6 +253,7 @@ export async function fetchFilteredLeadIds(
   };
 
   if (error) {
+    logQueryError(error, 'fetchFilteredLeadIds', { orgId, filters });
     return { success: false, error: 'Erro ao buscar IDs dos leads' };
   }
 
@@ -268,6 +272,7 @@ export async function fetchDistinctCnaes(): Promise<ActionResult<string[]>> {
   };
 
   if (error) {
+    logQueryError(error, 'fetchDistinctCnaes');
     return { success: false, error: 'Erro ao buscar CNAEs' };
   }
 
@@ -294,6 +299,7 @@ export async function fetchDistinctCanais(): Promise<ActionResult<string[]>> {
   };
 
   if (error) {
+    logQueryError(error, 'fetchDistinctCanais', { orgId });
     return { success: false, error: 'Erro ao buscar sub-origens' };
   }
 
@@ -333,6 +339,7 @@ export async function fetchLossReasonsForFilter(): Promise<ActionResult<LossReas
     error: { message: string } | null;
   };
   if (error) {
+    logQueryError(error, 'fetchLossReasonsForFilter', { orgId });
     return { success: false, error: 'Erro ao buscar motivos de perda' };
   }
 
