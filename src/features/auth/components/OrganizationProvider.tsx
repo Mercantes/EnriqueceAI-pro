@@ -3,6 +3,7 @@
 import { createContext, useEffect, useState } from 'react';
 
 import { createClient } from '@/lib/supabase/client';
+import { isUuid } from '@/lib/utils/uuid';
 
 import type { OrganizationMemberRow, OrganizationRow } from '../types';
 
@@ -31,6 +32,9 @@ export function OrganizationProvider({
   const [members, setMembers] = useState(initialMembers);
 
   useEffect(() => {
+    // Guard: never subscribe with a non-uuid org id (avoids `id=eq.undefined`
+    // filters that fail Realtime's RLS check with an invalid-uuid error).
+    if (!isUuid(initialOrg?.id)) return;
     const supabase = createClient();
     const channel = supabase
       .channel('org-changes')
