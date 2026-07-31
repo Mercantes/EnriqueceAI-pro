@@ -4,6 +4,7 @@ import { createContext, useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { createClient } from '@/lib/supabase/client';
+import { isUuid } from '@/lib/utils/uuid';
 
 import { fetchNotifications } from '../actions/fetch-notifications';
 import { markAllNotificationsRead as markAllAction } from '../actions/mark-all-notifications-read';
@@ -59,6 +60,10 @@ export function NotificationProvider({
 
   // Realtime subscription
   useEffect(() => {
+    // Guard: never subscribe with a non-uuid userId. An interpolated
+    // `user_id=eq.undefined` filter makes Realtime's RLS check fail with
+    // "invalid input syntax for type uuid: undefined".
+    if (!isUuid(userId)) return;
     const supabase = createClient();
     const channel = supabase
       .channel('notifications-changes')

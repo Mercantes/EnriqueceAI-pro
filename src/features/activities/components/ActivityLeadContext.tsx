@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { createClient } from '@/lib/supabase/client';
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 
 import type { TimelineEntry } from '@/features/cadences/cadences.contract';
 import { LeadInfoPanel } from '@/features/leads/components/LeadInfoPanel';
@@ -30,6 +31,9 @@ export function ActivityLeadContext({ lead, cadenceName, stepOrder, totalSteps, 
   const [standardFieldSettings, setStandardFieldSettings] = useState<StandardFieldSettingRow[]>([]);
 
   useEffect(() => {
+    // Guard: never query/subscribe with a non-uuid lead id (avoids
+    // `lead_id=eq.undefined` filters that fail with an invalid-uuid error).
+    if (!isUuid(lead?.id)) return;
     const supabase = createClient();
 
     async function fetchTimeline() {
