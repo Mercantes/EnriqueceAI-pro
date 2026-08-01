@@ -317,6 +317,9 @@ export function ActivityWhatsAppCallPanel({
           // discagem gera um callId novo → cada tentativa vira um registro distinto.
           void persistAttempt({ notes }).catch(() => {});
           dispatch({ type: 'RESET' });
+          // Re-disca na hora — o SDR liga várias vezes até conectar sem sair do
+          // fluxo. Cada discagem gera um callId novo (registro por tentativa).
+          handleDial();
         }}
         onLeadLost={
           onLeadLost

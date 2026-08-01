@@ -224,6 +224,11 @@ export function ActivityPhonePanel({
     setProviderCallId(null);
     setElapsed(0);
     setCallDuration(0);
+
+    // Re-disca na hora: o SDR liga várias vezes até conectar sem fechar o modal e
+    // reclicar no botão. A tentativa anterior já foi persistida acima; a nova
+    // discagem gera um callId novo, então cada tentativa vira um registro distinto.
+    handleInitiateCall();
   }
 
   function handleSubmitResult(
