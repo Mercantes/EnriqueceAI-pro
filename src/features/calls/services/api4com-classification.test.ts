@@ -89,6 +89,75 @@ describe('classifyApi4ComCall', () => {
     });
   });
 
+  // Regression: API4COM ships answeredAt="" (empty string, NOT null) for calls
+  // that were never answered. A raw `!== null` check read that as answered and
+  // marked every webhook-fed call connected=true / not_significant, regardless
+  // of hangup cause (V4 Amaral, jul/2026). The classifier must treat an
+  // unparseable/empty answeredAt exactly like null.
+  describe('empty-string answeredAt (unanswered — must NOT count as answered)', () => {
+    it('NUMBER_CHANGED with answeredAt="" and duration 0 → not connected + not_connected', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: '',
+        hangupCause: 'NUMBER_CHANGED',
+        durationSeconds: 0,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'not_connected' });
+    });
+
+    it('ORIGINATOR_CANCEL with answeredAt="" and duration 1 → not connected + not_connected', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: '',
+        hangupCause: 'ORIGINATOR_CANCEL',
+        durationSeconds: 1,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'not_connected' });
+    });
+
+    it('NO_ANSWER with answeredAt="" → not connected + no_contact (not not_significant)', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: '',
+        hangupCause: 'NO_ANSWER',
+        durationSeconds: 0,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'no_contact' });
+    });
+
+    it('whitespace-only answeredAt is treated as unanswered', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: '   ',
+        hangupCause: 'USER_BUSY',
+        durationSeconds: 0,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'busy' });
+    });
+
+    it('unparseable answeredAt is treated as unanswered', () => {
+      const out = classifyApi4ComCall({
+        answeredAt: 'not-a-date',
+        hangupCause: 'NUMBER_CHANGED',
+        durationSeconds: 0,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: false, status: 'not_connected' });
+    });
+
+    it('empty answeredAt but genuine talk time on a broken-webhook ramal still connects via duration fallback', () => {
+      // "" answeredAt + no hangup_cause + real duration: the duration fallback
+      // (≥15s) still applies — the empty-string fix must not kill that path.
+      const out = classifyApi4ComCall({
+        answeredAt: '',
+        hangupCause: null,
+        durationSeconds: 40,
+        significantThresholdSeconds: threshold,
+      });
+      expect(out).toEqual({ connected: true, status: 'significant' });
+    });
+  });
+
   describe('REST path (answeredAt unavailable)', () => {
     it('NORMAL_CLEARING + duration>0 → connected (the reconcile proxy)', () => {
       const out = classifyApi4ComCall({
