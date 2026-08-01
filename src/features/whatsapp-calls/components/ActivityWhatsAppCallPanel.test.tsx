@@ -141,10 +141,9 @@ describe('ActivityWhatsAppCallPanel', () => {
     const arg = vi.mocked(persistWhatsAppCall).mock.calls[0]![0];
     expect(arg.callId).toBe('call-1');
     expect(arg.notes).toBe('nota-retry');
-    // Após o retry o painel volta a permitir discar (estado idle).
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Ligar via WhatsApp/ })).toBeInTheDocument(),
-    );
+    // Após o retry o painel re-disca automaticamente (não volta pra idle): o SDR
+    // liga várias vezes até conectar sem sair do fluxo.
+    await waitFor(() => expect(startWhatsAppCall).toHaveBeenCalledTimes(2));
   });
 
   it('persists the attempt with the SDR outcome on conclude', async () => {

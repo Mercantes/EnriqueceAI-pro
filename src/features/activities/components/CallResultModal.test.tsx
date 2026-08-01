@@ -26,9 +26,19 @@ function renderModal(overrides: Partial<CallResultModalProps> = {}) {
 
 describe('CallResultModal', () => {
   describe('pré-seleção do desfecho pelo sinal técnico', () => {
-    it('não atendida → pré-seleciona "Não atendeu"', () => {
+    it('não atendida → esconde o desfecho; "Registrar outro desfecho" revela pré-selecionado em "Não atendeu"', async () => {
+      const user = userEvent.setup();
       renderModal({ connected: false, durationSeconds: 0 });
+      // Fluxo enxuto: sem seletor de cara (o SDR só quer re-discar).
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      // O desfecho continua no_contact por baixo — revelável sob demanda.
+      await user.click(screen.getByRole('button', { name: /Registrar outro desfecho/ }));
       expect(screen.getByRole('radio', { checked: true })).toHaveAttribute('value', 'no_contact');
+    });
+
+    it('não atendida com onRetry → "Ligar de novo" é a ação primária', () => {
+      renderModal({ connected: false, onRetry: vi.fn() });
+      expect(screen.getByRole('button', { name: /Ligar de novo/ })).toBeInTheDocument();
     });
 
     it('atendida → pré-seleciona "Conversa relevante"', () => {
