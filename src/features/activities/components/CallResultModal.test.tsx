@@ -41,9 +41,40 @@ describe('CallResultModal', () => {
       expect(screen.getByRole('button', { name: /Ligar de novo/ })).toBeInTheDocument();
     });
 
-    it('atendida → pré-seleciona "Conversa relevante"', () => {
+    it('atendida → NÃO pré-seleciona: o SDR deve escolher o desfecho', () => {
       renderModal({ connected: true, durationSeconds: 257 });
-      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute('value', 'significant');
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('trava por telemetria — o formulário não contradiz o que o sistema já sabe', () => {
+    it('atendida: não oferece "Não atendeu"', () => {
+      renderModal({ connected: true, durationSeconds: 120 });
+      expect(screen.getByRole('radio', { name: /Conversa relevante/ })).toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: /^Não atendeu/ })).not.toBeInTheDocument();
+    });
+
+    it('não atendida: "Registrar outro desfecho" revela só "Não atendeu" e "Falha técnica"', async () => {
+      const user = userEvent.setup();
+      renderModal({ connected: false, durationSeconds: 0 });
+      await user.click(screen.getByRole('button', { name: /Registrar outro desfecho/ }));
+      expect(screen.getByRole('radio', { name: /^Não atendeu/ })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Falha técnica/ })).toBeInTheDocument();
+      for (const forbidden of [/Conversa relevante/, /Atendeu, sem avanço/, /Pediu para ligar depois/]) {
+        expect(screen.queryByRole('radio', { name: forbidden })).not.toBeInTheDocument();
+      }
+    });
+  });
+
+  describe('obrigatoriedade do desfecho (atendida)', () => {
+    it('atendida: "Concluir" fica desabilitado até o SDR escolher o desfecho', async () => {
+      const user = userEvent.setup();
+      renderModal({ connected: true, durationSeconds: 90 });
+      expect(screen.getByRole('button', { name: /Concluir atividade/ })).toBeDisabled();
+      expect(screen.getByText(/Selecione o desfecho para concluir/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: /Conversa relevante/ }));
+      expect(screen.getByRole('button', { name: /Concluir atividade/ })).toBeEnabled();
     });
   });
 

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { DISPOSITION_OPTIONS, mapDispositionToAction } from './disposition';
+import {
+  DISPOSITION_OPTIONS,
+  dispositionOptionsForTelemetry,
+  mapDispositionToAction,
+} from './disposition';
 
 describe('mapDispositionToAction', () => {
   it('advances on a real conversation', () => {
@@ -32,5 +36,26 @@ describe('mapDispositionToAction', () => {
       'no_contact',
       'not_connected',
     ]);
+  });
+});
+
+describe('dispositionOptionsForTelemetry', () => {
+  it('atendida: oferece os desfechos de conversa + falha técnica, mas NÃO "Não atendeu"', () => {
+    const values = dispositionOptionsForTelemetry(true).map((o) => o.value);
+    expect(values).toEqual(['significant', 'not_significant', 'busy', 'not_connected']);
+    expect(values).not.toContain('no_contact');
+  });
+
+  it('não atendida: oferece só "Não atendeu" e "Falha técnica" — sem os que exigem conversa', () => {
+    const values = dispositionOptionsForTelemetry(false).map((o) => o.value);
+    expect(values).toEqual(['no_contact', 'not_connected']);
+    for (const forbidden of ['significant', 'not_significant', 'busy'] as const) {
+      expect(values).not.toContain(forbidden);
+    }
+  });
+
+  it('"Falha técnica" (not_connected) fica disponível nos dois casos', () => {
+    expect(dispositionOptionsForTelemetry(true).map((o) => o.value)).toContain('not_connected');
+    expect(dispositionOptionsForTelemetry(false).map((o) => o.value)).toContain('not_connected');
   });
 });

@@ -39,7 +39,7 @@ import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/utils/format';
 
 import { CallOutcomeSelector } from '@/features/calls/components/CallOutcomeSelector';
-import { mapDispositionToAction } from '@/features/calls/disposition';
+import { mapDispositionToAction, dispositionOptionsForTelemetry } from '@/features/calls/disposition';
 import type { CallStatus } from '@/features/calls/types';
 
 export interface CallReturnSchedule {
@@ -63,12 +63,16 @@ const RETURN_CHANNEL_MAP: Record<
 };
 
 /**
- * Desfecho pré-selecionado a partir do sinal técnico — não perguntamos o que o
- * sistema já sabe. Atendeu → assume conversa; não atendeu → "Não atendeu".
- * O SDR só confirma (ou corrige) em 1 clique.
+ * Desfecho inicial a partir do sinal técnico:
+ *  - não atendida → a telemetria já classifica: `no_contact` automático, o SDR
+ *    conclui em 1 clique (caso mais comom do dia);
+ *  - atendida → `null` (obrigatório): a qualidade da conversa — relevante, sem
+ *    avanço, pediu retorno — só o SDR sabe, então ele DEVE escolher antes de
+ *    concluir. Sem default silencioso (era `significant` e o SDR aceitava sem
+ *    pensar → preenchimento sem valor de métrica).
  */
-function defaultOutcome(connected: boolean): CallStatus {
-  return connected ? 'significant' : 'no_contact';
+function defaultOutcome(connected: boolean): CallStatus | null {
+  return connected ? null : 'no_contact';
 }
 
 export interface CallResultModalProps {
@@ -136,7 +140,7 @@ export function CallResultModal({
   onConclude,
 }: CallResultModalProps) {
   const [notes, setNotes] = useState('');
-  const [outcome, setOutcome] = useState<CallStatus>(() => defaultOutcome(connected));
+  const [outcome, setOutcome] = useState<CallStatus | null>(() => defaultOutcome(connected));
   const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
   const [returnTime, setReturnTime] = useState('09:00');
   const [returnChannel, setReturnChannel] = useState<ReturnChannelOption>('phone');
@@ -163,9 +167,13 @@ export function CallResultModal({
     }
   }
 
-  const action = mapDispositionToAction(outcome);
+  const outcomeOptions = dispositionOptionsForTelemetry(connected);
+  const action = outcome ? mapDispositionToAction(outcome) : 'none';
   const needsReturn = showOutcome && action === 'reschedule';
   const missingReturnDate = needsReturn && !returnDate;
+  // Atendida obriga o SDR a escolher o desfecho antes de concluir. Na não
+  // atendida `outcome` já vem preenchido (no_contact), então nunca bloqueia.
+  const missingOutcome = showOutcome && outcome === null;
 
   function buildReturnSchedule(): CallReturnSchedule | null {
     if (!needsReturn || !returnDate) return null;
@@ -176,6 +184,8 @@ export function CallResultModal({
   }
 
   function handleConclude() {
+    // Guarda de tipo + trava de obrigatoriedade: sem desfecho não conclui.
+    if (!outcome) return;
     onConclude({ notes, returnSchedule: buildReturnSchedule(), outcome });
   }
 
@@ -225,7 +235,17 @@ export function CallResultModal({
               <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 O que aconteceu?
               </Label>
-              <CallOutcomeSelector value={outcome} onChange={setOutcome} disabled={isSending} />
+              <CallOutcomeSelector
+                value={outcome}
+                onChange={setOutcome}
+                options={outcomeOptions}
+                disabled={isSending}
+              />
+              {missingOutcome && (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Selecione o desfecho para concluir a atividade.
+                </p>
+              )}
             </div>
           ) : (
             <p className="text-sm text-[var(--muted-foreground)]">
@@ -380,7 +400,7 @@ export function CallResultModal({
             <Button
               variant={connected ? 'default' : 'outline'}
               onClick={handleConclude}
-              disabled={isSending || missingReturnDate}
+              disabled={isSending || missingReturnDate || missingOutcome}
             >
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

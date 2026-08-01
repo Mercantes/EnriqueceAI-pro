@@ -58,3 +58,34 @@ export const DISPOSITION_OPTIONS: DispositionOption[] = [
   { value: 'no_contact', label: 'Não atendeu', hint: 'Segue a cadência' },
   { value: 'not_connected', label: 'Falha técnica', hint: 'Volta para a fila' },
 ];
+
+// Desfechos que PRESSUPÕEM atendimento — só fazem sentido quando a telemetria
+// diz que alguém atendeu. `busy` entra aqui porque "Pediu para ligar depois"
+// só existe se o lead atendeu e pediu (ver nota acima).
+const OUTCOMES_REQUIRING_ANSWER: ReadonlySet<CallStatus> = new Set<CallStatus>([
+  'significant',
+  'not_significant',
+  'busy',
+]);
+
+// `no_contact` ("Não atendeu") pressupõe NÃO-atendimento.
+const OUTCOME_REQUIRING_NO_ANSWER: CallStatus = 'no_contact';
+
+/**
+ * Restringe os desfechos oferecidos ao SDR conforme o sinal de telemetria, para
+ * o formulário não permitir contradições com o que o sistema já sabe (jul/2026:
+ * 181 ligações marcadas "Não atendeu" tinham `answered_at` preenchido).
+ *
+ *  - atendida     → esconde "Não atendeu" (`no_contact`);
+ *  - não atendida → esconde os que exigem conversa (`significant`,
+ *                   `not_significant`, `busy`).
+ *
+ * "Falha técnica" (`not_connected`) fica disponível nos dois casos — é neutra
+ * quanto a atendimento (linha caiu, problema de áudio/sistema).
+ */
+export function dispositionOptionsForTelemetry(connected: boolean): DispositionOption[] {
+  if (connected) {
+    return DISPOSITION_OPTIONS.filter((o) => o.value !== OUTCOME_REQUIRING_NO_ANSWER);
+  }
+  return DISPOSITION_OPTIONS.filter((o) => !OUTCOMES_REQUIRING_ANSWER.has(o.value));
+}

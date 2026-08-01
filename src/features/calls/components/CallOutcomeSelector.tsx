@@ -4,14 +4,16 @@ import { Label } from '@/shared/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/shared/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 
-import { DISPOSITION_OPTIONS } from '../disposition';
+import { DISPOSITION_OPTIONS, type DispositionOption } from '../disposition';
 import type { CallStatus } from '../types';
 
 export interface CallOutcomeSelectorProps {
-  value: CallStatus;
+  value: CallStatus | null;
   onChange: (value: CallStatus) => void;
   disabled?: boolean;
   className?: string;
+  /** Opções exibidas — default são todas. O modal passa as filtradas pela telemetria. */
+  options?: DispositionOption[];
 }
 
 /**
@@ -30,16 +32,20 @@ export function CallOutcomeSelector({
   onChange,
   disabled = false,
   className,
+  options = DISPOSITION_OPTIONS,
 }: CallOutcomeSelectorProps) {
   return (
     <RadioGroup
-      value={value}
+      // String vazia (não `undefined`) mantém o RadioGroup CONTROLLED quando
+      // nada está selecionado — senão o Radix alterna uncontrolled→controlled
+      // ao escolher e o React alerta. Nenhum item usa "" como value.
+      value={value ?? ''}
       onValueChange={(v) => onChange(v as CallStatus)}
       disabled={disabled}
       className={cn('grid gap-2 sm:grid-cols-2', className)}
       aria-label="Desfecho da ligação"
     >
-      {DISPOSITION_OPTIONS.map((option) => {
+      {options.map((option) => {
         const id = `outcome-${option.value}`;
         const selected = value === option.value;
         return (
