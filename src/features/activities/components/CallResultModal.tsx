@@ -341,11 +341,11 @@ export function CallResultModal({
         </div>
 
         <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          {/* Esquerda: ações discretas — não competem com a primária */}
+          {/* Esquerda: ações discretas — não competem com a primária.
+              A saída sem concluir fica no "×" do cabeçalho (onOpenChange →
+              onClose); não repetimos como botão pra não competir com "Perdido"
+              nem poluir o rodapé. */}
           <div className="flex flex-wrap gap-1">
-            <Button variant="ghost" size="sm" onClick={onClose} disabled={isSending}>
-              Cancelar
-            </Button>
             {onMarkNoShow && (
               <Button variant="ghost" size="sm" onClick={onMarkNoShow} disabled={isSending}>
                 <CalendarX className="mr-1.5 h-3.5 w-3.5" />
