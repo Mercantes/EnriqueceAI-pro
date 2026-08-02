@@ -1,6 +1,17 @@
 // Call status and type enums matching database
 export type CallStatus = 'significant' | 'not_significant' | 'no_contact' | 'busy' | 'not_connected';
 export type CallType = 'inbound' | 'outbound' | 'manual';
+
+// Desfecho comercial informado pelo SDR ao concluir a ligação. SEPARADO de
+// CallStatus (que é a medição da telefonia) — cada valor descreve o desfecho,
+// sem a colisão semântica do antigo `busy`. Persiste em calls.sdr_disposition
+// (enum call_disposition).
+export type CallDisposition =
+  | 'relevant_conversation' // Conversa relevante
+  | 'answered_no_progress' // Atendeu, sem avanço
+  | 'callback_requested' // Pediu para ligar depois
+  | 'no_answer' // Não atendeu
+  | 'technical_failure'; // Falha técnica
 export type TranscriptionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
 
 // Call row matching database table

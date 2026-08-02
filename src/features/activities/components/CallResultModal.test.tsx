@@ -31,9 +31,9 @@ describe('CallResultModal', () => {
       renderModal({ connected: false, durationSeconds: 0 });
       // Fluxo enxuto: sem seletor de cara (o SDR só quer re-discar).
       expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-      // O desfecho continua no_contact por baixo — revelável sob demanda.
+      // O desfecho continua no_answer por baixo — revelável sob demanda.
       await user.click(screen.getByRole('button', { name: /Registrar outro desfecho/ }));
-      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute('value', 'no_contact');
+      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute('value', 'no_answer');
     });
 
     it('não atendida com onRetry → "Ligar de novo" é a ação primária', () => {
@@ -41,9 +41,40 @@ describe('CallResultModal', () => {
       expect(screen.getByRole('button', { name: /Ligar de novo/ })).toBeInTheDocument();
     });
 
-    it('atendida → pré-seleciona "Conversa relevante"', () => {
+    it('atendida → NÃO pré-seleciona: o SDR deve escolher o desfecho', () => {
       renderModal({ connected: true, durationSeconds: 257 });
-      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute('value', 'significant');
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('trava por telemetria — o formulário não contradiz o que o sistema já sabe', () => {
+    it('atendida: não oferece "Não atendeu"', () => {
+      renderModal({ connected: true, durationSeconds: 120 });
+      expect(screen.getByRole('radio', { name: /Conversa relevante/ })).toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: /^Não atendeu/ })).not.toBeInTheDocument();
+    });
+
+    it('não atendida: "Registrar outro desfecho" revela só "Não atendeu" e "Falha técnica"', async () => {
+      const user = userEvent.setup();
+      renderModal({ connected: false, durationSeconds: 0 });
+      await user.click(screen.getByRole('button', { name: /Registrar outro desfecho/ }));
+      expect(screen.getByRole('radio', { name: /^Não atendeu/ })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Falha técnica/ })).toBeInTheDocument();
+      for (const forbidden of [/Conversa relevante/, /Atendeu, sem avanço/, /Pediu para ligar depois/]) {
+        expect(screen.queryByRole('radio', { name: forbidden })).not.toBeInTheDocument();
+      }
+    });
+  });
+
+  describe('obrigatoriedade do desfecho (atendida)', () => {
+    it('atendida: "Concluir" fica desabilitado até o SDR escolher o desfecho', async () => {
+      const user = userEvent.setup();
+      renderModal({ connected: true, durationSeconds: 90 });
+      expect(screen.getByRole('button', { name: /Concluir atividade/ })).toBeDisabled();
+      expect(screen.getByText(/Selecione o desfecho para concluir/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: /Conversa relevante/ }));
+      expect(screen.getByRole('button', { name: /Concluir atividade/ })).toBeEnabled();
     });
   });
 
@@ -63,7 +94,7 @@ describe('CallResultModal', () => {
 
   describe('bloco de retorno — só quando o lead pediu retorno', () => {
     it('NÃO aparece em "Não atendeu": ninguém falou com ninguém, a cadência segue', () => {
-      renderModal({ connected: false }); // pré-seleciona no_contact
+      renderModal({ connected: false }); // pré-seleciona no_answer
       expect(screen.queryByText('Quando ligar de novo')).not.toBeInTheDocument();
     });
 
@@ -107,7 +138,7 @@ describe('CallResultModal', () => {
       await user.click(screen.getByRole('button', { name: /Concluir atividade/ }));
 
       expect(onConclude).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'not_significant', returnSchedule: null }),
+        expect.objectContaining({ outcome: 'answered_no_progress', returnSchedule: null }),
       );
     });
   });

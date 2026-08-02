@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { from } from '@/lib/supabase/from';
+import { parseApi4ComTimestamp } from '@/features/integrations/services/api4com-time';
 
 import type { CallStatus } from '../types';
 
@@ -73,7 +74,11 @@ const HANGUP_CAUSE_TO_STATUS: Record<string, CallStatus> = {
 };
 
 export interface ClassifyInput {
-  /** When non-null, the webhook saw channel-answer — call was definitely connected. */
+  /**
+   * channel-answer timestamp from the webhook. Only a PARSEABLE value counts as
+   * answered — API4COM sends "" (empty string) for unanswered calls, which is
+   * not the same as null and must not be read as an answer.
+   */
   answeredAt: string | null;
   /** FreeSWITCH hangup cause (NORMAL_CLEARING, NO_ANSWER, USER_BUSY, ...). */
   hangupCause: string | null;
@@ -101,8 +106,17 @@ export function classifyApi4ComCall(input: ClassifyInput): ClassifyOutput {
   const { answeredAt, hangupCause, durationSeconds, significantThresholdSeconds } = input;
 
   // Authoritative signal from webhook: channel-answer fired.
+  //
+  // MUST use parseApi4ComTimestamp (not `answeredAt !== null`): API4COM ships
+  // an EMPTY STRING "" — not null — in answeredAt for calls that were never
+  // answered (NUMBER_CHANGED, ORIGINATOR_CANCEL, USER_BUSY, ...). A raw
+  // `!== null` check treats "" as answered, so every webhook-fed call came out
+  // connected=true / not_significant (V4 Amaral, jul/2026 — 6979 of 6979 calls
+  // wrongly connected). Parsing the timestamp is also the exact predicate that
+  // decides whether answered_at gets persisted, so the classifier and the
+  // stored column can no longer disagree.
   const wasAnswered =
-    answeredAt !== null
+    parseApi4ComTimestamp(answeredAt) !== null
     // REST/reconcile proxy: NORMAL_CLEARING with talk time means the user
     // picked up. API4COM dashboard's "Chamadas Atendidas" metric uses the
     // same rule (validated against May/2026 numbers — 970 connected calls

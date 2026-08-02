@@ -45,16 +45,32 @@ export interface CallConnectionSignals {
 }
 
 /**
- * A ligação alcançou a pessoa do outro lado.
+ * A ligação alcançou a pessoa do outro lado — regra "answered-first".
  *
- * Três sinais independentes, qualquer um basta:
- *  1. `significant` — conversa qualificada, já validada pelo classificador;
- *  2. `answered_at` — o provedor confirmou que atenderam (mais forte que tudo);
- *  3. duração >= 30s — salvaguarda para ramais cujo webhook chega sem sinais.
+ * ORDEM DE PRECEDÊNCIA (a fonte de verdade vem primeiro):
+ *  1. `answered_at` — o provedor confirmou channel-answer. Sinal FORTE e direto;
+ *     é o que o BI do Sales Hub adotou como fonte de verdade de "atendida".
+ *     Cobre 100% das conexões nos ramais com webhook saudável (jul/2026:
+ *     `answered_at` explica ~99,7% das conectadas; ver PR).
+ *  2. `significant` — salvaguarda qualitativa. Só ADICIONA linhas que não têm
+ *     `answered_at` (REST/legado); mantida para garantir a invariante
+ *     `significant ⊆ conectadas`. NÃO é atingida pelo bug de escrita — esse bug
+ *     produz `not_significant` em não-atendimentos, nunca `significant`.
+ *  3. duração >= 30s — proxy para ramais SEM webhook (ex. 1042), cujo
+ *     `answered_at` nunca chega mas cuja duração real prova a conversa
+ *     (685 ligações de ~61s/mês só nesse ramal, jul/2026). É a rede que impede
+ *     um ramal sem webhook de aparecer com 0% de conexão apesar de conversar.
+ *
+ * `not_significant` continua deliberadamente FORA: de não-atendimento tem
+ * `answered_at` nulo e duração ~0, então nunca dispara nenhum dos três sinais.
+ *
+ * NOTA: os sinais 2 e 3 são salvaguardas para dados sem `answered_at`. Quando o
+ * webhook cobrir todos os ramais (resolvido o vínculo do 1042), a regra pode
+ * colapsar em `answered_at` puro — hoje isso cegaria os ramais sem webhook.
  */
 export function isConnectedCall(call: CallConnectionSignals): boolean {
-  if (call.status === 'significant') return true;
   if (call.answered_at) return true;
+  if (call.status === 'significant') return true;
   return call.duration_seconds >= CONNECTED_MIN_DURATION_SECONDS;
 }
 

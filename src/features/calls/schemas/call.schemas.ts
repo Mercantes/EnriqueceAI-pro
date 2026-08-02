@@ -8,12 +8,23 @@ export const TRANSCRIPTION_MIN_DURATION_SECONDS = 90;
 export const callStatusValues = ['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'] as const;
 export const callTypeValues = ['inbound', 'outbound', 'manual'] as const;
 
+/** Desfecho comercial do SDR — enum próprio (call_disposition), separado da
+ *  telemetria (callStatusValues). Ver src/features/calls/types. */
+export const callDispositionValues = [
+  'relevant_conversation',
+  'answered_no_progress',
+  'callback_requested',
+  'no_answer',
+  'technical_failure',
+] as const;
+
 /** Origem/discador da ligação. Ligações via WhatsApp gravam
  *  `metadata.provider = 'whatsapp'`; as demais (API4COM) não têm provider. */
 export const callProviderValues = ['api4com', 'whatsapp'] as const;
 export type CallProvider = (typeof callProviderValues)[number];
 
 export const callStatusSchema = z.enum(callStatusValues);
+export const callDispositionSchema = z.enum(callDispositionValues);
 export const callTypeSchema = z.enum(callTypeValues);
 
 export const createCallSchema = z.object({

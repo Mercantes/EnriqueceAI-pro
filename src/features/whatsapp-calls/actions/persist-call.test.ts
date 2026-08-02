@@ -133,7 +133,7 @@ describe('persistWhatsAppCall', () => {
     queues.calls = [{ data: { id: 'existing-1' } }]; // existing hit → update path
     queues.interactions = [{ data: { id: 'int-1', metadata: {} } }]; // mirror exists → update
 
-    const result = await persistWhatsAppCall({ ...baseInput, sdrOutcome: 'significant', notes: 'ok' });
+    const result = await persistWhatsAppCall({ ...baseInput, sdrOutcome: 'relevant_conversation', notes: 'ok' });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.callId).toBe('existing-1');
     // A tentativa é ATUALIZADA, não reinserida — nada de linha duplicada.
