@@ -6,18 +6,23 @@ vi.mock('@/lib/auth/require-auth', () => ({
 
 let queues: Record<string, unknown[]>;
 let inserts: Record<string, unknown[]>;
+// Resultado que um `insert` awaited (sem .select) resolve — permite simular
+// erros como a colisão 23505 do índice único de interações. Default: sucesso.
+let insertResults: Record<string, unknown[]>;
 
 function makeChain(table: string) {
   const chain: Record<string, unknown> = {};
   for (const m of ['select', 'eq', 'update', 'contains', 'limit']) chain[m] = vi.fn(() => chain);
   chain.insert = vi.fn((payload: unknown) => {
     (inserts[table] ??= []).push(payload);
+    chain.__insertResult = insertResults[table]?.shift() ?? { error: null };
     return chain;
   });
   const shift = () => (queues[table]?.shift() ?? { data: null, error: null });
   chain.single = vi.fn(() => Promise.resolve(shift()));
   chain.maybeSingle = vi.fn(() => Promise.resolve(shift()));
-  chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve);
+  chain.then = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve(chain.__insertResult ?? { error: null }).then(resolve);
   return chain;
 }
 
@@ -53,6 +58,7 @@ describe('persistWhatsAppCall', () => {
     vi.clearAllMocks();
     queues = {};
     inserts = {};
+    insertResults = {};
   });
 
   it('inserts the call + interaction and returns the call id', async () => {
@@ -126,6 +132,43 @@ describe('persistWhatsAppCall', () => {
     // Sem anotação do SDR, a timeline ainda precisa mostrar algo legível.
     expect(interactionRow.message_content).toBe('Ligação WhatsApp — não atendida');
     expect((interactionRow.metadata as Record<string, unknown>).connected).toBe(false);
+  });
+
+  it('re-inserts the retry interaction as a manual touch when it hits the step unique index', async () => {
+    queues.organization_members = [{ data: { org_id: 'org-1' } }];
+    queues.calls = [
+      { data: null }, // sem call existente p/ este service_call_id (retry = callId novo)
+      { data: { id: 'call-retry' }, error: null }, // insert ... select single
+    ];
+    // 1ª interação (com step_id) colide com uq_interactions_sent_step_lead;
+    // a reinserção como toque manual (step_id null) passa.
+    insertResults.interactions = [
+      { error: { code: '23505', message: 'duplicate key value violates unique constraint' } },
+      { error: null },
+    ];
+
+    const result = await persistWhatsAppCall(baseInput);
+    expect(result.success).toBe(true);
+
+    const rows = inserts.interactions as Record<string, unknown>[];
+    expect(rows).toHaveLength(2);
+    // 1ª tentativa mantém o passo; a retentativa vira toque manual (step_id null)
+    // para AINDA aparecer na timeline sem violar o índice do passo.
+    expect(rows[0]!.step_id).toBe(baseInput.stepId);
+    expect(rows[1]!.step_id).toBeNull();
+    expect((rows[1]!.metadata as Record<string, unknown>).service_call_id).toBe(baseInput.callId);
+  });
+
+  it('does not re-insert when the interaction inserts cleanly (no collision)', async () => {
+    queues.organization_members = [{ data: { org_id: 'org-1' } }];
+    queues.calls = [
+      { data: null },
+      { data: { id: 'call-ok' }, error: null },
+    ];
+    // Sem erro configurado → insere uma única vez, sem toque manual extra.
+    const result = await persistWhatsAppCall(baseInput);
+    expect(result.success).toBe(true);
+    expect(inserts.interactions).toHaveLength(1);
   });
 
   it('upserts (updates, never duplicates) on the same service_call_id', async () => {

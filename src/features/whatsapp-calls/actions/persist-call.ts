@@ -112,6 +112,46 @@ export async function persistWhatsAppCall(
   };
   const destination = toE164BR(p.destination) || p.destination;
 
+  // Insere a interação-espelho da tentativa na timeline do lead. A retentativa da
+  // MESMA atividade de cadência colide com o índice único
+  // `uq_interactions_sent_step_lead` (1 interação 'sent' por (cadence,step,lead)
+  // — o anti-duplicata do contador de atividades). Nesse caso reinsere como toque
+  // manual (step_id null, fora do índice parcial) pra a retentativa AINDA
+  // aparecer no histórico. O erro é checado de propósito: antes era engolido, e a
+  // retentativa sumia da timeline sem deixar rastro (só a linha em `calls`).
+  async function insertAttemptInteraction(): Promise<void> {
+    const base = {
+      org_id: orgId,
+      lead_id: p.leadId,
+      cadence_id: p.cadenceId ?? null,
+      channel: 'phone',
+      type: 'sent',
+      performed_by: user.id,
+      message_content: messageContent,
+      metadata: interactionMeta,
+    };
+    const first = (await from(supabase, 'interactions').insert({
+      ...base,
+      step_id: p.stepId ?? null,
+    } as Record<string, unknown>)) as { error: { code?: string; message?: string } | null };
+    if (!first.error) return;
+
+    if (first.error.code === '23505' && p.stepId) {
+      const retry = (await from(supabase, 'interactions').insert({
+        ...base,
+        step_id: null,
+      } as Record<string, unknown>)) as { error: { code?: string; message?: string } | null };
+      if (retry.error) {
+        console.error(
+          '[whatsapp-call] falha ao registrar interação (toque manual):',
+          retry.error.message,
+        );
+      }
+      return;
+    }
+    console.error('[whatsapp-call] falha ao registrar interação da ligação:', first.error.message);
+  }
+
   // Upsert idempotente por `service_call_id`: cada TENTATIVA é gravada assim que
   // encerra (inclusive não atendida) e depois enriquecida no "Concluir" com o
   // desfecho do SDR + anotação. Re-submeter o mesmo callId ATUALIZA a linha em
@@ -162,17 +202,7 @@ export async function persistWhatsAppCall(
         await from(supabase, 'interactions').update(interactionUpdates).eq('id', existingInteraction.id);
       } else {
         // Fallback: a linha de calls existe mas a interação não (legado/raro).
-        await from(supabase, 'interactions').insert({
-          org_id: orgId,
-          lead_id: p.leadId,
-          cadence_id: p.cadenceId ?? null,
-          step_id: p.stepId ?? null,
-          channel: 'phone',
-          type: 'sent',
-          performed_by: user.id,
-          message_content: messageContent,
-          metadata: interactionMeta,
-        } as Record<string, unknown>);
+        await insertAttemptInteraction();
       }
 
       return { success: true, data: { callId: existing.id } };
@@ -202,20 +232,10 @@ export async function persistWhatsAppCall(
 
   if (callError || !call) return { success: false, error: 'Erro ao registrar a ligação' };
 
-  // Interação canônica do passo (flui para as métricas de Ligação + BI). Numa
-  // ligação avulsa, cadence_id/step_id ficam NULL (a coluna aceita) e a interação
-  // entra como toque manual — fora do índice único parcial (que exige step_id).
-  await from(supabase, 'interactions').insert({
-    org_id: orgId,
-    lead_id: p.leadId,
-    cadence_id: p.cadenceId ?? null,
-    step_id: p.stepId ?? null,
-    channel: 'phone',
-    type: 'sent',
-    performed_by: user.id,
-    message_content: messageContent,
-    metadata: interactionMeta,
-  } as Record<string, unknown>);
+  // Interação-espelho da tentativa (flui para timeline + métricas de Ligação). A
+  // 1ª tentativa de cadência mantém o step_id; a retentativa do mesmo passo vira
+  // toque manual (step_id null) dentro de insertAttemptInteraction.
+  await insertAttemptInteraction();
 
   return { success: true, data: { callId: call.id } };
 }
