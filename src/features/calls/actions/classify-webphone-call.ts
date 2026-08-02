@@ -6,7 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
-import { callStatusSchema } from '../schemas/call.schemas';
+import { callDispositionSchema, callStatusSchema } from '../schemas/call.schemas';
 
 // `calls.status` continua sendo escrito EXCLUSIVAMENTE pelo webhook do API4COM
 // (/api/webhooks/api4com), que classifica significant / no_contact /
@@ -15,15 +15,15 @@ import { callStatusSchema } from '../schemas/call.schemas';
 // que o time de BI reclamou em maio/2026 — por isso nunca mais tocamos em
 // `status` aqui.
 //
-// O que o SDR informa agora vai para `calls.sdr_outcome` (coluna separada,
-// migration 20260722120000): a telefonia sabe SE conectou, só o SDR sabe O QUE
-// aconteceu na conversa. Os dois convivem, ninguém sobrescreve ninguém.
+// O que o SDR informa agora vai para `calls.sdr_disposition` (coluna e enum
+// próprios, migration 20260801210000): a telefonia sabe SE conectou, só o SDR
+// sabe O QUE aconteceu na conversa. Os dois convivem, ninguém sobrescreve ninguém.
 const classifyInputSchema = z.object({
   callId: z.string().uuid(),
   /** Legado: alguns callers ainda mandam. Nunca aplicado em `calls.status`. */
   status: callStatusSchema.optional(),
-  /** Desfecho informado pelo SDR → gravado em `calls.sdr_outcome`. */
-  sdrOutcome: callStatusSchema.optional(),
+  /** Desfecho informado pelo SDR → gravado em `calls.sdr_disposition`. */
+  sdrOutcome: callDispositionSchema.optional(),
   clientDurationSeconds: z.number().int().min(0),
   notes: z.string().optional(),
   leadId: z.string().uuid().optional(),
@@ -65,7 +65,7 @@ export async function classifyWebphoneCall(
 
   // O desfecho do SDR vai para a coluna própria, ao lado do status técnico.
   if (sdrOutcome) {
-    updates.sdr_outcome = sdrOutcome;
+    updates.sdr_disposition = sdrOutcome;
   }
 
   // Use client-side duration as fallback if webhook hasn't set it

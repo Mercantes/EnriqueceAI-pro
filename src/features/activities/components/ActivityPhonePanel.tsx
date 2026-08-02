@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import type { CallStatus } from '@/features/calls/types';
+import type { CallDisposition } from '@/features/calls/types';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import { initiateCall, hangupCall } from '@/features/calls/actions/initiate-call';
 import { classifyWebphoneCall } from '@/features/calls/actions/classify-webphone-call';
@@ -234,7 +234,7 @@ export function ActivityPhonePanel({
   function handleSubmitResult(
     resultNotes: string,
     returnSchedule: CallReturnSchedule | null,
-    outcome: CallStatus,
+    outcome: CallDisposition,
   ) {
     const allAttempts = [...attempts, buildCurrentAttempt(resultNotes)];
     const aggregatedNotes = formatAggregatedNotes(allAttempts);

@@ -6,14 +6,14 @@ import { CallOutcomeSelector } from './CallOutcomeSelector';
 
 describe('CallOutcomeSelector', () => {
   it('renderiza as 5 opções de desfecho', () => {
-    render(<CallOutcomeSelector value="significant" onChange={vi.fn()} />);
+    render(<CallOutcomeSelector value="relevant_conversation" onChange={vi.fn()} />);
     for (const option of DISPOSITION_OPTIONS) {
       expect(screen.getByText(option.label)).toBeInTheDocument();
     }
   });
 
   it('mostra a consequência (hint) de cada desfecho — o SDR precisa ver antes de escolher', () => {
-    render(<CallOutcomeSelector value="significant" onChange={vi.fn()} />);
+    render(<CallOutcomeSelector value="relevant_conversation" onChange={vi.fn()} />);
     expect(screen.getAllByText('Avança a cadência')).toHaveLength(2);
     expect(screen.getByText('Agenda o retorno combinado')).toBeInTheDocument();
     expect(screen.getByText('Segue a cadência')).toBeInTheDocument();
@@ -21,19 +21,19 @@ describe('CallOutcomeSelector', () => {
   });
 
   it('marca como selecionado o desfecho recebido em `value`', () => {
-    render(<CallOutcomeSelector value="no_contact" onChange={vi.fn()} />);
+    render(<CallOutcomeSelector value="no_answer" onChange={vi.fn()} />);
     const selected = screen.getByRole('radio', { checked: true });
-    expect(selected).toHaveAttribute('value', 'no_contact');
+    expect(selected).toHaveAttribute('value', 'no_answer');
   });
 
   it('expõe os desfechos como radios num grupo rotulado (acessibilidade)', () => {
-    render(<CallOutcomeSelector value="significant" onChange={vi.fn()} />);
+    render(<CallOutcomeSelector value="relevant_conversation" onChange={vi.fn()} />);
     expect(screen.getByRole('radiogroup', { name: 'Desfecho da ligação' })).toBeInTheDocument();
     expect(screen.getAllByRole('radio')).toHaveLength(DISPOSITION_OPTIONS.length);
   });
 
   it('desabilita todos os radios quando disabled', () => {
-    render(<CallOutcomeSelector value="significant" onChange={vi.fn()} disabled />);
+    render(<CallOutcomeSelector value="relevant_conversation" onChange={vi.fn()} disabled />);
     for (const radio of screen.getAllByRole('radio')) {
       expect(radio).toBeDisabled();
     }

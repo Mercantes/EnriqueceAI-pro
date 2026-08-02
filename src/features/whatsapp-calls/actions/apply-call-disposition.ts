@@ -8,11 +8,12 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { rescheduleCurrentStep } from '@/features/activities/actions/reschedule-current-step';
 
 import { mapDispositionToAction } from '@/features/calls/disposition';
+import { callDispositionValues } from '@/features/calls/schemas/call.schemas';
 
 const dispositionSchema = z.object({
   enrollmentId: z.string().uuid(),
   stepId: z.string().uuid(),
-  disposition: z.enum(['significant', 'not_significant', 'no_contact', 'busy', 'not_connected']),
+  disposition: z.enum(callDispositionValues),
   // Horário do callback (ISO) — obrigatório quando a disposition reagenda.
   callbackAt: z.string().datetime().optional(),
 });
@@ -26,9 +27,9 @@ export type DispositionResult =
 
 /**
  * Aplica o desfecho de uma Ligação via WhatsApp à cadência (story 7.6):
- *  - conversa relevante / atendeu  -> avança (advance_enrollment_after_step)
- *  - ocupado / não atendeu         -> reagenda o step atual no `callbackAt`
- *  - não conectou (erro técnico)   -> nada (a atividade volta para a fila)
+ *  - relevant_conversation / answered_no_progress / no_answer -> avança
+ *  - callback_requested (pediu p/ ligar depois) -> reagenda no `callbackAt`
+ *  - technical_failure (erro técnico)           -> nada (volta para a fila)
  *
  * NÃO grava a `calls.status` — a persistência da chamada é da story 7.7. Aqui só
  * a ação de cadência. O avanço é idempotente (RPC com row-lock).

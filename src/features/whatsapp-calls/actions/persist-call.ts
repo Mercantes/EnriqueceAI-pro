@@ -9,6 +9,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { formatDuration } from '@/lib/utils/format';
 
+import { callDispositionValues } from '@/features/calls/schemas/call.schemas';
+
 import { toE164BR } from '../phone';
 
 const persistSchema = z.object({
@@ -24,12 +26,11 @@ const persistSchema = z.object({
   destination: z.string().min(1),
   // Sinal TÉCNICO da chamada — vira `calls.status` (atendeu / não conectou).
   disposition: z.enum(['significant', 'not_significant', 'no_contact', 'busy', 'not_connected']),
-  // Desfecho informado pelo SDR no modal de resultado — vira `calls.sdr_outcome`,
-  // SEM tocar em `calls.status`. Os dois convivem de propósito (ver a migration
-  // 20260722120000 e o comentário em classify-webphone-call.ts).
-  sdrOutcome: z
-    .enum(['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'])
-    .optional(),
+  // Desfecho informado pelo SDR no modal de resultado — vira
+  // `calls.sdr_disposition` (enum próprio), SEM tocar em `calls.status`. Os dois
+  // convivem de propósito (ver a migration 20260801210000 e o comentário em
+  // classify-webphone-call.ts).
+  sdrOutcome: z.enum(callDispositionValues).optional(),
   connected: z.boolean(),
   durationSeconds: z.number().int().min(0),
   startedAt: z.string().datetime(),
@@ -135,7 +136,7 @@ export async function persistWhatsAppCall(
       // gravação-base do encerramento roda SEM eles; o "Concluir" chega depois
       // com o desfecho, e a gravação pode ter chegado nesse meio-tempo. Nunca
       // limpamos um desfecho já informado nem uma gravação já baixada.
-      if (p.sdrOutcome) callUpdates.sdr_outcome = p.sdrOutcome;
+      if (p.sdrOutcome) callUpdates.sdr_disposition = p.sdrOutcome;
       if (recordingUrl) callUpdates.recording_url = recordingUrl;
       await from(supabase, 'calls').update(callUpdates).eq('id', existing.id).eq('org_id', orgId);
 
@@ -189,7 +190,7 @@ export async function persistWhatsAppCall(
       started_at: p.startedAt,
       duration_seconds: p.durationSeconds,
       status: p.disposition,
-      sdr_outcome: p.sdrOutcome ?? null,
+      sdr_disposition: p.sdrOutcome ?? null,
       type: 'outbound',
       connected: p.connected,
       answered_at: p.answeredAt ?? null,

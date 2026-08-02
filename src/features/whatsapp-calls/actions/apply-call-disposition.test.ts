@@ -22,7 +22,7 @@ describe('applyCallDisposition', () => {
   });
 
   it('advances the cadence on a significant call', async () => {
-    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'significant' });
+    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'relevant_conversation' });
     expect(result.success).toBe(true);
     if (result.success && result.data.action === 'advanced') {
       expect(result.data.advanced).toBe(true);
@@ -44,7 +44,7 @@ describe('applyCallDisposition', () => {
     const result = await applyCallDisposition({
       enrollmentId: ENR,
       stepId: STEP,
-      disposition: 'busy',
+      disposition: 'callback_requested',
       callbackAt: when,
     });
 
@@ -59,21 +59,21 @@ describe('applyCallDisposition', () => {
 
   it('requires a callback time when the disposition reschedules', async () => {
     // `busy` = "Pediu para ligar depois" — o único desfecho que reagenda.
-    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'busy' });
+    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'callback_requested' });
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toContain('horário');
     expect(reschedule.rescheduleCurrentStep).not.toHaveBeenCalled();
   });
 
   it('avança (não reagenda) quando o lead não atendeu — a cadência cuida da retentativa', async () => {
-    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'no_contact' });
+    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'no_answer' });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.action).toBe('advanced');
     expect(reschedule.rescheduleCurrentStep).not.toHaveBeenCalled();
   });
 
   it('does nothing on a technical failure (not_connected)', async () => {
-    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'not_connected' });
+    const result = await applyCallDisposition({ enrollmentId: ENR, stepId: STEP, disposition: 'technical_failure' });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.action).toBe('none');
     expect(rpc).not.toHaveBeenCalled();

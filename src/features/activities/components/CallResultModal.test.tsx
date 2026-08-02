@@ -31,9 +31,9 @@ describe('CallResultModal', () => {
       renderModal({ connected: false, durationSeconds: 0 });
       // Fluxo enxuto: sem seletor de cara (o SDR só quer re-discar).
       expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-      // O desfecho continua no_contact por baixo — revelável sob demanda.
+      // O desfecho continua no_answer por baixo — revelável sob demanda.
       await user.click(screen.getByRole('button', { name: /Registrar outro desfecho/ }));
-      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute('value', 'no_contact');
+      expect(screen.getByRole('radio', { checked: true })).toHaveAttribute('value', 'no_answer');
     });
 
     it('não atendida com onRetry → "Ligar de novo" é a ação primária', () => {
@@ -94,7 +94,7 @@ describe('CallResultModal', () => {
 
   describe('bloco de retorno — só quando o lead pediu retorno', () => {
     it('NÃO aparece em "Não atendeu": ninguém falou com ninguém, a cadência segue', () => {
-      renderModal({ connected: false }); // pré-seleciona no_contact
+      renderModal({ connected: false }); // pré-seleciona no_answer
       expect(screen.queryByText('Quando ligar de novo')).not.toBeInTheDocument();
     });
 
@@ -138,7 +138,7 @@ describe('CallResultModal', () => {
       await user.click(screen.getByRole('button', { name: /Concluir atividade/ }));
 
       expect(onConclude).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'not_significant', returnSchedule: null }),
+        expect.objectContaining({ outcome: 'answered_no_progress', returnSchedule: null }),
       );
     });
   });

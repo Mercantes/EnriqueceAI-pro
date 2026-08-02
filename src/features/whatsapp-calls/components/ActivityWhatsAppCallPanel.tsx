@@ -8,7 +8,7 @@ import { Button } from '@/shared/components/ui/button';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 
-import type { CallStatus } from '@/features/calls/types';
+import type { CallDisposition } from '@/features/calls/types';
 import type { ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
 
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
@@ -167,7 +167,7 @@ export function ActivityWhatsAppCallPanel({
   // no momento em que a cadeia executa) — senão um enrich adiado leria os refs já
   // sobrescritos pela próxima discagem. Idempotente no servidor por callId.
   function persistAttempt(extra?: {
-    sdrOutcome?: CallStatus;
+    sdrOutcome?: CallDisposition;
     notes?: string;
   }): Promise<ActionResult<{ callId: string }> | undefined> {
     const callId = callIdRef.current;

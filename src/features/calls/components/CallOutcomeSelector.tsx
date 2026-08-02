@@ -5,11 +5,11 @@ import { RadioGroup, RadioGroupItem } from '@/shared/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 
 import { DISPOSITION_OPTIONS, type DispositionOption } from '../disposition';
-import type { CallStatus } from '../types';
+import type { CallDisposition } from '../types';
 
 export interface CallOutcomeSelectorProps {
-  value: CallStatus | null;
-  onChange: (value: CallStatus) => void;
+  value: CallDisposition | null;
+  onChange: (value: CallDisposition) => void;
   disabled?: boolean;
   className?: string;
   /** Opções exibidas — default são todas. O modal passa as filtradas pela telemetria. */
@@ -40,7 +40,7 @@ export function CallOutcomeSelector({
       // nada está selecionado — senão o Radix alterna uncontrolled→controlled
       // ao escolher e o React alerta. Nenhum item usa "" como value.
       value={value ?? ''}
-      onValueChange={(v) => onChange(v as CallStatus)}
+      onValueChange={(v) => onChange(v as CallDisposition)}
       disabled={disabled}
       className={cn('grid gap-2 sm:grid-cols-2', className)}
       aria-label="Desfecho da ligação"

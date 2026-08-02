@@ -8,33 +8,33 @@ import {
 
 describe('mapDispositionToAction', () => {
   it('advances on a real conversation', () => {
-    expect(mapDispositionToAction('significant')).toBe('advance');
-    expect(mapDispositionToAction('not_significant')).toBe('advance');
+    expect(mapDispositionToAction('relevant_conversation')).toBe('advance');
+    expect(mapDispositionToAction('answered_no_progress')).toBe('advance');
   });
 
   it('reschedules only when the lead asked for a callback', () => {
-    // `busy` = o lead ATENDEU e pediu para ligar depois — há horário combinado.
-    expect(mapDispositionToAction('busy')).toBe('reschedule');
+    // callback_requested = o lead ATENDEU e pediu para ligar depois — há horário.
+    expect(mapDispositionToAction('callback_requested')).toBe('reschedule');
   });
 
   it('advances on no answer — a cadência cuida da retentativa', () => {
     // Regressão: reagendar aqui obrigava o SDR a escolher uma data no caso mais
     // comum do dia. Ninguém falou com ninguém, então não há retorno combinado.
-    expect(mapDispositionToAction('no_contact')).toBe('advance');
+    expect(mapDispositionToAction('no_answer')).toBe('advance');
   });
 
   it('does nothing on a technical failure', () => {
-    expect(mapDispositionToAction('not_connected')).toBe('none');
+    expect(mapDispositionToAction('technical_failure')).toBe('none');
   });
 
   it('exposes all five dispositions as options', () => {
     expect(DISPOSITION_OPTIONS).toHaveLength(5);
     expect(DISPOSITION_OPTIONS.map((o) => o.value)).toEqual([
-      'significant',
-      'not_significant',
-      'busy',
-      'no_contact',
-      'not_connected',
+      'relevant_conversation',
+      'answered_no_progress',
+      'callback_requested',
+      'no_answer',
+      'technical_failure',
     ]);
   });
 });
@@ -42,20 +42,25 @@ describe('mapDispositionToAction', () => {
 describe('dispositionOptionsForTelemetry', () => {
   it('atendida: oferece os desfechos de conversa + falha técnica, mas NÃO "Não atendeu"', () => {
     const values = dispositionOptionsForTelemetry(true).map((o) => o.value);
-    expect(values).toEqual(['significant', 'not_significant', 'busy', 'not_connected']);
-    expect(values).not.toContain('no_contact');
+    expect(values).toEqual([
+      'relevant_conversation',
+      'answered_no_progress',
+      'callback_requested',
+      'technical_failure',
+    ]);
+    expect(values).not.toContain('no_answer');
   });
 
   it('não atendida: oferece só "Não atendeu" e "Falha técnica" — sem os que exigem conversa', () => {
     const values = dispositionOptionsForTelemetry(false).map((o) => o.value);
-    expect(values).toEqual(['no_contact', 'not_connected']);
-    for (const forbidden of ['significant', 'not_significant', 'busy'] as const) {
+    expect(values).toEqual(['no_answer', 'technical_failure']);
+    for (const forbidden of ['relevant_conversation', 'answered_no_progress', 'callback_requested'] as const) {
       expect(values).not.toContain(forbidden);
     }
   });
 
-  it('"Falha técnica" (not_connected) fica disponível nos dois casos', () => {
-    expect(dispositionOptionsForTelemetry(true).map((o) => o.value)).toContain('not_connected');
-    expect(dispositionOptionsForTelemetry(false).map((o) => o.value)).toContain('not_connected');
+  it('"Falha técnica" (technical_failure) fica disponível nos dois casos', () => {
+    expect(dispositionOptionsForTelemetry(true).map((o) => o.value)).toContain('technical_failure');
+    expect(dispositionOptionsForTelemetry(false).map((o) => o.value)).toContain('technical_failure');
   });
 });

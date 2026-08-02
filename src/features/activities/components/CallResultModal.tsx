@@ -40,7 +40,7 @@ import { formatDuration } from '@/lib/utils/format';
 
 import { CallOutcomeSelector } from '@/features/calls/components/CallOutcomeSelector';
 import { mapDispositionToAction, dispositionOptionsForTelemetry } from '@/features/calls/disposition';
-import type { CallStatus } from '@/features/calls/types';
+import type { CallDisposition } from '@/features/calls/types';
 
 export interface CallReturnSchedule {
   scheduledAt: string;
@@ -71,8 +71,8 @@ const RETURN_CHANNEL_MAP: Record<
  *    concluir. Sem default silencioso (era `significant` e o SDR aceitava sem
  *    pensar → preenchimento sem valor de métrica).
  */
-function defaultOutcome(connected: boolean): CallStatus | null {
-  return connected ? null : 'no_contact';
+function defaultOutcome(connected: boolean): CallDisposition | null {
+  return connected ? null : 'no_answer';
 }
 
 export interface CallResultModalProps {
@@ -110,7 +110,7 @@ export interface CallResultModalProps {
   onConclude: (args: {
     notes: string;
     returnSchedule: CallReturnSchedule | null;
-    outcome: CallStatus;
+    outcome: CallDisposition;
   }) => void;
 }
 
@@ -140,7 +140,7 @@ export function CallResultModal({
   onConclude,
 }: CallResultModalProps) {
   const [notes, setNotes] = useState('');
-  const [outcome, setOutcome] = useState<CallStatus | null>(() => defaultOutcome(connected));
+  const [outcome, setOutcome] = useState<CallDisposition | null>(() => defaultOutcome(connected));
   const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
   const [returnTime, setReturnTime] = useState('09:00');
   const [returnChannel, setReturnChannel] = useState<ReturnChannelOption>('phone');

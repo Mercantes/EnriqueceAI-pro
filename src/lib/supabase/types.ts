@@ -368,6 +368,7 @@ export type Database = {
           origin: string
           recording_url: string | null
           sdr_outcome: Database["public"]["Enums"]["call_status"] | null
+          sdr_disposition: Database["public"]["Enums"]["call_disposition"] | null
           started_at: string
           status: Database["public"]["Enums"]["call_status"]
           type: Database["public"]["Enums"]["call_type"]
@@ -390,6 +391,7 @@ export type Database = {
           origin: string
           recording_url?: string | null
           sdr_outcome?: Database["public"]["Enums"]["call_status"] | null
+          sdr_disposition?: Database["public"]["Enums"]["call_disposition"] | null
           started_at?: string
           status?: Database["public"]["Enums"]["call_status"]
           type?: Database["public"]["Enums"]["call_type"]
@@ -412,6 +414,7 @@ export type Database = {
           origin?: string
           recording_url?: string | null
           sdr_outcome?: Database["public"]["Enums"]["call_status"] | null
+          sdr_disposition?: Database["public"]["Enums"]["call_disposition"] | null
           started_at?: string
           status?: Database["public"]["Enums"]["call_status"]
           type?: Database["public"]["Enums"]["call_type"]
@@ -1627,6 +1630,12 @@ export type Database = {
     }
     Enums: {
       cadence_status: "draft" | "active" | "paused" | "archived"
+      call_disposition:
+        | "relevant_conversation"
+        | "answered_no_progress"
+        | "callback_requested"
+        | "no_answer"
+        | "technical_failure"
       call_status:
         | "significant"
         | "not_significant"
@@ -1811,6 +1820,13 @@ export const Constants = {
   public: {
     Enums: {
       cadence_status: ["draft", "active", "paused", "archived"],
+      call_disposition: [
+        "relevant_conversation",
+        "answered_no_progress",
+        "callback_requested",
+        "no_answer",
+        "technical_failure",
+      ],
       call_status: [
         "significant",
         "not_significant",
