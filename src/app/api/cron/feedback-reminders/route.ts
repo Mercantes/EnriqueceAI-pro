@@ -5,6 +5,7 @@ import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { getAppUrl } from '@/lib/utils/app-url';
+import { parseBrtDateTime } from '@/lib/utils/brt-date';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 import { validateBrazilianPhone } from '@/features/integrations/services/whatsapp.service';
@@ -39,11 +40,6 @@ interface LeadInfo {
   id: string;
   nome_fantasia: string | null;
   razao_social: string | null;
-}
-
-interface MeetingTiming {
-  lead_id: string;
-  start_time: string;
 }
 
 /**
@@ -81,42 +77,46 @@ async function sendFeedbackReminders() {
     return { reminders: 0, errors: 0, skipped: 0 };
   }
 
-  // Pull meeting start_time for each lead — first try the meeting_scheduled
-  // interaction's metadata; for leads that lack that interaction (or have it
-  // without start_time), fall back to leads.meeting_scheduled_at. Audit on
-  // 2026-05-12 showed 62% of Q4-latency feedbacks (closers responding >5d
-  // late) had no start_time in the interaction, so the cron silently skipped
-  // every reminder for them.
+  // Início da reunião por lead. Fonte canônica: leads.meeting_starts_at
+  // (timestamptz, COM fuso — new Date() já resolve o instante certo). Para
+  // reuniões legadas sem essa coluna, cai no metadata.start_time da interação
+  // meeting_scheduled, que é hora de PAREDE em BRT e precisa ser ancorada
+  // (parseBrtDateTime).
+  //
+  // NÃO usar leads.meeting_scheduled_at: auditoria 2026-08-03 mostrou que essa
+  // coluna guarda o horário de MARCAÇÃO (= created_at do agendamento), não o de
+  // início. Usá-la abria a cobrança 24h após a marcação — para reuniões marcadas
+  // com antecedência, ANTES da reunião acontecer.
   const leadIds = [...new Set(candidates.map((c) => c.lead_id))];
-  const { data: meetingsRaw } = (await from(supabase, 'interactions')
-    .select('lead_id, metadata, created_at')
-    .eq('type', 'meeting_scheduled')
-    .in('lead_id', leadIds)
-    .order('created_at', { ascending: false })) as {
-    data: Array<{ lead_id: string; metadata: Record<string, unknown> | null }> | null;
-  };
 
-  const meetingMap = new Map<string, MeetingTiming>();
-  for (const m of meetingsRaw ?? []) {
-    if (meetingMap.has(m.lead_id)) continue; // first row per lead is latest
-    const startTime = (m.metadata?.start_time as string | undefined) ?? null;
-    if (startTime) {
-      meetingMap.set(m.lead_id, { lead_id: m.lead_id, start_time: startTime });
-    }
+  const meetingStartMap = new Map<string, Date>();
+
+  const { data: leadsRaw } = (await from(supabase, 'leads')
+    .select('id, meeting_starts_at')
+    .in('id', leadIds)) as { data: Array<{ id: string; meeting_starts_at: string | null }> | null };
+  for (const l of leadsRaw ?? []) {
+    if (!l.meeting_starts_at) continue;
+    const d = new Date(l.meeting_starts_at);
+    if (!Number.isNaN(d.getTime())) meetingStartMap.set(l.id, d);
   }
 
-  // Fallback for leads still without a start_time: read leads.meeting_scheduled_at.
-  const leadsMissingMeeting = leadIds.filter((id) => !meetingMap.has(id));
-  if (leadsMissingMeeting.length > 0) {
-    const { data: leadsRaw } = (await from(supabase, 'leads')
-      .select('id, meeting_scheduled_at')
-      .in('id', leadsMissingMeeting)) as {
-      data: Array<{ id: string; meeting_scheduled_at: string | null }> | null;
+  // Fallback legado (meeting_starts_at nulo): metadata.start_time da interação,
+  // hora de parede BRT ancorada. Sem fonte confiável, o lead é pulado — melhor
+  // não cobrar do que cobrar no horário errado.
+  const legacyLeadIds = leadIds.filter((id) => !meetingStartMap.has(id));
+  if (legacyLeadIds.length > 0) {
+    const { data: meetingsRaw } = (await from(supabase, 'interactions')
+      .select('lead_id, metadata, created_at')
+      .eq('type', 'meeting_scheduled')
+      .in('lead_id', legacyLeadIds)
+      .order('created_at', { ascending: false })) as {
+      data: Array<{ lead_id: string; metadata: Record<string, unknown> | null }> | null;
     };
-    for (const l of leadsRaw ?? []) {
-      if (l.meeting_scheduled_at) {
-        meetingMap.set(l.id, { lead_id: l.id, start_time: l.meeting_scheduled_at });
-      }
+    for (const m of meetingsRaw ?? []) {
+      if (meetingStartMap.has(m.lead_id)) continue; // first row per lead is latest
+      const raw = m.metadata?.start_time as string | undefined;
+      const d = raw ? parseBrtDateTime(raw) : null;
+      if (d) meetingStartMap.set(m.lead_id, d);
     }
   }
 
@@ -126,9 +126,9 @@ async function sendFeedbackReminders() {
       // Subsequent reminders are gated only by the 24h interval already in the SQL filter
       return true;
     }
-    const meeting = meetingMap.get(fb.lead_id);
-    if (!meeting) return false; // No meeting found — don't pester
-    const meetingPlus24h = new Date(new Date(meeting.start_time).getTime() + REMINDER_INTERVAL_HOURS * 60 * 60 * 1000);
+    const meetingStart = meetingStartMap.get(fb.lead_id);
+    if (!meetingStart) return false; // No reliable meeting start — don't pester
+    const meetingPlus24h = new Date(meetingStart.getTime() + REMINDER_INTERVAL_HOURS * 60 * 60 * 1000);
     return meetingPlus24h <= now;
   });
 
