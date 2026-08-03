@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { summarizeDirectResets } from './detect-status-reset-alert';
+import { summarizeDirectResets } from './detect-status-reset-alert.logic';
 
 function row(
   overrides: Partial<{
