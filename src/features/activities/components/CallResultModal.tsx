@@ -171,6 +171,10 @@ export function CallResultModal({
   const action = outcome ? mapDispositionToAction(outcome) : 'none';
   const needsReturn = showOutcome && action === 'reschedule';
   const missingReturnDate = needsReturn && !returnDate;
+  // "Ligar de novo" é a ação primária quando ainda não houve contato: não
+  // atendida OU caixa postal/secretária (a linha atendeu, mas não um humano —
+  // o SDR quase sempre vai tentar de novo).
+  const retryPrimary = !connected || outcome === 'voicemail';
   // Atendida obriga o SDR a escolher o desfecho antes de concluir. Na não
   // atendida `outcome` já vem preenchido (no_contact), então nunca bloqueia.
   const missingOutcome = showOutcome && outcome === null;
@@ -385,11 +389,12 @@ export function CallResultModal({
               </Button>
             )}
           </div>
-          {/* Direita: "Ligar de novo" (primário quando não atendida) + Concluir */}
+          {/* Direita: "Ligar de novo" (primário quando não houve contato —
+              não atendida ou caixa postal) + Concluir */}
           <div className="flex flex-wrap gap-2 sm:justify-end">
             {onRetry && (
               <Button
-                variant={connected ? 'ghost' : 'default'}
+                variant={retryPrimary ? 'default' : 'ghost'}
                 onClick={() => onRetry(notes)}
                 disabled={isSending}
               >
@@ -398,7 +403,7 @@ export function CallResultModal({
               </Button>
             )}
             <Button
-              variant={connected ? 'default' : 'outline'}
+              variant={retryPrimary ? 'outline' : 'default'}
               onClick={handleConclude}
               disabled={isSending || missingReturnDate || missingOutcome}
             >

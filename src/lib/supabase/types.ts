@@ -1636,6 +1636,7 @@ export type Database = {
         | "callback_requested"
         | "no_answer"
         | "technical_failure"
+        | "voicemail"
       call_status:
         | "significant"
         | "not_significant"
@@ -1826,6 +1827,7 @@ export const Constants = {
         "callback_requested",
         "no_answer",
         "technical_failure",
+        "voicemail",
       ],
       call_status: [
         "significant",

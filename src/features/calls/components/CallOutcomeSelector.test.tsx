@@ -5,7 +5,7 @@ import { DISPOSITION_OPTIONS } from '../disposition';
 import { CallOutcomeSelector } from './CallOutcomeSelector';
 
 describe('CallOutcomeSelector', () => {
-  it('renderiza as 5 opções de desfecho', () => {
+  it('renderiza as 6 opções de desfecho', () => {
     render(<CallOutcomeSelector value="relevant_conversation" onChange={vi.fn()} />);
     for (const option of DISPOSITION_OPTIONS) {
       expect(screen.getByText(option.label)).toBeInTheDocument();
@@ -16,7 +16,8 @@ describe('CallOutcomeSelector', () => {
     render(<CallOutcomeSelector value="relevant_conversation" onChange={vi.fn()} />);
     expect(screen.getAllByText('Avança a cadência')).toHaveLength(2);
     expect(screen.getByText('Agenda o retorno combinado')).toBeInTheDocument();
-    expect(screen.getByText('Segue a cadência')).toBeInTheDocument();
+    // "Segue a cadência" agora aparece em dois desfechos: caixa postal e "não atendeu".
+    expect(screen.getAllByText('Segue a cadência')).toHaveLength(2);
     expect(screen.getByText('Volta para a fila')).toBeInTheDocument();
   });
 

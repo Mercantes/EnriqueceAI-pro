@@ -31,6 +31,10 @@ export function mapDispositionToAction(disposition: CallDisposition): Dispositio
     case 'relevant_conversation':
     case 'answered_no_progress':
     case 'no_answer':
+    // Caixa postal / secretária: a linha atendeu mas não houve humano. Trata
+    // como "não atendeu" — segue a cadência (os próximos toques cuidam da
+    // retentativa); conta como tentativa no histórico.
+    case 'voicemail':
       return 'advance';
     // Só `callback_requested` ("Pediu para ligar depois") reagenda — houve
     // conversa e um horário combinado. `no_answer` cai no 'advance' acima junto
@@ -52,18 +56,22 @@ export interface DispositionOption {
 export const DISPOSITION_OPTIONS: DispositionOption[] = [
   { value: 'relevant_conversation', label: 'Conversa relevante', hint: 'Avança a cadência' },
   { value: 'answered_no_progress', label: 'Atendeu, sem avanço', hint: 'Avança a cadência' },
+  { value: 'voicemail', label: 'Caixa postal / Secretária', hint: 'Segue a cadência' },
   { value: 'callback_requested', label: 'Pediu para ligar depois', hint: 'Agenda o retorno combinado' },
   { value: 'no_answer', label: 'Não atendeu', hint: 'Segue a cadência' },
   { value: 'technical_failure', label: 'Falha técnica', hint: 'Volta para a fila' },
 ];
 
-// Desfechos que PRESSUPÕEM atendimento — só fazem sentido quando a telemetria
-// diz que alguém atendeu. `callback_requested` entra aqui porque "Pediu para
-// ligar depois" só existe se o lead atendeu e pediu.
+// Desfechos que PRESSUPÕEM que a LINHA atendeu — só fazem sentido quando a
+// telemetria diz que houve atendimento. `callback_requested` entra porque
+// "Pediu para ligar depois" só existe se o lead atendeu; `voicemail` entra
+// porque caixa postal/secretária só ocorre quando a linha atende (a máquina
+// "pega") — numa ligação que ninguém atende não há caixa postal.
 const OUTCOMES_REQUIRING_ANSWER: ReadonlySet<CallDisposition> = new Set<CallDisposition>([
   'relevant_conversation',
   'answered_no_progress',
   'callback_requested',
+  'voicemail',
 ]);
 
 // `no_answer` ("Não atendeu") pressupõe NÃO-atendimento.
