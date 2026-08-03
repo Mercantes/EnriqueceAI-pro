@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
+import { parseBrtDateTime } from '@/lib/utils/brt-date';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification } from '@/features/notifications/services/notification.service';
@@ -153,23 +154,38 @@ export async function POST(request: Request) {
         const meetLink = meeting.metadata.meet_link as string | undefined;
         const subject = meeting.metadata.subject as string | undefined;
 
-        const timeMatch = meeting.message_content?.match(/Horário:\s*(\d{2}\/\d{2}\/\d{4}),?\s*(\d{2}:\d{2})/);
-        if (!timeMatch) continue;
-
-        const [, dateStr, timeStr] = timeMatch;
-        const [day, month, year] = dateStr!.split('/');
-        const meetingStart = new Date(`${year}-${month}-${day}T${timeStr}:00`);
+        // O horário da reunião (metadata.start_time e o texto "Horário:") é hora
+        // de PAREDE em BRT, sem fuso. Ancorar em BRT (parseBrtDateTime) — sem
+        // isto, em prod (UTC) o instante fica 3h adiantado e o lembrete dispara
+        // horas antes ("Reunião em 30min" numa reunião que ainda está a 3h30).
+        const startTime = meeting.metadata.start_time as string | undefined;
+        let meetingStart = startTime ? parseBrtDateTime(startTime) : null;
+        if (!meetingStart) {
+          const timeMatch = meeting.message_content?.match(/Horário:\s*(\d{2}\/\d{2}\/\d{4}),?\s*(\d{2}:\d{2})/);
+          if (timeMatch) {
+            const [, dateStr, timeStr] = timeMatch;
+            const [day, month, year] = dateStr!.split('/');
+            meetingStart = parseBrtDateTime(`${year}-${month}-${day}T${timeStr}`);
+          }
+        }
+        if (!meetingStart) continue;
 
         if (meetingStart <= now || meetingStart > windowEnd) continue;
 
         const leadName = leadNameMap.get(meeting.lead_id) ?? 'Lead';
+        const horaBrt = new Intl.DateTimeFormat('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }).format(meetingStart);
 
         await createNotification({
           org_id: meeting.org_id,
           user_id: meeting.performed_by,
           type: 'meeting_reminder',
           title: `Reunião em ${REMINDER_WINDOW_MINUTES}min: ${leadName}`,
-          body: subject ?? `Reunião agendada para ${timeStr}${meetLink ? ' — Google Meet disponível' : ''}`,
+          body: subject ?? `Reunião agendada para ${horaBrt}${meetLink ? ' — Google Meet disponível' : ''}`,
           resource_type: 'lead',
           resource_id: meeting.lead_id,
           metadata: { interaction_id: meeting.id, meet_link: meetLink ?? null },
