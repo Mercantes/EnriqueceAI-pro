@@ -8,7 +8,7 @@ vi.mock('@/lib/supabase/from', () => ({
 
 vi.mock('@/lib/auth/get-org-id', () => ({
   getAuthOrgIdResult: vi.fn(() =>
-    Promise.resolve({ success: true, data: { orgId: 'org-1', userId: 'user-1', supabase: {} } }),
+    Promise.resolve({ success: true, data: { orgId: 'org-1', userId: 'user-1', role: 'manager', supabase: {} } }),
   ),
 }));
 
@@ -47,7 +47,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getAuthOrgIdResult).mockResolvedValue({
     success: true,
-    data: { orgId: 'org-1', userId: 'user-1', supabase: {} as never },
+    data: { orgId: 'org-1', userId: 'user-1', role: 'manager', supabase: {} as never },
   });
 });
 

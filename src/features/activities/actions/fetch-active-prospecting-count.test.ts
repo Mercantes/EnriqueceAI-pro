@@ -37,7 +37,7 @@ describe('fetchActiveProspectingCount', () => {
     vi.clearAllMocks();
     orgMemberChain = createChainMock();
     enrollmentsChain = createChainMock();
-    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
+    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1', role: 'sdr' } });
   });
 
   it('returns error when user has no org', async () => {
@@ -83,5 +83,27 @@ describe('fetchActiveProspectingCount', () => {
 
     expect(enrollmentsChain.eq).toHaveBeenCalledWith('status', 'active');
     expect(enrollmentsChain.neq).toHaveBeenCalledWith('cadences.type', 'auto_email');
+  });
+
+  it('SDR: escopa por posse (leads.assigned_to = usuário) — não vaza fila de outros', async () => {
+    (enrollmentsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [], error: null });
+
+    await fetchActiveProspectingCount();
+
+    // O filtro de posse é o que impede o vazamento entre SDRs mesmo em
+    // lead_visibility_mode='all' (o RLS de leads deixa de escopar nesse modo).
+    expect(enrollmentsChain.eq).toHaveBeenCalledWith('leads.assigned_to', 'user-1');
+  });
+
+  it('manager: NÃO filtra por posse — vê a org inteira', async () => {
+    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1', role: 'manager' } });
+    (enrollmentsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [], error: null });
+
+    await fetchActiveProspectingCount();
+
+    const assignedToCall = (enrollmentsChain.eq as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === 'leads.assigned_to',
+    );
+    expect(assignedToCall).toBeUndefined();
   });
 });

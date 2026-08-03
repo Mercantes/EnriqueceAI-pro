@@ -52,7 +52,7 @@ describe('fetchDrilldownData', () => {
     vi.mocked(from).mockReturnValue(chain);
     vi.mocked(getAuthOrgIdResult).mockResolvedValue({
       success: true,
-      data: { orgId: 'org-1', userId: 'u-1', supabase: {} as any },
+      data: { orgId: 'org-1', userId: 'u-1', role: 'manager', supabase: {} as any },
     });
 
     const { fetchDrilldownData } = await import('../fetch-drilldown-data');
@@ -84,7 +84,7 @@ describe('fetchDrilldownData', () => {
     vi.mocked(from).mockReturnValue(chain);
     vi.mocked(getAuthOrgIdResult).mockResolvedValue({
       success: true,
-      data: { orgId: 'org-1', userId: 'u-1', supabase: {} as any },
+      data: { orgId: 'org-1', userId: 'u-1', role: 'manager', supabase: {} as any },
     });
 
     const { fetchDrilldownData } = await import('../fetch-drilldown-data');
@@ -140,7 +140,7 @@ describe('fetchDrilldownData', () => {
 
     vi.mocked(getAuthOrgIdResult).mockResolvedValue({
       success: true,
-      data: { orgId: 'org-1', userId: 'u-1', supabase: {} as any },
+      data: { orgId: 'org-1', userId: 'u-1', role: 'manager', supabase: {} as any },
     });
 
     const { fetchDrilldownData } = await import('../fetch-drilldown-data');

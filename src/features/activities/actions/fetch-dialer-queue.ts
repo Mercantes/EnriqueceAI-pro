@@ -33,14 +33,17 @@ export interface DialerQueueItem {
 export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { supabase, userId, role } = auth.data;
 
-  // Active enrollments (all due, regardless of step type)
-  // RLS on leads filters by assigned_to for SDRs — !inner excludes enrollments for invisible leads
-  const { data: enrollments, error } = (await from(supabase, 'cadence_enrollments')
+  // Active enrollments (all due, regardless of step type). Fila PESSOAL: SDR só os
+  // leads atribuídos a ele (não confiar no RLS — em modo 'all' deixa de escopar);
+  // manager, a org toda.
+  let queue = from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios), cadence:cadences(id, name)')
     .eq('status', 'active')
-    .lte('next_step_due', new Date().toISOString())
+    .lte('next_step_due', new Date().toISOString());
+  if (role !== 'manager') queue = queue.eq('lead.assigned_to', userId);
+  const { data: enrollments, error } = (await queue
     .order('next_step_due', { ascending: true })
     .limit(100)) as {
       data: Array<{
