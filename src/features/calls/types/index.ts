@@ -11,7 +11,8 @@ export type CallDisposition =
   | 'answered_no_progress' // Atendeu, sem avanço
   | 'callback_requested' // Pediu para ligar depois
   | 'no_answer' // Não atendeu
-  | 'technical_failure'; // Falha técnica
+  | 'technical_failure' // Falha técnica
+  | 'voicemail'; // Caixa postal / secretária eletrônica (linha atendeu, sem humano)
 export type TranscriptionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
 
 // Call row matching database table

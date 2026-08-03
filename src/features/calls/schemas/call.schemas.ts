@@ -16,6 +16,7 @@ export const callDispositionValues = [
   'callback_requested',
   'no_answer',
   'technical_failure',
+  'voicemail',
 ] as const;
 
 /** Origem/discador da ligação. Ligações via WhatsApp gravam

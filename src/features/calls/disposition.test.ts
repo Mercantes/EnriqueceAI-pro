@@ -27,11 +27,16 @@ describe('mapDispositionToAction', () => {
     expect(mapDispositionToAction('technical_failure')).toBe('none');
   });
 
-  it('exposes all five dispositions as options', () => {
-    expect(DISPOSITION_OPTIONS).toHaveLength(5);
+  it('advances on voicemail — caixa postal segue a cadência, como "não atendeu"', () => {
+    expect(mapDispositionToAction('voicemail')).toBe('advance');
+  });
+
+  it('exposes all six dispositions as options', () => {
+    expect(DISPOSITION_OPTIONS).toHaveLength(6);
     expect(DISPOSITION_OPTIONS.map((o) => o.value)).toEqual([
       'relevant_conversation',
       'answered_no_progress',
+      'voicemail',
       'callback_requested',
       'no_answer',
       'technical_failure',
@@ -40,21 +45,23 @@ describe('mapDispositionToAction', () => {
 });
 
 describe('dispositionOptionsForTelemetry', () => {
-  it('atendida: oferece os desfechos de conversa + falha técnica, mas NÃO "Não atendeu"', () => {
+  it('atendida: oferece conversa + caixa postal + falha técnica, mas NÃO "Não atendeu"', () => {
     const values = dispositionOptionsForTelemetry(true).map((o) => o.value);
     expect(values).toEqual([
       'relevant_conversation',
       'answered_no_progress',
+      'voicemail',
       'callback_requested',
       'technical_failure',
     ]);
     expect(values).not.toContain('no_answer');
   });
 
-  it('não atendida: oferece só "Não atendeu" e "Falha técnica" — sem os que exigem conversa', () => {
+  it('não atendida: oferece só "Não atendeu" e "Falha técnica" — sem os que exigem atendimento', () => {
     const values = dispositionOptionsForTelemetry(false).map((o) => o.value);
     expect(values).toEqual(['no_answer', 'technical_failure']);
-    for (const forbidden of ['relevant_conversation', 'answered_no_progress', 'callback_requested'] as const) {
+    // Caixa postal também exige que a linha tenha atendido — fora da não atendida.
+    for (const forbidden of ['relevant_conversation', 'answered_no_progress', 'callback_requested', 'voicemail'] as const) {
       expect(values).not.toContain(forbidden);
     }
   });
