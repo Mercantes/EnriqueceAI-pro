@@ -21,18 +21,21 @@ import { from } from '@/lib/supabase/from';
 export async function fetchActiveProspectingCount(): Promise<ActionResult<number>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { supabase, userId, role } = auth.data;
 
-  // Select lead_id with inner joins so (a) RLS on leads filters invisible rows
-  // and (b) we can filter out auto_email cadences. Distinct leads are counted in
-  // JS. limit(10000) is a safety ceiling far above any current org's active
+  // Select lead_id with inner joins so (a) we can filter out auto_email cadences
+  // and (b) we can scope to owned leads. Distinct leads are counted in JS.
+  // limit(10000) is a safety ceiling far above any current org's active
   // enrollment volume (~hundreds); revisit with an RPC if an org ever approaches it.
-  const { data, error } = (await from(supabase, 'cadence_enrollments')
+  // Posse: SDR conta só os próprios leads (não confiar no RLS — em modo 'all' ele
+  // deixa de escopar); manager conta a org toda.
+  let query = from(supabase, 'cadence_enrollments')
     .select('lead_id, leads!inner(id), cadences!inner(type)')
     .eq('status', 'active')
     .neq('cadences.type', 'auto_email')
-    .is('leads.deleted_at', null)
-    .limit(10000)) as {
+    .is('leads.deleted_at', null);
+  if (role !== 'manager') query = query.eq('leads.assigned_to', userId);
+  const { data, error } = (await query.limit(10000)) as {
     data: Array<{ lead_id: string }> | null;
     error: { message: string } | null;
   };

@@ -14,7 +14,7 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
       data: { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 },
     };
   }
-  const { orgId, supabase } = auth.data;
+  const { orgId, supabase, userId, role } = auth.data;
 
   // Get dialer daily limit setting
   const { data: settings } = (await from(supabase, 'organization_call_settings')
@@ -24,11 +24,15 @@ export async function fetchDialerStats(): Promise<ActionResult<DialerStats>> {
 
   const dailyLimit = settings?.dialer_daily_limit_per_lead ?? 3;
 
-  // Get active enrollments where current step is a phone step
-  const { data: enrollments } = (await from(supabase, 'cadence_enrollments')
-    .select('id, lead_id, cadence_id, current_step, lead:leads(id, telefone)')
+  // Get active enrollments where current step is a phone step. Posse: SDR só os
+  // próprios leads (leads!inner + assigned_to; não confiar no RLS, que em modo
+  // 'all' deixa de escopar); manager, a org toda.
+  let enrollQuery = from(supabase, 'cadence_enrollments')
+    .select('id, lead_id, cadence_id, current_step, lead:leads!inner(id, telefone)')
     .eq('status', 'active')
-    .lte('next_step_due', new Date().toISOString())) as {
+    .lte('next_step_due', new Date().toISOString());
+  if (role !== 'manager') enrollQuery = enrollQuery.eq('lead.assigned_to', userId);
+  const { data: enrollments } = (await enrollQuery) as {
     data: Array<{
       id: string;
       lead_id: string;

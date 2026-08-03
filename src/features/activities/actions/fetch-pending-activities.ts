@@ -62,19 +62,23 @@ interface EnrollmentRow {
 export async function fetchPendingActivities(): Promise<ActionResult<PendingActivity[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase } = auth.data;
+  const { supabase, userId, role } = auth.data;
 
   // 1. Fetch active enrollments whose current step is actually due (next_step_due <= now()).
   // Without this filter the queue ignores the cadence's configured delay_days — every step
   // appears as soon as the previous one is executed, defeating multi-day cadence designs
   // (e.g. an SDR could "burn through" a 6-day Outbound cadence in 30 minutes the same day).
-  // RLS on leads table filters by assigned_to for SDRs: leads not visible to this
-  // user will come back as null in the join, and are filtered out below.
-  const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
+  // A fila é PESSOAL: o SDR executa apenas os leads atribuídos a ele — mesmo que
+  // possa VER outros (lead_visibility_mode). Managers veem a org inteira. Filtrar
+  // por posse aqui, e não confiar só no RLS de leads: em modo 'all' o RLS deixa de
+  // escopar por assigned_to e o SDR herdaria a fila de todos os SDRs.
+  let enrollQuery = from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
-    .lte('next_step_due', new Date().toISOString())
+    .lte('next_step_due', new Date().toISOString());
+  if (role !== 'manager') enrollQuery = enrollQuery.eq('lead.assigned_to', userId);
+  const { data: enrollments, error: enrollError } = (await enrollQuery
     .order('enrolled_at', { ascending: false })
     .limit(500)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
 
@@ -235,10 +239,13 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     .filter((c) => !executedSet.has(`${c.cadenceId}:${c.stepId}:${c.leadId}`))
     .map((c) => c.activity);
 
-  // 6. Fetch pending scheduled activities (standalone return-to-lead activities)
-  const scheduledResult = (await from(supabase, 'scheduled_activities')
+  // 6. Fetch pending scheduled activities (standalone return-to-lead activities).
+  // Mesma regra de posse: SDR só as suas; manager, todas.
+  let scheduledQuery = from(supabase, 'scheduled_activities')
     .select('id, lead_id, channel, call_provider, scheduled_at, notes, leads!inner(id, org_id, nome_fantasia, razao_social, cnpj, email, telefone, porte, first_name, last_name, socios, endereco, instagram, linkedin, website, status, meeting_scheduled_at, enrichment_status, notes, fit_score, engagement_score, phones, emails, job_title, lead_source, canal, segmento, assigned_to, custom_field_values, is_inbound, created_at)')
-    .eq('status', 'pending')
+    .eq('status', 'pending');
+  if (role !== 'manager') scheduledQuery = scheduledQuery.eq('leads.assigned_to', userId);
+  const scheduledResult = (await scheduledQuery
     .order('scheduled_at', { ascending: true })
     .limit(100)) as { data: Array<{
       id: string;
