@@ -48,10 +48,16 @@ describe('CallResultModal', () => {
   });
 
   describe('trava por telemetria — o formulário não contradiz o que o sistema já sabe', () => {
-    it('atendida: não oferece "Não atendeu"', () => {
+    it('atendida: não oferece o no_answer real, mas oferece "Não atendeu" via caixa postal (voicemail)', () => {
       renderModal({ connected: true, durationSeconds: 120 });
       expect(screen.getByRole('radio', { name: /Conversa relevante/ })).toBeInTheDocument();
-      expect(screen.queryByRole('radio', { name: /^Não atendeu/ })).not.toBeInTheDocument();
+      const values = screen.getAllByRole('radio').map((r) => r.getAttribute('value'));
+      // Guard: numa ligação atendida o SDR não pode marcar o "não atendeu" cru
+      // (contradiz a telemetria)...
+      expect(values).not.toContain('no_answer');
+      // ...mas há um "Não atendeu" rotulado assim que grava `voicemail` (a linha
+      // atendeu, mas era caixa postal/secretária — não um humano).
+      expect(values).toContain('voicemail');
     });
 
     it('não atendida: "Registrar outro desfecho" revela só "Não atendeu" e "Falha técnica"', async () => {
