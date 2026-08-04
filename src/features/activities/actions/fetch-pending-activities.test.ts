@@ -145,6 +145,23 @@ describe('fetchPendingActivities', () => {
     }
   });
 
+  it('orders the queue by next_step_due (most overdue first) and caps at 1500, not 500', async () => {
+    // Regressão: o limit(500) + order(enrolled_at desc) antigo fazia SDR de
+    // backlog alto perder cadências vencidas silenciosamente ao cruzar 500.
+    let enrollChain: Record<string, unknown> | undefined;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') return orgMemberChain();
+      const chain = createChainMock({ data: [], error: null });
+      if (table === 'cadence_enrollments') enrollChain = chain;
+      return chain;
+    });
+
+    await fetchPendingActivities();
+
+    expect(enrollChain?.order).toHaveBeenCalledWith('next_step_due', { ascending: true });
+    expect(enrollChain?.limit).toHaveBeenCalledWith(1500);
+  });
+
   it('should return error when enrollment query fails', async () => {
     wireByTable({
       cadence_enrollments: { data: null, error: { message: 'connection refused' } },
