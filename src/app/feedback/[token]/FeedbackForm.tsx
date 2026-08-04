@@ -16,15 +16,20 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
   const [result, setResult] = useState('');
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
+  // Decisor presente na call — booleano capturado só quando a reunião aconteceu.
+  // null = não respondido; fonte da métrica "Decisor na Call %" do Sales Hub.
+  const [decisorPresente, setDecisorPresente] = useState<boolean | null>(null);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
+  // Campos que só existem quando a reunião aconteceu (rating + decisor presente).
+  const needsMeetingFields = result === 'meeting_done';
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const needsRating = result === 'meeting_done';
-    if (!result || (needsRating && !rating)) return;
+    if (!result || (needsMeetingFields && (!rating || decisorPresente === null))) return;
 
     setSubmitting(true);
     setError('');
@@ -33,7 +38,13 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, result, rating: needsRating ? rating : null, comment: comment.trim() || null }),
+        body: JSON.stringify({
+          token,
+          result,
+          rating: needsMeetingFields ? rating : null,
+          comment: comment.trim() || null,
+          decisor_presente: needsMeetingFields ? decisorPresente : null,
+        }),
       });
 
       if (res.ok) {
@@ -81,7 +92,10 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
                 name="result"
                 value={option.value}
                 checked={result === option.value}
-                onChange={() => { setResult(option.value); if (option.value !== 'meeting_done') setRating(0); }}
+                onChange={() => {
+                  setResult(option.value);
+                  if (option.value !== 'meeting_done') { setRating(0); setDecisorPresente(null); }
+                }}
                 className="accent-primary"
               />
               <span className="text-sm text-[var(--foreground)]">{option.label}</span>
@@ -124,6 +138,40 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         </div>
       )}
 
+      {/* Decisor presente — só quando a reunião aconteceu. Obrigatório para não
+          deixar buraco na métrica "Decisor na Call %" do Sales Hub. */}
+      {result === 'meeting_done' && (
+        <div>
+          <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
+            O decisor estava presente na call? <span className="text-primary">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: true, label: 'Sim' },
+              { value: false, label: 'Não' },
+            ].map((option) => (
+              <label
+                key={option.label}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  decisorPresente === option.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-[var(--border)] hover:border-[var(--muted-foreground)]'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="decisor_presente"
+                  checked={decisorPresente === option.value}
+                  onChange={() => setDecisorPresente(option.value)}
+                  className="accent-primary"
+                />
+                <span className="text-sm text-[var(--foreground)]">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Comment */}
       <div>
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-2">
@@ -144,7 +192,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
       <button
         type="submit"
-        disabled={submitting || !result || (result === 'meeting_done' && !rating)}
+        disabled={submitting || !result || (needsMeetingFields && (!rating || decisorPresente === null))}
         className="w-full bg-primary hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
       >
         {submitting ? 'Enviando...' : 'Enviar Feedback'}
