@@ -72,6 +72,13 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   // possa VER outros (lead_visibility_mode). Managers veem a org inteira. Filtrar
   // por posse aqui, e não confiar só no RLS de leads: em modo 'all' o RLS deixa de
   // escopar por assigned_to e o SDR herdaria a fila de todos os SDRs.
+  // Cap defensivo da fila. Ordena por next_step_due ASC (mais atrasado primeiro):
+  // se o teto for atingido, o que sobra é o MAIS urgente — não uma fatia
+  // arbitrária por data de inscrição. O `enrolled_at desc` + limit(500) antigo
+  // fazia SDR de backlog alto (ex.: 498 due, a 2 do teto) perder cadências
+  // vencidas SILENCIOSAMENTE ao cruzar 500. 1500 dá folga p/ a org inteira do
+  // manager; o warn abaixo denuncia se algum dia encostar.
+  const QUEUE_ENROLLMENT_LIMIT = 1500;
   let enrollQuery = from(supabase, 'cadence_enrollments')
     .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
@@ -79,11 +86,18 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     .lte('next_step_due', new Date().toISOString());
   if (role !== 'manager') enrollQuery = enrollQuery.eq('lead.assigned_to', userId);
   const { data: enrollments, error: enrollError } = (await enrollQuery
-    .order('enrolled_at', { ascending: false })
-    .limit(500)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
+    .order('next_step_due', { ascending: true })
+    .limit(QUEUE_ENROLLMENT_LIMIT)) as { data: EnrollmentRow[] | null; error: { message: string } | null };
 
   const qErr = handleQueryError(enrollError, 'Erro ao buscar atividades pendentes', 'activities');
   if (qErr) return qErr;
+
+  // Não deixa o teto virar omissão silenciosa (o bug do limit(500) era invisível).
+  if (enrollments && enrollments.length >= QUEUE_ENROLLMENT_LIMIT) {
+    console.warn(
+      `[activities] fila de pendências atingiu o teto de ${QUEUE_ENROLLMENT_LIMIT} enrollments (user ${userId}, role ${role}) — cadências menos urgentes podem ter sido omitidas.`,
+    );
+  }
 
   if (!enrollments || enrollments.length === 0) {
     return { success: true, data: [] };
