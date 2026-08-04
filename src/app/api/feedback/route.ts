@@ -47,7 +47,7 @@ function nextBusinessDayAt9hBRT(now: Date): string {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { token, result, rating, comment } = body;
+    const { token, result, rating, comment, decisor_presente } = body;
 
     // Validate input
     if (!token || !isUuid(token)) {
@@ -56,10 +56,15 @@ export async function POST(request: Request) {
     if (!result || !VALID_RESULTS.includes(result)) {
       return NextResponse.json({ error: 'Resultado inválido' }, { status: 400 });
     }
-    // Rating is required only for meeting_done
-    const needsRating = result === 'meeting_done';
-    if (needsRating && (!rating || typeof rating !== 'number' || rating < 1 || rating > 5)) {
+    // Rating e "decisor presente" só existem quando a reunião aconteceu.
+    const needsMeetingFields = result === 'meeting_done';
+    if (needsMeetingFields && (!rating || typeof rating !== 'number' || rating < 1 || rating > 5)) {
       return NextResponse.json({ error: 'Nota deve ser entre 1 e 5' }, { status: 400 });
+    }
+    // Obrigatório em meeting_done para não deixar buraco na métrica "Decisor na
+    // Call %" do Sales Hub. Para no_show/rescheduled o valor é ignorado (NULL).
+    if (needsMeetingFields && typeof decisor_presente !== 'boolean') {
+      return NextResponse.json({ error: 'Informe se o decisor estava presente na call' }, { status: 400 });
     }
 
     const supabase = createServiceRoleClient();
@@ -88,6 +93,9 @@ export async function POST(request: Request) {
         result,
         rating: rating ?? null,
         comment: comment || null,
+        // Só grava o booleano quando a reunião aconteceu; nos demais fica NULL
+        // (não se aplica). Fonte da métrica "Decisor na Call %" do Sales Hub.
+        decisor_presente: needsMeetingFields ? decisor_presente : null,
         responded_at: new Date().toISOString(),
       } as Record<string, unknown>)
       .eq('id', feedbackReq.id)
