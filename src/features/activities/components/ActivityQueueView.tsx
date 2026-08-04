@@ -295,6 +295,17 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
   // Filtered activities (cadence only — retornos are always shown separately)
   const filtered = useMemo(() => applyFilters(cadenceActivities, filters), [cadenceActivities, filters]);
 
+  // Quebra do total em "atrasada" (mesma régua canônica do badge vermelho e do
+  // filtro Atrasadas) vs "no prazo" — troca o número cru por algo acionável, que
+  // era a confusão do SDR ("691" assustava ao lado do "120/100 feitas hoje").
+  const dueBreakdown = useMemo(() => {
+    let overdue = 0;
+    for (const a of filtered) {
+      if (hoursOverdue(a.nextStepDue) >= OVERDUE_THRESHOLD_HOURS) overdue += 1;
+    }
+    return { overdue, onTime: filtered.length - overdue };
+  }, [filtered]);
+
   // Auto-open first activity when quick mode is activated. Resolves the
   // first activity from the channel-sorted list so the sheet opens on the
   // top of the first channel bucket (typically email or linkedin given
@@ -490,11 +501,25 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
 
           {/* Column headers */}
           <div id="activity-list-top">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
               <ListChecks className="h-5 w-5 text-[var(--muted-foreground)] dark:text-[var(--foreground)]" />
               <h2 className="text-lg font-semibold">
                 Atividades das Cadências ({filtered.length})
               </h2>
+              {filtered.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  {dueBreakdown.overdue > 0 && (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                      {dueBreakdown.overdue} atrasada{dueBreakdown.overdue === 1 ? '' : 's'}
+                    </span>
+                  )}
+                  {dueBreakdown.onTime > 0 && (
+                    <span className="rounded-full bg-[var(--muted)] px-2 py-0.5 text-xs font-medium text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                      {dueBreakdown.onTime} no prazo
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             {filtered.length > 0 && (
               <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 border-b border-[var(--border)] px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]`}>
