@@ -31,11 +31,21 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   // reflects what the SDR actually did.
   const SDR_CHANNELS = ['email', 'whatsapp', 'phone', 'linkedin', 'research'];
 
+  // Além do canal, dois ruídos precisam sair da conta:
+  //  - NOTAS (metadata.is_note=true): importações de CRM legado gravam notas nos
+  //    leads com channel='research' e performed_by = dono do lead. Giovanni viu
+  //    213 "feitas" num dia que fez 19 — 172 eram notas de uma carga do CRM. Nota
+  //    (importada OU manual) é anotação, não atividade de cadência. `is.null` OR
+  //    `neq.true` é null-safe: atividade real não tem a chave, então fica.
+  //  - ENVIOS FALHOS (type='failed'): tentativa que não saiu não é toque
+  //    concluído (eram 22 WhatsApp failed no mesmo dia).
   const { count: completed } = (await from(supabase, 'interactions')
     .select('id', { count: 'exact', head: true })
     .eq('org_id', orgId)
     .eq('performed_by', userId)
     .in('channel', SDR_CHANNELS)
+    .neq('type', 'failed')
+    .or('metadata->>is_note.is.null,metadata->>is_note.neq.true')
     .gte('created_at', todayStart.toISOString())) as { count: number | null };
 
   // Count pending activities for THIS SDR only:

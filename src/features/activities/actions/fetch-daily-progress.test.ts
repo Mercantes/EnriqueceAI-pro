@@ -9,6 +9,7 @@ function createChainMock() {
   chain.select = vi.fn().mockReturnValue(chain);
   chain.eq = vi.fn().mockReturnValue(chain);
   chain.neq = vi.fn().mockReturnValue(chain);
+  chain.or = vi.fn().mockReturnValue(chain);
   chain.in = vi.fn().mockReturnValue(chain);
   chain.not = vi.fn().mockReturnValue(chain);
   chain.gte = vi.fn().mockReturnValue(chain);
@@ -82,6 +83,28 @@ describe('fetchDailyProgress', () => {
       expect(result.data.total).toBe(5);
       expect(result.data.target).toBe(20); // default
     }
+  });
+
+  it('excludes imported/manual notes and failed sends from the completed count', async () => {
+    // Regressão: uma carga de notas do CRM legado (channel='research',
+    // is_note=true) inflou "feitas hoje" de 19 → 213 p/ um SDR que fez 19.
+    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
+    (interactionsChain.gte as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 19 });
+    (enrollmentsChain.limit as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] });
+    (goalsChain.single as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ data: null })
+      .mockResolvedValueOnce({ data: null });
+
+    const result = await fetchDailyProgress();
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.completed).toBe(19);
+    // Envio falho não é toque concluído.
+    expect(interactionsChain.neq).toHaveBeenCalledWith('type', 'failed');
+    // Nota (importada ou manual) excluída, de forma null-safe.
+    expect(interactionsChain.or).toHaveBeenCalledWith(
+      'metadata->>is_note.is.null,metadata->>is_note.neq.true',
+    );
   });
 
   it('should return user-specific goal target', async () => {
