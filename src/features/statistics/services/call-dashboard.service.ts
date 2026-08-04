@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { isConnectedCall, isSignificantCall } from '@/features/calls/connection';
-import type { CallStatus } from '@/features/calls/types';
+import type { CallDisposition, CallStatus } from '@/features/calls/types';
 import { from } from '@/lib/supabase/from';
 import { isUuid } from '@/lib/utils/uuid';
 import { CALL_STATUS_COLORS, CALL_STATUS_LABELS } from '@/shared/constants/chart-colors';
@@ -22,6 +22,7 @@ interface CallRow {
   status: CallStatus;
   duration_seconds: number;
   answered_at: string | null;
+  sdr_disposition: CallDisposition | null;
   started_at: string;
 }
 
@@ -34,7 +35,7 @@ export async function fetchCallDashboardData(
 ): Promise<CallDashboardData> {
   // Fetch calls
   let callsQuery = from(supabase, 'calls')
-    .select('id, user_id, destination, status, duration_seconds, answered_at, started_at')
+    .select('id, user_id, destination, status, duration_seconds, answered_at, sdr_disposition, started_at')
     .eq('org_id', orgId)
     .gte('started_at', periodStart)
     .lte('started_at', periodEnd)

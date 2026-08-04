@@ -44,6 +44,30 @@ describe('isConnectedCall', () => {
   it('trata answered_at ausente como não informado', () => {
     expect(isConnectedCall({ status: 'no_contact', duration_seconds: 0 })).toBe(false);
   });
+
+  it('NÃO conta caixa postal/secretária confirmada pelo SDR, mesmo com answered_at', () => {
+    // Fase 2: voicemail é o falso-positivo do lado "answered" — a linha atende
+    // (answered_at + duração), mas era máquina. O desfecho do SDR sobrepõe.
+    expect(
+      isConnectedCall({
+        status: 'significant',
+        duration_seconds: 39,
+        answered_at: '2026-08-03T17:00:00Z',
+        sdr_disposition: 'voicemail',
+      }),
+    ).toBe(false);
+  });
+
+  it('voicemail não afeta ligações que não foram marcadas assim', () => {
+    expect(
+      isConnectedCall({
+        status: 'significant',
+        duration_seconds: 39,
+        answered_at: '2026-08-03T17:00:00Z',
+        sdr_disposition: 'relevant_conversation',
+      }),
+    ).toBe(true);
+  });
 });
 
 describe('isSignificantCall', () => {

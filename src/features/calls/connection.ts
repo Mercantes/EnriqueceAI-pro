@@ -28,7 +28,7 @@
 // `sdr_outcome` é deliberadamente ignorado aqui: é a leitura do SDR, não a
 // medição da telefonia. Misturar os dois foi a origem da divergência de BI de
 // mai/2026 — ver `classify-webphone-call.ts`.
-import type { CallStatus } from './types';
+import type { CallDisposition, CallStatus } from './types';
 
 /**
  * Piso de duração que, sozinho, comprova conexão. Igual ao usado pelo
@@ -42,6 +42,13 @@ export interface CallConnectionSignals {
   duration_seconds: number;
   /** Timestamp de channel-answer do webhook. Sinal autoritativo de atendimento. */
   answered_at?: string | null;
+  /**
+   * Desfecho informado pelo SDR (`calls.sdr_disposition`). Só `voicemail` importa
+   * aqui: caixa postal/secretária eletrônica ATENDE a linha (a máquina "pega",
+   * então `answered_at` vem preenchido), mas não houve contato humano. É o
+   * falso-positivo que sobra no lado "answered" — o SDR confirma e a gente exclui.
+   */
+  sdr_disposition?: CallDisposition | null;
 }
 
 /**
@@ -69,6 +76,11 @@ export interface CallConnectionSignals {
  * colapsar em `answered_at` puro — hoje isso cegaria os ramais sem webhook.
  */
 export function isConnectedCall(call: CallConnectionSignals): boolean {
+  // Override do SDR (fase 2 da taxa de conexão): caixa postal/secretária. A
+  // telefonia marca `answered_at` (a máquina atendeu), mas não houve humano — o
+  // SDR confirmou via `voicemail`. Vem ANTES de tudo para corrigir o único
+  // falso-positivo que sobrava no lado "answered".
+  if (call.sdr_disposition === 'voicemail') return false;
   if (call.answered_at) return true;
   if (call.status === 'significant') return true;
   return call.duration_seconds >= CONNECTED_MIN_DURATION_SECONDS;
@@ -87,4 +99,4 @@ export function isSignificantCall(call: Pick<CallConnectionSignals, 'status'>): 
 }
 
 /** Colunas mínimas que uma query precisa trazer para alimentar os helpers. */
-export const CALL_CONNECTION_COLUMNS = 'status, duration_seconds, answered_at' as const;
+export const CALL_CONNECTION_COLUMNS = 'status, duration_seconds, answered_at, sdr_disposition' as const;
