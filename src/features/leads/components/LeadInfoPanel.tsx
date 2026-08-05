@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronDown,
   Clock,
+  Copy,
   FileText,
   Pencil,
   Plus,
@@ -120,7 +121,7 @@ function CollapsibleSection({ title, children, defaultOpen = true }: { title: st
         onClick={() => setIsOpen(!isOpen)}
         className="flex w-full items-center justify-between group"
       >
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+        <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
           {title}
         </h4>
         <ChevronDown className={`h-3.5 w-3.5 text-[var(--muted-foreground)] transition-transform ${isOpen ? '' : '-rotate-90'}`} />
@@ -700,6 +701,13 @@ export function LeadInfoPanel({
     );
   };
 
+  const handleCopy = (text: string) => {
+    navigator.clipboard?.writeText(text).then(
+      () => toast.success('Copiado!'),
+      () => toast.error('Não foi possível copiar'),
+    );
+  };
+
   return (
     <div className={`flex h-full shrink-0 flex-col ${showLeadHeader ? 'w-full' : 'w-96'}`}>
       {/* Lead header — avatar + name + actions shown only in activity execution */}
@@ -722,19 +730,19 @@ export function LeadInfoPanel({
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
               <p className="text-2xl font-bold">{kpis.completed}</p>
-              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              <p className="text-xs font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Completado
               </p>
             </div>
             <div>
               <p className="text-2xl font-bold">{kpis.open}</p>
-              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              <p className="text-xs font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Aberto{kpis.open !== 1 ? 's' : ''}
               </p>
             </div>
             <div>
               <p className="text-2xl font-bold">{kpis.conversations}</p>
-              <p className="text-[10px] font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+              <p className="text-xs font-medium uppercase text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
                 Conversa{kpis.conversations !== 1 ? 's' : ''}
               </p>
             </div>
@@ -973,13 +981,13 @@ export function LeadInfoPanel({
 
             <CollapsibleSection title="Contatos">
               <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail(s)</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail(s)</p>
               {isEditing ? (
                 <div className="space-y-2">
                   {emailEntries.map((entry, index) => (
                     <div key={`email-edit-${index}`} className="flex items-end gap-1.5">
                       <div className="w-[100px] shrink-0 space-y-1">
-                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>}
+                        {index === 0 && <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>}
                         <Select
                           value={entry.tipo}
                           onValueChange={(val) => handleEmailEntryChange(index, 'tipo', val)}
@@ -994,7 +1002,7 @@ export function LeadInfoPanel({
                         </Select>
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
-                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail</p>}
+                        {index === 0 && <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail</p>}
                         <Input
                           value={entry.email}
                           onChange={(e) => handleEmailEntryChange(index, 'email', e.target.value)}
@@ -1032,13 +1040,13 @@ export function LeadInfoPanel({
                 allEmails.map((em, i) => (
                   <div key={`email-${i}`} className="flex gap-2">
                     <div className="w-28 shrink-0 space-y-1">
-                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
                       <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-sm font-medium">
                         {em.tipo}
                       </div>
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail:</p>
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail:</p>
                       <div className="rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
                         <a href={`mailto:${em.email}`} className="text-[var(--primary)] hover:underline truncate">
                           {em.email}
@@ -1051,13 +1059,13 @@ export function LeadInfoPanel({
               </div>
 
               <div className="space-y-2 pt-3 border-t border-[var(--border)]">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Telefone(s)</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Telefone(s)</p>
               {isEditing ? (
                 <div className="space-y-2">
                   {phoneEntries.map((entry, index) => (
                     <div key={`phone-edit-${index}`} className="flex items-end gap-1.5">
                       <div className="w-[100px] shrink-0 space-y-1">
-                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>}
+                        {index === 0 && <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>}
                         <Select
                           value={entry.tipo}
                           onValueChange={(val) => handlePhoneChange(index, 'tipo', val)}
@@ -1073,7 +1081,7 @@ export function LeadInfoPanel({
                         </Select>
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
-                        {index === 0 && <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Número</p>}
+                        {index === 0 && <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Número</p>}
                         <Input
                           value={entry.numero}
                           onChange={(e) => handlePhoneChange(index, 'numero', e.target.value)}
@@ -1111,17 +1119,26 @@ export function LeadInfoPanel({
                 allPhones.map((phone, i) => (
                   <div key={`phone-${i}`} className="flex gap-2">
                     <div className="w-28 shrink-0 space-y-1">
-                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
                       <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-sm font-medium">
                         {phone.tipo}
                       </div>
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-[10px] text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Telefone:</p>
-                      <div className="rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
-                        <a href={phone.href} className="text-[var(--primary)] hover:underline truncate">
+                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Telefone:</p>
+                      <div className="flex items-center gap-1.5 rounded-md bg-[var(--muted)] px-3 py-2 text-base">
+                        <a href={phone.href} className="min-w-0 flex-1 truncate text-[var(--primary)] hover:underline">
                           {phone.numero}
                         </a>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(phone.numero)}
+                          className="shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                          title="Copiar telefone"
+                          aria-label="Copiar telefone"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
