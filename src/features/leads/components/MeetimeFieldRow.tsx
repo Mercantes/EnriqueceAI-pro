@@ -17,13 +17,13 @@ export function MeetimeFieldRow({ label, value, href, mono, multiline }: Meetime
       {value}
     </a>
   ) : (
-    <span className={`${valueClass} ${mono ? 'font-mono text-xs' : ''}`}>{value}</span>
+    <span className={`${valueClass} ${mono ? 'font-mono text-sm' : ''}`}>{value}</span>
   );
 
   return (
     <div className="space-y-1">
-      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{label}</p>
-      <div className={`min-w-0 rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm ${multiline ? '' : 'overflow-hidden'}`}>{content}</div>
+      <p className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{label}</p>
+      <div className={`min-w-0 rounded-md bg-[var(--muted)] px-3 py-2 text-base ${multiline ? '' : 'overflow-hidden'}`}>{content}</div>
     </div>
   );
 }
