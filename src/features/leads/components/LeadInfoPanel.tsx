@@ -131,6 +131,23 @@ function CollapsibleSection({ title, children, defaultOpen = true }: { title: st
   );
 }
 
+// Salvaguarda dos dropdowns de edição: o valor salvo do lead vem de
+// enriquecimento/import/IA e muitas vezes NÃO está na lista curada de opções.
+// Sem isto, o Radix Select mostra o placeholder (parece vazio) mesmo com o valor
+// salvo — o que confundia e arriscava sobrescrita (ex.: Segmento "Imobiliária"
+// não estava em SEGMENTO_OPTIONS). Injeta o valor atual como opção quando falta.
+function withCurrentString(options: readonly string[], current?: string | null): readonly string[] {
+  return current && !options.includes(current) ? [current, ...options] : options;
+}
+function withCurrentOption(
+  options: readonly { value: string; label: string }[],
+  current?: string | null,
+): readonly { value: string; label: string }[] {
+  return current && !options.some((o) => o.value === current)
+    ? [{ value: current, label: current }, ...options]
+    : options;
+}
+
 export interface LeadInfoPanelProps {
   data: LeadInfoPanelData;
   enrollment?: { cadence_name: string; enrolled_by_email: string | null } | null;
@@ -638,7 +655,7 @@ export function LeadInfoPanel({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">—</SelectItem>
-            {cf.options.map((opt) => (
+            {withCurrentString(cf.options, editCustomFieldValues[cf.id]).map((opt) => (
               <SelectItem key={opt} value={opt}>
                 {opt}
               </SelectItem>
@@ -860,7 +877,7 @@ export function LeadInfoPanel({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">—</SelectItem>
-                          {sourceOptions.map((opt) => (
+                          {withCurrentOption(sourceOptions, editFields.lead_source).map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
                             </SelectItem>
@@ -883,7 +900,7 @@ export function LeadInfoPanel({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">—</SelectItem>
-                          {getCanalOptions(standardFieldSettings).map((c) => (
+                          {withCurrentString(getCanalOptions(standardFieldSettings), editFields.canal).map((c) => (
                             <SelectItem key={c} value={c}>{c}</SelectItem>
                           ))}
                         </SelectContent>
@@ -904,7 +921,10 @@ export function LeadInfoPanel({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">—</SelectItem>
-                          {(standardFieldSettings?.find((s) => s.field_key === 'segmento')?.options ?? SEGMENTO_OPTIONS).map((s) => (
+                          {withCurrentString(
+                            standardFieldSettings?.find((s) => s.field_key === 'segmento')?.options ?? SEGMENTO_OPTIONS,
+                            editFields.segmento,
+                          ).map((s) => (
                             <SelectItem key={s} value={s}>{s}</SelectItem>
                           ))}
                         </SelectContent>
