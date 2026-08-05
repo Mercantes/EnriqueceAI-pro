@@ -609,8 +609,14 @@ export function LeadInfoPanel({
   // (BANT)", fechada por padrão — em vez de 4 linhas soltas. O contador mostra
   // quantos estão preenchidos sem precisar abrir. Os demais campos seguem soltos.
   const bantRegex = /^(B|A|N|T)\s*\(/;
+  // "Biblioteca de anúncios" (Google/Meta) são custom fields, mas conceitualmente
+  // são links sociais — movidos para a seção Social (junto de Site/Instagram).
+  const BIBLIOTECA_NAMES = new Set(['Biblioteca Google', 'Biblioteca Meta']);
   const bantDefs = (customFieldDefs ?? []).filter((cf) => bantRegex.test(cf.field_name));
-  const restCustomDefs = (customFieldDefs ?? []).filter((cf) => !bantRegex.test(cf.field_name));
+  const bibliotecaDefs = (customFieldDefs ?? []).filter((cf) => BIBLIOTECA_NAMES.has(cf.field_name));
+  const restCustomDefs = (customFieldDefs ?? []).filter(
+    (cf) => !bantRegex.test(cf.field_name) && !BIBLIOTECA_NAMES.has(cf.field_name),
+  );
   const bantFilledCount = bantDefs.filter((cf) => {
     const v = data.custom_field_values?.[cf.id];
     return v != null && String(v).trim() !== '';
@@ -1127,7 +1133,7 @@ export function LeadInfoPanel({
             )}
 
             {/* SOCIAL */}
-            {(isFieldVisible('instagram') || isFieldVisible('linkedin') || isFieldVisible('website')) && (
+            {(isFieldVisible('instagram') || isFieldVisible('linkedin') || isFieldVisible('website') || bibliotecaDefs.length > 0) && (
             <>
             <hr className="border-t-2 border-[var(--border)]" />
             <CollapsibleSection title="Social">
@@ -1166,12 +1172,14 @@ export function LeadInfoPanel({
                       />
                     </div>
                   )}
+                  {bibliotecaDefs.map(renderEditCustomField)}
                 </>
               ) : (
                 <>
                   {isFieldVisible('instagram') && <MeetimeFieldRow label="Instagram" value={data.instagram || '—'} href={normalizeInstagramUrl(data.instagram)} />}
                   {isFieldVisible('linkedin') && <MeetimeFieldRow label="LinkedIn" value={data.linkedin || '—'} href={normalizeUrlMaybe(data.linkedin)} />}
                   {isFieldVisible('website') && <MeetimeFieldRow label="Site" value={data.website || '—'} href={normalizeUrlMaybe(data.website)} />}
+                  {bibliotecaDefs.map(renderDisplayCustomField)}
                 </>
               )}
             </CollapsibleSection>
