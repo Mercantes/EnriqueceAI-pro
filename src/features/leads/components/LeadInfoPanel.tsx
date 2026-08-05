@@ -606,7 +606,7 @@ export function LeadInfoPanel({
   const headerCompany = fullName && companyName && fullName !== companyName ? companyName : null;
 
   return (
-    <div className={`flex h-full shrink-0 flex-col ${showLeadHeader ? 'w-full' : 'w-80'}`}>
+    <div className={`flex h-full shrink-0 flex-col ${showLeadHeader ? 'w-full' : 'w-96'}`}>
       {/* Lead header — avatar + name + actions shown only in activity execution */}
       {showLeadHeader && (
         <LeadInfoPanelHeader
