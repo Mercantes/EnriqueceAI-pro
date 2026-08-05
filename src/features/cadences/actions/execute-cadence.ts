@@ -300,6 +300,19 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
     }
   }
 
+  // Remetente do e-mail automático: o SDR dono do lead (assigned_to) quando ele
+  // tem Gmail conectado; senão, cai no criador da cadência. Assim o lead recebe
+  // do seu próprio SDR e as RESPOSTAS voltam pra caixa dele — não pra do criador.
+  // Pré-carrega os Gmails conectados dos orgs do lote (evita N+1 no loop).
+  const connectedGmailKeys = new Set<string>(); // `${org_id}:${user_id}`
+  if (orgIds.length > 0) {
+    const { data: gmailRows } = (await from(supabase, 'gmail_connections')
+      .select('org_id, user_id')
+      .eq('status', 'connected')
+      .in('org_id', orgIds)) as { data: Array<{ org_id: string; user_id: string }> | null };
+    for (const g of gmailRows ?? []) connectedGmailKeys.add(`${g.org_id}:${g.user_id}`);
+  }
+
   for (const enrollment of enrollments ?? []) {
     const stepStart = Date.now();
     result.processed++;
@@ -607,11 +620,19 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           cadenceCreatedBy = cadenceFallback?.created_by ?? null;
         }
 
-        if (!cadenceCreatedBy) {
-          await markInteractionFailed(supabase, interaction.id, 'no_cadence_creator');
+        // Remetente: SDR dono do lead se tiver Gmail conectado; senão o criador
+        // da cadência (comportamento antigo, como fallback).
+        const assignedTo = enrollment.lead.assigned_to;
+        const senderId =
+          assignedTo && connectedGmailKeys.has(`${enrollment.lead.org_id}:${assignedTo}`)
+            ? assignedTo
+            : cadenceCreatedBy;
+
+        if (!senderId) {
+          await markInteractionFailed(supabase, interaction.id, 'no_sender');
           result.failed++;
-          result.errors.push(`Cadência ${enrollment.cadence_id} sem created_by`);
-          console.error(`[cadence-engine] enrollment=${enrollment.id} status=failed reason=no_cadence_creator duration_ms=${Date.now() - stepStart}`);
+          result.errors.push(`Cadência ${enrollment.cadence_id}: sem remetente (SDR sem Gmail e cadência sem criador)`);
+          console.error(`[cadence-engine] enrollment=${enrollment.id} status=failed reason=no_sender duration_ms=${Date.now() - stepStart}`);
           continue;
         }
 
@@ -650,7 +671,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         }
 
         const emailResult = await EmailService.sendEmail(
-          cadenceCreatedBy,
+          senderId,
           enrollment.lead.org_id,
           {
             to: enrollment.lead.email,
