@@ -605,6 +605,95 @@ export function LeadInfoPanel({
   const headerName = fullName ?? companyName ?? data.cnpj ?? '—';
   const headerCompany = fullName && companyName && fullName !== companyName ? companyName : null;
 
+  // Agrupa os 4 campos de BANT (B/A/N/T) numa subseção recolhível "Qualificação
+  // (BANT)", fechada por padrão — em vez de 4 linhas soltas. O contador mostra
+  // quantos estão preenchidos sem precisar abrir. Os demais campos seguem soltos.
+  const bantRegex = /^(B|A|N|T)\s*\(/;
+  const bantDefs = (customFieldDefs ?? []).filter((cf) => bantRegex.test(cf.field_name));
+  const restCustomDefs = (customFieldDefs ?? []).filter((cf) => !bantRegex.test(cf.field_name));
+  const bantFilledCount = bantDefs.filter((cf) => {
+    const v = data.custom_field_values?.[cf.id];
+    return v != null && String(v).trim() !== '';
+  }).length;
+
+  const renderEditCustomField = (cf: CustomFieldRow) => (
+    <div key={cf.id} className="space-y-1">
+      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{cf.field_name}</p>
+      {cf.field_type === 'select' && cf.options && cf.options.length > 0 ? (
+        <Select
+          value={editCustomFieldValues[cf.id] ?? 'none'}
+          onValueChange={(v) =>
+            setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: v === 'none' ? '' : v }))
+          }
+        >
+          <SelectTrigger className="w-full text-sm">
+            <SelectValue placeholder="Selecione..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">—</SelectItem>
+            {cf.options.map((opt) => (
+              <SelectItem key={opt} value={opt}>
+                {opt}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : cf.field_type === 'textarea' || cf.field_type === 'text' ? (
+        <textarea
+          value={editCustomFieldValues[cf.id] ?? ''}
+          onChange={(e) =>
+            setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
+          }
+          rows={1}
+          className={`w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] resize-y field-sizing-content ${cf.field_type === 'textarea' ? 'min-h-[80px]' : 'min-h-[40px]'}`}
+          placeholder={cf.field_name}
+        />
+      ) : cf.field_type === 'currency' ? (
+        <CurrencyInput
+          value={editCustomFieldValues[cf.id] ?? ''}
+          onChange={(raw) =>
+            setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: raw }))
+          }
+          placeholder={cf.field_name}
+          className="h-8 text-sm"
+        />
+      ) : (
+        <Input
+          value={editCustomFieldValues[cf.id] ?? ''}
+          onChange={(e) =>
+            setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
+          }
+          className="h-8 text-sm"
+          type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : cf.field_type === 'datetime' ? 'datetime-local' : cf.field_type === 'url' ? 'url' : 'text'}
+          placeholder={cf.field_type === 'url' ? 'https://...' : cf.field_name}
+        />
+      )}
+    </div>
+  );
+
+  const renderDisplayCustomField = (cf: CustomFieldRow) => {
+    const rawVal = data.custom_field_values?.[cf.id];
+    let display: string;
+    if (cf.field_type === 'currency') {
+      display = formatBRL(rawVal);
+    } else if (cf.field_type === 'date') {
+      display = rawVal ? formatDateOnly(rawVal) : '—';
+    } else if (cf.field_type === 'datetime') {
+      display = rawVal ? formatDateTimeBR(rawVal) : '—';
+    } else {
+      display = rawVal || '—';
+    }
+    return (
+      <MeetimeFieldRow
+        key={cf.id}
+        label={cf.field_name}
+        value={display}
+        multiline={cf.field_type === 'textarea' || cf.field_type === 'text'}
+        href={cf.field_type === 'url' && rawVal ? (rawVal.startsWith('http://') || rawVal.startsWith('https://') ? rawVal : `https://${rawVal}`) : undefined}
+      />
+    );
+  };
+
   return (
     <div className={`flex h-full shrink-0 flex-col ${showLeadHeader ? 'w-full' : 'w-96'}`}>
       {/* Lead header — avatar + name + actions shown only in activity execution */}
@@ -1107,83 +1196,29 @@ export function LeadInfoPanel({
                     </Button>
                   )}
                   {isEditing ? (
-                    customFieldDefs.map((cf) => (
-                      <div key={cf.id} className="space-y-1">
-                        <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">{cf.field_name}</p>
-                        {cf.field_type === 'select' && cf.options && cf.options.length > 0 ? (
-                          <Select
-                            value={editCustomFieldValues[cf.id] ?? 'none'}
-                            onValueChange={(v) =>
-                              setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: v === 'none' ? '' : v }))
-                            }
-                          >
-                            <SelectTrigger className="w-full text-sm">
-                              <SelectValue placeholder="Selecione..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">—</SelectItem>
-                              {cf.options.map((opt) => (
-                                <SelectItem key={opt} value={opt}>
-                                  {opt}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : cf.field_type === 'textarea' || cf.field_type === 'text' ? (
-                          <textarea
-                            value={editCustomFieldValues[cf.id] ?? ''}
-                            onChange={(e) =>
-                              setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
-                            }
-                            rows={1}
-                            className={`w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] resize-y field-sizing-content ${cf.field_type === 'textarea' ? 'min-h-[80px]' : 'min-h-[40px]'}`}
-                            placeholder={cf.field_name}
-                          />
-                        ) : cf.field_type === 'currency' ? (
-                          <CurrencyInput
-                            value={editCustomFieldValues[cf.id] ?? ''}
-                            onChange={(raw) =>
-                              setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: raw }))
-                            }
-                            placeholder={cf.field_name}
-                            className="h-8 text-sm"
-                          />
-                        ) : (
-                          <Input
-                            value={editCustomFieldValues[cf.id] ?? ''}
-                            onChange={(e) =>
-                              setEditCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
-                            }
-                            className="h-8 text-sm"
-                            type={cf.field_type === 'number' ? 'number' : cf.field_type === 'date' ? 'date' : cf.field_type === 'datetime' ? 'datetime-local' : cf.field_type === 'url' ? 'url' : 'text'}
-                            placeholder={cf.field_type === 'url' ? 'https://...' : cf.field_name}
-                          />
-                        )}
-                      </div>
-                    ))
+                    <>
+                      {restCustomDefs.map(renderEditCustomField)}
+                      {bantDefs.length > 0 && (
+                        <CollapsibleSection
+                          title={`Qualificação (BANT) · ${bantFilledCount}/${bantDefs.length}`}
+                          defaultOpen={false}
+                        >
+                          {bantDefs.map(renderEditCustomField)}
+                        </CollapsibleSection>
+                      )}
+                    </>
                   ) : (
-                    customFieldDefs.map((cf) => {
-                      const rawVal = data.custom_field_values?.[cf.id];
-                      let display: string;
-                      if (cf.field_type === 'currency') {
-                        display = formatBRL(rawVal);
-                      } else if (cf.field_type === 'date') {
-                        display = rawVal ? formatDateOnly(rawVal) : '—';
-                      } else if (cf.field_type === 'datetime') {
-                        display = rawVal ? formatDateTimeBR(rawVal) : '—';
-                      } else {
-                        display = rawVal || '—';
-                      }
-                      return (
-                        <MeetimeFieldRow
-                          key={cf.id}
-                          label={cf.field_name}
-                          value={display}
-                          multiline={cf.field_type === 'textarea' || cf.field_type === 'text'}
-                          href={cf.field_type === 'url' && rawVal ? (rawVal.startsWith('http://') || rawVal.startsWith('https://') ? rawVal : `https://${rawVal}`) : undefined}
-                        />
-                      );
-                    })
+                    <>
+                      {restCustomDefs.map(renderDisplayCustomField)}
+                      {bantDefs.length > 0 && (
+                        <CollapsibleSection
+                          title={`Qualificação (BANT) · ${bantFilledCount}/${bantDefs.length}`}
+                          defaultOpen={false}
+                        >
+                          {bantDefs.map(renderDisplayCustomField)}
+                        </CollapsibleSection>
+                      )}
+                    </>
                   )}
                 </CollapsibleSection>
               </>
