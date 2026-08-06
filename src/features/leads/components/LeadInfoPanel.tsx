@@ -607,16 +607,18 @@ export function LeadInfoPanel({
     }
   }
 
-  // Gather all emails for read mode
+  // Gather all emails for read mode. Ignora entradas sem endereço: uma linha de
+  // `emails` (JSONB) com tipo/descrição mas email vazio renderizava a "Descrição"
+  // com a caixa de e-mail em branco. Se nenhuma sobrar, cai no e-mail primário.
   const allEmails: Array<{ tipo: string; email: string }> = [];
-  if (Array.isArray(data.emails) && data.emails.length > 0) {
+  if (Array.isArray(data.emails)) {
     for (const e of data.emails) {
+      if (!e.email?.trim()) continue;
       allEmails.push({ tipo: e.tipo === 'pessoal' ? 'Pessoal' : 'Corporativo', email: e.email });
     }
-  } else {
-    // Fallback: show primary email
-    const pe = primaryEmail;
-    if (pe) allEmails.push({ tipo: 'Corporativo', email: pe });
+  }
+  if (allEmails.length === 0 && primaryEmail) {
+    allEmails.push({ tipo: 'Corporativo', email: primaryEmail });
   }
 
   const avatarInitial = (firstName ?? companyName ?? data.cnpj ?? '?')[0]?.toUpperCase() ?? '?';
