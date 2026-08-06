@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { ReminderDueRow } from '../types';
 import {
@@ -11,6 +11,7 @@ import {
   formatMeetingTimeBRT,
   isPhoneBlacklisted,
   isQuietHoursBRT,
+  recordReminderInteraction,
 } from './meeting-reminders.service';
 
 function makeRow(overrides: Partial<ReminderDueRow> = {}): ReminderDueRow {
@@ -145,6 +146,52 @@ describe('buildWhatsAppContent', () => {
     const body = buildWhatsAppContent(makeRow({ meet_link: null }), template, 'Ismael');
     expect(body).not.toContain('Link da reunião');
     expect(body).not.toContain('{{link_reuniao_linha}}');
+  });
+});
+
+describe('recordReminderInteraction', () => {
+  function stubClient() {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn().mockReturnValue({ insert });
+    // só o formato mínimo que recordReminderInteraction usa
+    return { client: { from } as never, from, insert };
+  }
+
+  it('grava o e-mail da régua como interaction para aparecer no histórico', async () => {
+    const { client, from, insert } = stubClient();
+    await recordReminderInteraction(client, makeRow({ step_order: 2 }), {
+      subject: 'Amanhã: o que preparei',
+      body: '<p>corpo html</p>',
+    });
+
+    expect(from).toHaveBeenCalledWith('interactions');
+    const payload = insert.mock.calls[0]![0] as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      org_id: 'org-1',
+      lead_id: 'lead-1',
+      channel: 'email',
+      type: 'sent',
+      message_content: '<p>corpo html</p>',
+      ai_generated: false,
+      performed_by: 'sdr-1',
+    });
+    expect(payload.metadata).toMatchObject({
+      meeting_reminder: true,
+      reminder_step_order: 2,
+      subject: 'Amanhã: o que preparei',
+    });
+  });
+
+  it('usa o canal da linha (whatsapp) e omite subject quando ausente', async () => {
+    const { client, insert } = stubClient();
+    await recordReminderInteraction(client, makeRow({ channel: 'whatsapp' }), {
+      body: 'oi, tudo bem?',
+    });
+
+    const payload = insert.mock.calls[0]![0] as Record<string, unknown>;
+    expect(payload.channel).toBe('whatsapp');
+    expect(payload.message_content).toBe('oi, tudo bem?');
+    expect(payload.metadata).not.toHaveProperty('subject');
   });
 });
 
