@@ -154,7 +154,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
         )}
         {hasHtml ? (
           <div
-            className="prose prose-sm max-w-none whitespace-pre-line mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
+            className="prose prose-sm max-w-none whitespace-pre-line break-words [overflow-wrap:anywhere] [&_a]:break-all mt-1 text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlContent!) }}
           />
         ) : (
@@ -181,7 +181,7 @@ function TimelineMessageContent({ entry, isShortForm }: { entry: TimelineEntry; 
             }`}
           >
             <div
-              className="prose prose-sm max-w-none whitespace-pre-line text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
+              className="prose prose-sm max-w-none whitespace-pre-line break-words [overflow-wrap:anywhere] [&_a]:break-all text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)] [&_p]:my-3 [&_br]:block"
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlContent!) }}
             />
           </div>
@@ -327,7 +327,7 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                       {isSystem ? (
                         <div className="mt-2 rounded-lg border border-[var(--border)] p-3">
                           <p className="text-sm font-semibold text-[var(--foreground)]">{entry.subject}</p>
-                          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                          <p className="mt-1 whitespace-pre-line break-words [overflow-wrap:anywhere] text-sm text-[var(--muted-foreground)]">
                             {localizedFieldsUpdatedContent(entry) ?? entry.message_content}
                           </p>
                         </div>
