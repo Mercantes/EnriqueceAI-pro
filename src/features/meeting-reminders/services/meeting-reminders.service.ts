@@ -371,6 +371,7 @@ export async function runMeetingReminders(
         );
         if (result.success) {
           await updateLog(supabase, row, 'sent');
+          await recordReminderInteraction(supabase, row, { subject, body: htmlBody });
           log('sent');
         } else {
           await updateLog(supabase, row, 'failed', result.error ?? 'send_failed');
@@ -389,6 +390,7 @@ export async function runMeetingReminders(
         );
         if (result.success) {
           await updateLog(supabase, row, 'sent');
+          await recordReminderInteraction(supabase, row, { body });
           log('sent');
         } else {
           await updateLog(supabase, row, 'failed', result.error ?? 'send_failed');
@@ -406,6 +408,45 @@ export async function runMeetingReminders(
 }
 
 // --- helpers de persistência ------------------------------------------------
+
+/**
+ * Espelha o envio da régua na timeline do lead (tabela interactions), igual a
+ * cadência já faz. Sem isto, os e-mails de confirmação/véspera/lembrete só
+ * gravavam em meeting_reminder_log e sumiam do histórico do lead.
+ *
+ * Best-effort: um erro aqui NÃO desfaz o envio (o e-mail/WhatsApp já saiu e o
+ * meeting_reminder_log já está 'sent'). step_id/cadence_id ficam NULL — a régua
+ * não é cadência; a timeline renderiza como um e-mail/WhatsApp avulso com
+ * assunto+corpo. O corpo HTML vai em message_content (o render detecta as tags).
+ */
+export async function recordReminderInteraction(
+  supabase: SupabaseClient,
+  row: ReminderDueRow,
+  content: { subject?: string; body: string },
+): Promise<void> {
+  const metadata: Record<string, unknown> = {
+    meeting_reminder: true,
+    reminder_step_order: row.step_order,
+  };
+  if (content.subject) metadata.subject = content.subject;
+
+  const { error } = (await from(supabase, 'interactions').insert({
+    org_id: row.org_id,
+    lead_id: row.lead_id,
+    channel: row.channel,
+    type: 'sent',
+    message_content: content.body || null,
+    metadata,
+    ai_generated: false,
+    performed_by: row.sdr_user_id,
+  } as Record<string, unknown>)) as { error: { message: string } | null };
+
+  if (error) {
+    console.warn(
+      `[meeting-reminders] lead=${row.lead_id} step=${row.step_order} interaction insert failed: ${error.message}`,
+    );
+  }
+}
 
 async function reserveLog(supabase: SupabaseClient, row: ReminderDueRow): Promise<boolean> {
   const { data } = (await from(supabase, 'meeting_reminder_log' as never)
