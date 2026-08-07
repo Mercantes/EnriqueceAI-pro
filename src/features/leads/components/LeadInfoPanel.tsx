@@ -284,23 +284,15 @@ export function LeadInfoPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackedLeadId]);
 
-  // Build initial phone entries — mirrors the view-mode `allPhones` sources so
-  // clicking the pencil never makes a visible phone disappear.
+  // Build initial phone entries a partir SÓ dos telefones próprios do lead
+  // (phones JSONB + telefone legado). Os celulares dos sócios (auto-enriquecidos
+  // do CNPJ) NÃO entram aqui: eles não são persistidos por este save, então
+  // apareciam como dezenas de campos "editáveis" que voltavam a cada reload
+  // (o SDR excluía e salvava, mas re-derivavam de socios.celulares). Agora vivem
+  // numa subseção separada só-leitura (sociosPhones). Ver lead KAP (02f81149).
   const buildInitialPhones = useCallback((): LeadPhone[] => {
     const entries: LeadPhone[] = [];
     const seen = new Set<string>();
-
-    // Socios celulares (auto-enriched from CNPJ, may have whatsapp flag)
-    for (const socio of data.socios ?? []) {
-      for (const cel of socio.celulares ?? []) {
-        const formatted = `(${cel.ddd}) ${cel.numero}`;
-        const key = normalizePhone(formatted);
-        if (!seen.has(key)) {
-          seen.add(key);
-          entries.push({ tipo: cel.whatsapp ? 'whatsapp' : 'celular', numero: formatted });
-        }
-      }
-    }
 
     // Phones JSONB (user-edited list, has explicit type)
     for (const raw of data.phones ?? []) {
@@ -333,7 +325,7 @@ export function LeadInfoPanel({
     }
 
     return entries;
-  }, [data.telefone, data.phones, data.socios, data.lead_source]);
+  }, [data.telefone, data.phones, data.lead_source]);
 
   const [phoneEntries, setPhoneEntries] = useState<LeadPhone[]>(buildInitialPhones);
 
@@ -553,19 +545,24 @@ export function LeadInfoPanel({
 
   // Normalize phone to digits only for dedup
 
-  // Socios celulares first (more specific: has whatsapp flag, nome)
-  for (const socio of data.socios ?? []) {
-    for (const cel of socio.celulares ?? []) {
-      const formatted = `(${cel.ddd}) ${cel.numero}`;
-      const key = normalizePhone(formatted);
-      if (!seenPhones.has(key)) {
-        seenPhones.add(key);
-        allPhones.push({
-          tipo: 'Celular',
+  // Celulares dos sócios (auto-enriquecidos do CNPJ) — vão para uma subseção
+  // separada, SÓ LEITURA. NÃO entram em allPhones (telefones próprios do lead)
+  // nem no editor: senão viram dezenas de campos não-persistíveis que "voltam"
+  // a cada reload (o save só grava leads.phones/telefone, não socios.celulares).
+  const sociosPhones: Array<{ nome: string; numero: string; href: string; whatsapp: boolean }> = [];
+  {
+    const seenSocioPhones = new Set<string>();
+    for (const socio of data.socios ?? []) {
+      for (const cel of socio.celulares ?? []) {
+        const formatted = `(${cel.ddd}) ${cel.numero}`;
+        const key = normalizePhone(formatted);
+        if (seenSocioPhones.has(key)) continue;
+        seenSocioPhones.add(key);
+        sociosPhones.push({
+          nome: socio.nome ?? '',
           numero: formatted,
           href: `tel:+55${cel.ddd}${cel.numero}`,
-          whatsapp: cel.whatsapp,
-          nome: socio.nome,
+          whatsapp: !!cel.whatsapp,
         });
       }
     }
@@ -1165,6 +1162,38 @@ export function LeadInfoPanel({
                     </div>
                   </div>
                 ))
+              )}
+
+              {/* Telefones dos sócios (enriquecidos do CNPJ) — só leitura, recolhível.
+                  NÃO fazem parte da lista editável do lead (não são persistidos). */}
+              {!isEditing && sociosPhones.length > 0 && (
+                <details className="mt-1 border-t border-[var(--border)] pt-2">
+                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    Telefones dos sócios (enriquecido) · {sociosPhones.length}
+                  </summary>
+                  <div className="mt-2 space-y-1.5">
+                    {sociosPhones.map((p, i) => (
+                      <div key={`socio-phone-${i}`} className="flex items-center gap-1.5 rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
+                        <a href={p.href} className="shrink-0 text-[var(--primary)] hover:underline">{p.numero}</a>
+                        {p.whatsapp && (
+                          <span className="shrink-0 rounded bg-green-100 px-1 text-[10px] font-medium text-green-700 dark:bg-green-950 dark:text-green-400">WhatsApp</span>
+                        )}
+                        {p.nome && (
+                          <span className="min-w-0 flex-1 truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">· {p.nome}</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(p.numero)}
+                          className="ml-auto shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                          title="Copiar telefone"
+                          aria-label="Copiar telefone"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
               </div>
             </CollapsibleSection>
