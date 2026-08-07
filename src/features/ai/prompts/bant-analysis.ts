@@ -124,7 +124,7 @@ export function buildBantAnalysisPrompt(
 COMO ESCREVER (o mais importante)
 - Escreva como GENTE de verdade, na primeira pessoa: "senti que...", "o cara...", "ela deixou claro que...", "achei que...". NADA de cara de relatório ou de texto de IA.
 - Evite jargão corporativo, frases genéricas e aquele tom robótico. Se soar como um vendedor humano anotando na correria, tá certo.
-- Comece cada campo pela informação que MAIS importa pro closer (o número, o nome, o fato-chave, a recomendação): a primeira frase é o resumo; depois vem o contexto e a leitura.
+- Comece cada campo pela informação que MAIS importa pro closer (o número, o nome, o fato-chave, a recomendação): o PRIMEIRO bullet é o resumo; os seguintes trazem o contexto e a leitura.
 - Vá ALÉM dos dados: capte o lado humano da conversa — o humor e o estado do lead (ansioso, empolgado, desconfiado, desanimado, cético, com pressa, cansado do problema), a personalidade e o estilo dele (direto, prolixo, técnico, informal, mandão, inseguro), o nível de interesse, a química da conversa, o tom das objeções, o que fez ele abrir ou travar. Ex.: "o Ricardo é bem direto, não gosta de rodeios", "senti o lead meio desgostoso do próprio negócio", "ela tava ansiosa pra resolver isso ontem".
 - Capte as NUANCES que um vendedor experiente percebe e que valem ouro pro closer: (a) o TERMÔMETRO — o quão fechável o lead está e como puxar ("essa é fechamento, só puxar"; "diz que é mês que vem, mas se der uma puxada ele vem"); (b) GANCHOS de conexão — gostos, paixões e assuntos que engajam ele (política, futebol, família, hobbies, quem ele admira ou critica); (c) o ESTILO dele (direto ao ponto, prolixo, técnico, informal). Essas nuances vão principalmente na "Observacao".
 - Seja completo, mas SEM ENCHER LINGUIÇA: se o assunto rendeu pouco na call, seja curto. Não escreva um parágrafo só pra dizer que não teve informação — os limites de caracteres são TETO, não meta.
@@ -136,10 +136,11 @@ REGRAS DE HONESTIDADE
 - Quantifique os números que o lead deu (faturamento, ticket, verba, prazos, conversão).
 
 FORMATAÇÃO
-- Português brasileiro, tom de anotação de vendedor.
-- Texto puro, SEM markdown — nada de #, *, negrito, títulos. Pode escrever em frases corridas, do jeito que sairia numa anotação de verdade; use hífen (-) pra listar quando fizer sentido, mas não force bullets.
-- RESPEITE o limite máximo de caracteres de cada campo.
-- Não use quebras de linha soltas dentro dos valores JSON; escreva contínuo (separe ideias com ". " ou " - ").
+- Português BEM informal, do jeito que um vendedor mandaria num áudio ou mensagem rápida pro colega — zero tom corporativo, zero formalidade. Pode escrever "na correria", com gíria leve.
+- Escreva CADA campo (B, A, N, T, Oportunidades, Observacao) em BULLET POINTS, pra facilitar a leitura do closer: cada linha começa com "- " e traz uma ideia curta e direta. O PRIMEIRO bullet é o resumo/punchline; os seguintes destrincham. Separe os bullets com quebra de linha (\n).
+- O campo "Gaps" mantém o formato por categoria já descrito nele (Financeiros/Operacionais/Estratégicos/Decision Process).
+- SEM markdown — nada de #, *, negrito, títulos. O bullet é só o hífen "- ".
+- RESPEITE o limite máximo de caracteres de cada campo (é TETO, não meta).
 
 CABEÇALHO DO LEAD
 ${formatLeadContext(leadContext)}
