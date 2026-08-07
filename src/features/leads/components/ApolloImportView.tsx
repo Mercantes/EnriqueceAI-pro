@@ -200,6 +200,17 @@ export function ApolloImportView() {
                   </div>
                 </div>
 
+                {importResult.errors > 0 && (importResult.errorSamples?.length ?? 0) > 0 && (
+                  <div className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-left text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+                    <p className="font-semibold">Motivo do(s) erro(s):</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                      {importResult.errorSamples!.map((m, i) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
                   <Button asChild>
                     <Link href="/leads">Ver Leads</Link>
