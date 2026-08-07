@@ -25,14 +25,18 @@ export function currentMonthBrt(): string {
 }
 
 /**
- * The "current day" to pace a month-based card against: today's day-of-month when
- * `month` ("YYYY-MM") is the current BRT month, otherwise the month's last day
- * (a past month is fully elapsed). Keeps sibling cards from disagreeing on pace.
+ * The day to pace a month-based card against — o último dia útil/civil já
+ * CONCLUÍDO. No mês corrente é **ontem** (`now.day - 1`), não hoje: o dia atual
+ * só entra no "esperado até hoje" quando termina. Antes contava o dia inteiro de
+ * hoje já de manhã, fazendo o time parecer "abaixo do ritmo" cedo mesmo sem ter
+ * tido o dia todo para bater o número. Mês passado = último dia (mês encerrado).
+ * Dia 1 do mês → 0 (nada concluído ainda). Fonte única: todos os cards e o
+ * "ideal/dia" por SDR pacem pelo mesmo dia, então nunca divergem.
  */
 export function currentDayOfMonthBrt(month: string): number {
   const [yr, mo] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(yr, mo, 0).getDate();
   const now = brtNowParts();
   const isCurrent = now.year === yr && now.month1 === mo;
-  return isCurrent ? now.day : lastDay;
+  return isCurrent ? Math.max(0, now.day - 1) : lastDay;
 }

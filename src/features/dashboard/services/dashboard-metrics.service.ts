@@ -4,6 +4,7 @@ import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
 import { expectedByBusinessDay } from '../utils/pacing';
+import { currentDayOfMonthBrt } from '../utils/brt-now';
 import type {
   CadenceOption,
   DailyDataPoint,
@@ -139,12 +140,10 @@ export async function fetchOpportunityKpi(
   const monthTarget = goal?.meetings_held_target || goal?.opportunity_target || 0;
   const conversionTarget = goal?.conversion_target ?? 0;
 
-  // Calculate % of target based on linear projection (BRT)
-  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  // % de meta na projeção linear (BRT), paceado pelo último dia CONCLUÍDO
+  // (currentDayOfMonthBrt = ontem no mês corrente) — fonte única do pace.
   const [yr, mo] = filters.month.split('-').map(Number) as [number, number];
-  const isCurrentMonth =
-    nowBrt.getUTCFullYear() === yr && nowBrt.getUTCMonth() + 1 === mo;
-  const currentDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
+  const currentDay = currentDayOfMonthBrt(filters.month);
 
   const expectedByToday = expectedByBusinessDay(monthTarget, yr, mo, currentDay);
   const percentOfTarget =

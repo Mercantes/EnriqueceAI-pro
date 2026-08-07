@@ -39,12 +39,10 @@ function getDaysInMonth(month: string): number {
   return new Date(year, mon, 0).getDate();
 }
 
-function computePercentOfTarget(actual: number, target: number, days: number, month: string): number {
+function computePercentOfTarget(actual: number, target: number, _days: number, month: string): number {
   if (target <= 0) return 0;
-  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const [yr, mo] = month.split('-').map(Number) as [number, number];
-  const isCurrentMonth = nowBrt.getUTCFullYear() === yr && nowBrt.getUTCMonth() + 1 === mo;
-  const currentDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
+  const currentDay = currentDayOfMonthBrt(month);
   const expectedByToday = expectedByBusinessDay(target, yr, mo, currentDay);
   if (expectedByToday <= 0) return 0;
   return Math.round(((actual - expectedByToday) / expectedByToday) * 100);

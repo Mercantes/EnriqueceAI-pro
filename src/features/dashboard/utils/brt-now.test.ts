@@ -39,9 +39,9 @@ describe('brt-now', () => {
   });
 
   describe('currentDayOfMonthBrt', () => {
-    it('returns today (BRT) when the month is the current BRT month', () => {
-      freezeUtc('2026-06-15T18:00:00Z'); // 15/jun BRT
-      expect(currentDayOfMonthBrt('2026-06')).toBe(15);
+    it('returns yesterday (last elapsed day) in the current BRT month', () => {
+      freezeUtc('2026-06-15T18:00:00Z'); // 15/jun BRT → paceia através do dia 14
+      expect(currentDayOfMonthBrt('2026-06')).toBe(14);
     });
 
     it('returns the last day for a fully-elapsed past month', () => {
@@ -50,9 +50,9 @@ describe('brt-now', () => {
       expect(currentDayOfMonthBrt('2026-02')).toBe(28);
     });
 
-    it('treats 23:00 BRT on the last day as still the current month', () => {
+    it('treats 23:00 BRT on the last day as still the current month (paces through the prior day)', () => {
       freezeUtc('2026-07-01T02:00:00Z'); // 30/jun 23:00 BRT
-      expect(currentDayOfMonthBrt('2026-06')).toBe(30);
+      expect(currentDayOfMonthBrt('2026-06')).toBe(29);
     });
   });
 });
