@@ -17,6 +17,24 @@ export interface ImportApolloResult {
   imported: number;
   duplicates: number;
   errors: number;
+  /** Amostra de motivos dos erros (distintos), para a tela mostrar o "porquê"
+   *  em vez de só o contador. Ex.: "Apollo sem créditos…". */
+  errorSamples?: string[];
+}
+
+/** Traduz a falha do Apollo (do enrichPerson) para uma mensagem acionável. */
+function describeApolloError(reason: unknown): string {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  if (/Apollo API 402|payment|credit|insufficient/i.test(msg)) {
+    return 'Apollo sem créditos disponíveis para revelar os dados (reveal consome crédito).';
+  }
+  if (/Apollo API 429|rate.?limit|too many/i.test(msg)) {
+    return 'Apollo: limite de requisições atingido — tente novamente em alguns minutos.';
+  }
+  if (/Apollo API 40[13]|unauthorized|forbidden/i.test(msg)) {
+    return 'Apollo: chave inválida ou sem permissão para reveal — verifique a conexão em Integrações.';
+  }
+  return msg.slice(0, 160);
 }
 
 interface ApolloPersonInput {
@@ -83,6 +101,7 @@ export async function importApolloLeads(
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
+  const errorMessages = new Set<string>();
   const apolloImportedIds: string[] = [];
 
   // Build webhook URL for async phone reveal (HMAC-bound to org_id)
@@ -112,12 +131,14 @@ export async function importApolloLeads(
 
       if (enrichResult.status === 'rejected') {
         console.error('[apollo-import] enrichPerson failed:', enrichResult.reason);
+        errorMessages.add(describeApolloError(enrichResult.reason));
         errors++;
         continue;
       }
 
       const enriched = enrichResult.value.person;
       if (!enriched) {
+        errorMessages.add('O Apollo não retornou dados desta pessoa (reveal indisponível — pode ser falta de crédito ou dados não disponíveis para este contato).');
         errors++;
         continue;
       }
@@ -237,6 +258,7 @@ export async function importApolloLeads(
         if (isDuplicate) {
           duplicates++;
         } else {
+          errorMessages.add(`Erro ao salvar no banco: ${(insertError.message ?? 'desconhecido').slice(0, 140)}`);
           errors++;
         }
       } else {
@@ -262,7 +284,7 @@ export async function importApolloLeads(
 
   return {
     success: true,
-    data: { imported, duplicates, errors },
+    data: { imported, duplicates, errors, errorSamples: [...errorMessages].slice(0, 3) },
   };
 }
 
