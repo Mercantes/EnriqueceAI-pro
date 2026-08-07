@@ -34,7 +34,7 @@ const BANT_FIELDS: Array<{ dbName: string; promptName: string; description: stri
     promptName: 'T - Timing',
     maxChars: 1200,
     description:
-      'A urgência de verdade. Tem prazo, evento ou gatilho concreto? Ele quer pra ontem ou tá só pesquisando? Você percebeu pressa ou enrolação? Escreve o que te deu a sensação de que é pra já — ou de que vai arrastar. Ex.: "quer resolver antes de abrir a 2ª loja", "me pareceu sem pressa, só cotando".',
+      'A urgência de verdade E o quanto dá pra ACELERAR. Tem prazo, evento ou gatilho concreto? Quer pra ontem ou tá só pesquisando? Percebeu pressa ou enrolação? E principalmente: dá pra puxar? Ex.: "quer resolver antes de abrir a 2ª loja", "falou em contratar mês que vem, mas senti que se o closer puxar ele vem antes", "me pareceu sem pressa, só cotando".',
   },
   {
     dbName: 'Oportunidades',
@@ -53,9 +53,9 @@ const BANT_FIELDS: Array<{ dbName: string; promptName: string; description: stri
   {
     dbName: 'Observação Decisor',
     promptName: 'Observacao',
-    maxChars: 500,
+    maxChars: 700,
     description:
-      'O resumo do seu "feeling": tudo que você sentiu sobre o decisor e a empresa que ajuda o closer a se preparar — personalidade, estilo de comunicação, clima da conversa, química, red flags, o que fez ele engajar ou travar. Ex.: "cara gente boa, mas ansioso", "senti ele meio desgostoso do próprio negócio", "super técnico, vai querer número". Se não houver nada relevante, retorne "".',
+      'O seu "feeling" + as NUANCES que ajudam o closer a conduzir. Traga: (1) PERSONALIDADE e ESTILO — direto ao ponto vs prolixo, técnico, informal, mandão, inseguro. Ex.: "é mais direto ao ponto, não enrola". (2) TERMÔMETRO / dica de fechamento — o quão quente e fechável ele está e COMO puxar. Ex.: "essa é fechamento, só puxar"; "diz que quer contratar mês que vem, mas se der uma puxada ele vem antes"; "vai precisar amadurecer, não adianta forçar". (3) GANCHOS DE RAPPORT — gostos, paixões e assuntos que engajam ele, que o closer pode usar pra criar conexão. Ex.: "adora falar de política, curte o presidente Lula"; "torce pro Palmeiras"; "puxou papo de filho". (4) CLIMA — química, red flags, o que fez ele abrir ou travar. Ex.: "cara gente boa, mas ansioso", "super técnico, vai querer número". Só registre gostos/opiniões/temperatura que ELE de fato demonstrou na call. Se não houver nada relevante, retorne "".',
   },
 ];
 
@@ -124,12 +124,15 @@ export function buildBantAnalysisPrompt(
 COMO ESCREVER (o mais importante)
 - Escreva como GENTE de verdade, na primeira pessoa: "senti que...", "o cara...", "ela deixou claro que...", "achei que...". NADA de cara de relatório ou de texto de IA.
 - Evite jargão corporativo, frases genéricas e aquele tom robótico. Se soar como um vendedor humano anotando na correria, tá certo.
+- Comece cada campo pela informação que MAIS importa pro closer (o número, o nome, o fato-chave, a recomendação): a primeira frase é o resumo; depois vem o contexto e a leitura.
 - Vá ALÉM dos dados: capte o lado humano da conversa — o humor e o estado do lead (ansioso, empolgado, desconfiado, desanimado, cético, com pressa, cansado do problema), a personalidade e o estilo dele (direto, prolixo, técnico, informal, mandão, inseguro), o nível de interesse, a química da conversa, o tom das objeções, o que fez ele abrir ou travar. Ex.: "o Ricardo é bem direto, não gosta de rodeios", "senti o lead meio desgostoso do próprio negócio", "ela tava ansiosa pra resolver isso ontem".
-- Seja DETALHADO. Não economize: traga o contexto e os detalhes que fazem o closer "já conhecer" o lead antes de entrar na reunião.
+- Capte as NUANCES que um vendedor experiente percebe e que valem ouro pro closer: (a) o TERMÔMETRO — o quão fechável o lead está e como puxar ("essa é fechamento, só puxar"; "diz que é mês que vem, mas se der uma puxada ele vem"); (b) GANCHOS de conexão — gostos, paixões e assuntos que engajam ele (política, futebol, família, hobbies, quem ele admira ou critica); (c) o ESTILO dele (direto ao ponto, prolixo, técnico, informal). Essas nuances vão principalmente na "Observacao".
+- Seja completo, mas SEM ENCHER LINGUIÇA: se o assunto rendeu pouco na call, seja curto. Não escreva um parágrafo só pra dizer que não teve informação — os limites de caracteres são TETO, não meta.
 
 REGRAS DE HONESTIDADE
 - Seja honesto e crítico. Não suavize. Se o lead é fraco ou tem red flag, diga com todas as letras.
 - NÃO invente nada. Use SÓ o que foi dito na call + o cabeçalho do lead. O que não apareceu, jogue em "Gaps". Se um campo não teve informação, retorne string vazia "".
+- Separe FATO de IMPRESSÃO: fato = o que o lead falou; impressão = a sua leitura ("me pareceu", "senti", "achei"). Nunca transforme achismo em fato. Vale pro termômetro e pros ganchos também — só registre gostos, opiniões e nível de interesse que ele REALMENTE demonstrou.
 - Quantifique os números que o lead deu (faturamento, ticket, verba, prazos, conversão).
 
 FORMATAÇÃO
