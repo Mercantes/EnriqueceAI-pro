@@ -226,6 +226,13 @@ export function ScheduleMeetingModal({
       return;
     }
 
+    // Closer obrigatório no agendamento: sem ele o servidor pula briefing (BANT) +
+    // grupo de WhatsApp silenciosamente (ambos gated em closerId). Ver Imperius Fitness.
+    if (!editData && !selectedCloserId) {
+      toast.error('Selecione o closer responsável antes de agendar a reunião.');
+      return;
+    }
+
     // Send local datetime string (no UTC conversion) — Google Calendar uses timeZone param
     const startIso = `${dateString}T${selectedTime}:00`;
     const endMs = new Date(startIso).getTime() + parseInt(effectiveDuration, 10) * 60 * 1000;

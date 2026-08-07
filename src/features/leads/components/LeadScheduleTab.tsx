@@ -249,6 +249,13 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
             return;
           }
 
+          // Closer obrigatório: sem ele, o servidor pula briefing (BANT) + grupo de
+          // WhatsApp silenciosamente (ambos são gated em closerId). Ver Imperius Fitness.
+          if (!selectedCloserId) {
+            toast.error('Selecione o closer responsável antes de agendar a reunião.');
+            return;
+          }
+
           startMeetingTransition(async () => {
             const result = await scheduleMeeting(leadId, {
               title,

@@ -38,6 +38,17 @@ export async function scheduleMeeting(
     return { success: false, error: 'Informe o faturamento estimado do lead (valor em R$ maior que zero) antes de agendar a reunião.' };
   }
 
+  // Closer obrigatório (defense-in-depth: o cliente também bloqueia). Sem closer, o
+  // briefing (BANT) e o grupo de WhatsApp abaixo são pulados — foi o que ocorreu no
+  // lead Imperius Fitness (agendado sem closer → nada disparou, sem aviso).
+  if (!input.closerId) {
+    return {
+      success: false,
+      error: 'Selecione o closer responsável antes de agendar a reunião.',
+      code: 'MISSING_CLOSER',
+    };
+  }
+
   // Defensive check: client surfaces (LeadScheduleTab, ScheduleMeetingModal)
   // also block on missing required-for-meeting fields, but the server must
   // not trust them — repeat the gate here so a direct API call can't
