@@ -166,7 +166,9 @@ function buildBriefingHtml(data: {
   // Build info rows helper
   function row(label: string, value: string | null | undefined): string {
     if (!value) return '';
-    return `<tr><td style="padding:6px 0;color:#6b7280;font-size:15px;width:160px;vertical-align:top;font-weight:500;">${label}:</td><td style="padding:6px 0;color:#1a1a1a;font-size:15px;line-height:1.5;">${value}</td></tr>`;
+    // white-space:pre-wrap preserva as quebras de linha dos bullets do BANT
+    // (cada "- " numa linha). Campos de uma linha só não são afetados.
+    return `<tr><td style="padding:6px 0;color:#6b7280;font-size:15px;width:160px;vertical-align:top;font-weight:500;">${label}:</td><td style="padding:6px 0;color:#1a1a1a;font-size:15px;line-height:1.5;white-space:pre-wrap;">${value}</td></tr>`;
   }
 
   function linkRow(label: string, value: string | null | undefined, href?: string): string {
