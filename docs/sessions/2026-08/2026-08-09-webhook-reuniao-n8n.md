@@ -82,6 +82,21 @@ UPDATE public.app_flags SET enabled = false WHERE key = 'meeting_webhook_enabled
 ```
 Vale no próximo tick, sem redeploy. Estado atual: **enabled = true (NO AR)**.
 
+## Lado n8n — quem consome o payload (⭐ mapa)
+
+O webhook `enriquece/reuniao-marcada` cai em **2 workflows** (instância `n8n.v4companyamaral.com`):
+
+1. **"WhatsApp - Disparo de Confirmacao (Ativo)"** (`1NOxAbQssHQrAFGv`) — recebe o webhook, **normaliza o payload** e dispara o template `confirmar_reuniao_sal`. ⭐ Já lê o payload certo: `event_id: p.event_id ?? p.calendar_event_id`, e `calendar_id: p.calendar_id ?? p.responsavel_email ?? p.closer_email` (usa nosso `responsavel_email` como agenda do closer). Fluxo: `Normalizar Payload` → RPC `pode_enviar_confirmacao(event_id, momento)` (dedup) → envia template → RPC `registrar_envio_confirmacao(event_id, …, calendar_id, wamid)` (**amarra wamid↔event_id**).
+2. **"WhatsApp - Respostas de Reuniao"** (`CYeIDuEtSYgIatE7`) — trata os cliques dos botões (Confirmar/Reagendar). Pega `event_id`/`calendar_id` pela RPC `marcar_interacao_confirmacao(wamid)`, calcula slots livres e **move o evento** (`Mover Evento na Agenda`, id cru via API).
+
+⭐ **Formato do `event_id`:** o app manda o **id cru** do Calendar (ex.: `l3o0simckkkgln4uob3v8poaio`) — aceito pela API e pela validação do n8n. NÃO é o base64 de URL (`NHZw…`, que decodifica pra `4vpsa..._2026...Z <email>`).
+
+## Fix no n8n — agenda do closer no reagendamento (⭐)
+
+**Bug:** no "WhatsApp - Respostas de Reuniao", o nó **`Buscar Ocupados`** (disponibilidade pra sugerir horários no reagendamento) estava com a agenda **hardcoded** em `jhonata.banqueri@v4company.com` — ignorava o `calendar_id` da RPC. Pra qualquer closer ≠ Jhonata, sugeria horários da agenda errada. (O nó `Mover Evento na Agenda` já usava `calendar_id` dinâmico; só o `Buscar Ocupados` ficou preso.)
+
+**Fix aplicado via MCP** (`update_workflow`, workflow ativo → já valendo): `Buscar Ocupados.calendar` → `={{ $('Marcar Reagendamento').first().json.calendar_id }}`. Validar no próximo reagendamento real de um closer ≠ Jhonata.
+
 ## Pendências herdadas (não desta frente)
 
 - Grupo de WhatsApp do lead Imperius Fitness — Matheus re-agenda pelo app OU endpoint "recriar grupo".
