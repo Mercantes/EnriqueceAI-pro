@@ -95,7 +95,19 @@ O webhook `enriquece/reuniao-marcada` cai em **2 workflows** (instância `n8n.v4
 
 **Bug:** no "WhatsApp - Respostas de Reuniao", o nó **`Buscar Ocupados`** (disponibilidade pra sugerir horários no reagendamento) estava com a agenda **hardcoded** em `jhonata.banqueri@v4company.com` — ignorava o `calendar_id` da RPC. Pra qualquer closer ≠ Jhonata, sugeria horários da agenda errada. (O nó `Mover Evento na Agenda` já usava `calendar_id` dinâmico; só o `Buscar Ocupados` ficou preso.)
 
-**Fix aplicado via MCP** (`update_workflow`, workflow ativo → já valendo): `Buscar Ocupados.calendar` → `={{ $('Marcar Reagendamento').first().json.calendar_id }}`. Validar no próximo reagendamento real de um closer ≠ Jhonata.
+**Fix aplicado via MCP** (`update_workflow`, workflow ativo → já valendo): `Buscar Ocupados.calendar` → `={{ $('Marcar Reagendamento').first().json.calendar_id }}`.
+
+## Fix no n8n — reagendamento ponta a ponta (⭐⭐)
+
+Testando o reagendamento real, ele parava em *"um especialista vai confirmar"* (nó de falha) e **não movia o evento**.
+
+**Causa raiz:** cada clique no WhatsApp é uma **execução NOVA e independente** do workflow. Ao escolher o slot, o nó `Buscar Dados da Reuniao` tentava re-achar a reunião pela RPC usando o `wamid` da **mensagem de slots** — que não está gravado na `confirmacoes_reuniao` (só os `wamid` do template d1/dia) → voltava `event_id`/`calendar_id` vazios → `valido=false` → falha. O `event_id` até vinha no id do botão (`slot|<iso>|<event_id>`), mas `Classificar Interacao` só extraía o horário e **descartava** o resto.
+
+**Fix aplicado via MCP** (3 nós, workflow ativo): o **id do botão** virou o canal de estado — `slot|<iso>|<event_id>|<calendar_id>|<link>`. `Calcular Horarios` passa a codificar os 3; `Classificar Interacao` extrai `slot_event_id`/`slot_calendar_id`/`slot_link`; `Preparar Novo Horario` usa esses valores primeiro (RPC vira fallback). Assim a execução do slot tem tudo pra mover o evento.
+
+**Depois disso:** o `Mover Evento na Agenda` chegou a rodar e deu **403 Forbidden** do Google — a conta Google do n8n (`"Google Calendar account"`) **não tinha permissão de escrita** na agenda. Leitura (free/busy → oferecer horários) funcionava; **escrita** exige compartilhamento nível **"Fazer alterações nos eventos"**. Após compartilhar, o reagendamento rodou **ponta a ponta** (evento movido + confirmação com link no WhatsApp). ✅
+
+**⭐ Pré-requisito de produção:** a agenda de **cada closer** (Pedro, Jhonata, …) precisa estar compartilhada com a conta Google do n8n em **"Fazer alterações nos eventos"** — senão o reagendamento deles bate no mesmo 403. Alternativa definitiva: Service Account + domain-wide delegation.
 
 ## Pendências herdadas (não desta frente)
 
