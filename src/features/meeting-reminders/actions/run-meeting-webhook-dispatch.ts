@@ -17,12 +17,32 @@ const DEFAULT_ORG_ID = 'c2727473-1df8-4faa-9264-a9fc1759fe3b';
 const DEFAULT_WEBHOOK_URL = 'https://n8n.v4companyamaral.com/webhook/enriquece/reuniao-marcada';
 const DEFAULT_MOMENTOS: MeetingWebhookMomento[] = ['d1', 'dia'];
 
+const ENABLED_FLAG_KEY = 'meeting_webhook_enabled';
+
 function parseMomentos(value: string | undefined): MeetingWebhookMomento[] {
   const parsed = (value ?? '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter((s): s is MeetingWebhookMomento => s === 'd1' || s === 'dia');
   return parsed.length > 0 ? parsed : DEFAULT_MOMENTOS;
+}
+
+/**
+ * Flag no banco (app_flags) — controle confiável independente da env do Coolify.
+ * Defensivo: se a tabela não existir/der erro, retorna false (cai pra env).
+ */
+async function isDbFlagEnabled(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+): Promise<boolean> {
+  try {
+    const { data } = (await from(supabase, 'app_flags' as never)
+      .select('enabled')
+      .eq('key', ENABLED_FLAG_KEY)
+      .limit(1)) as { data: Array<{ enabled: boolean }> | null };
+    return data?.[0]?.enabled === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -40,9 +60,13 @@ export async function runMeetingWebhookDispatchJob(): Promise<
   const supabase = createServiceRoleClient();
   const nowIso = new Date().toISOString();
 
+  // Liga por env (Coolify) OU pela flag no banco — o que estiver ligado ativa.
+  const envEnabled = process.env.MEETING_WEBHOOK_ENABLED === 'true';
+  const enabled = envEnabled || (await isDbFlagEnabled(supabase));
+
   try {
     const summary = await runMeetingWebhookDispatch(supabase, {
-      enabled: process.env.MEETING_WEBHOOK_ENABLED === 'true',
+      enabled,
       orgId: process.env.MEETING_WEBHOOK_ORG_ID ?? DEFAULT_ORG_ID,
       webhookUrl: process.env.N8N_MEETING_WEBHOOK_URL ?? DEFAULT_WEBHOOK_URL,
       webhookSecret: process.env.N8N_MEETING_WEBHOOK_SECRET,
