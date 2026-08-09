@@ -23,6 +23,8 @@ export interface MeetingWebhookCandidate {
   meet_link: string | null;
   calendar_event_id: string | null;
   whatsapp_phone: string | null;
+  /** E-mail do closer responsável (closers.email = calendar_id da agenda dele). */
+  responsavel_email: string | null;
 }
 
 /** Corpo enviado ao webhook do n8n. */
@@ -33,6 +35,8 @@ export interface MeetingWebhookPayload {
   inicio: string;
   link: string | null;
   event_id: string | null;
+  /** E-mail do closer = calendar_id da agenda que o n8n lê/move. */
+  responsavel_email: string | null;
   momento: MeetingWebhookMomento;
 }
 
@@ -141,6 +145,7 @@ export function buildWebhookPayload(
     inicio: new Date(c.meeting_starts_at).toISOString(),
     link: c.meet_link ?? null,
     event_id: c.calendar_event_id ?? null,
+    responsavel_email: c.responsavel_email ?? null,
     momento,
   };
 }
