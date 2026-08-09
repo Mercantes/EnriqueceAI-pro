@@ -20,6 +20,7 @@ const baseCandidate: MeetingWebhookCandidate = {
   meet_link: 'https://meet.google.com/xck-jbus-trw',
   calendar_event_id: 'evt-123',
   whatsapp_phone: '5511988887777',
+  responsavel_email: 'pedro@v4company.com',
 };
 
 // Reunião: 2026-08-11 20:00 UTC = 17:00 BRT (dia 11/08 em Brasília).
@@ -88,6 +89,7 @@ describe('buildWebhookPayload', () => {
       inicio: '2026-08-11T20:00:00.000Z',
       link: 'https://meet.google.com/xck-jbus-trw',
       event_id: 'evt-123',
+      responsavel_email: 'pedro@v4company.com',
       momento: 'd1',
     });
   });
