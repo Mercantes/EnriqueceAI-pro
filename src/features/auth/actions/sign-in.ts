@@ -3,12 +3,13 @@
 import { headers } from 'next/headers';
 
 import type { ActionResult } from '@/lib/actions/action-result';
-import { ERR_RATE_LIMITED } from '@/lib/constants/error-codes';
+import { ERR_INVITE_PENDING, ERR_RATE_LIMITED } from '@/lib/constants/error-codes';
 import { LOGIN_LIMIT, LOGIN_WINDOW_MS } from '@/lib/constants/limits';
 import { checkRateLimit, resetRateLimit } from '@/lib/security/rate-limit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { signInSchema } from '../schemas/auth.schemas';
+import { findPendingInviteByEmail } from '../services/pending-invite';
 
 export async function signIn(formData: FormData): Promise<ActionResult<void>> {
   try {
@@ -43,6 +44,19 @@ export async function signIn(formData: FormData): Promise<ActionResult<void>> {
   });
 
   if (error) {
+    // Conta convidada mas ainda não ativada: o Supabase devolve o genérico
+    // "Invalid login credentials" (não há senha). Em vez de expor isso, orienta
+    // o usuário a aceitar o convite e oferece o reenvio do link.
+    const pendingInvite = await findPendingInviteByEmail(parsed.data.email);
+    if (pendingInvite) {
+      return {
+        success: false,
+        error:
+          'Você tem um convite pendente. Verifique seu e-mail para criar sua senha e ativar o acesso.',
+        code: ERR_INVITE_PENDING,
+      };
+    }
+
     return { success: false, error: error.message, code: error.code };
   }
 
