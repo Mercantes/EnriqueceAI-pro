@@ -10,6 +10,7 @@
 // --- Auth & Rate Limiting ---
 export const ERR_RATE_LIMITED = 'RATE_LIMITED';
 export const ERR_NOT_CONFIGURED = 'NOT_CONFIGURED';
+export const ERR_INVITE_PENDING = 'INVITE_PENDING';
 
 // --- Resource Limits ---
 export const ERR_LEAD_LIMIT_REACHED = 'LEAD_LIMIT_REACHED';
