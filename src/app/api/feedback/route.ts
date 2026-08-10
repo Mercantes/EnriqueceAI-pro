@@ -9,6 +9,12 @@ import { isUuid } from '@/shared/utils/uuid';
 
 const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled'];
 
+// Conferência objetiva da qualificação feita pelo pré-vendas.
+const VALID_QUALIFICACAO = ['bateu', 'divergiu', 'nao_validado'];
+
+// Espelha o constraint closer_feedback_divergencias_validas.
+const VALID_DIVERGENCIAS = ['verba', 'decisor', 'dor', 'timing', 'dados_cadastrais'];
+
 const RESULT_LABELS: Record<string, string> = {
   meeting_done: 'Reunião realizada',
   no_show: 'Não compareceu',
@@ -47,7 +53,7 @@ function nextBusinessDayAt9hBRT(now: Date): string {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { token, result, rating, comment, decisor_presente } = body;
+    const { token, result, rating, comment, qualificacao_aderente, divergencias } = body;
 
     // Validate input
     if (!token || !isUuid(token)) {
@@ -56,16 +62,36 @@ export async function POST(request: Request) {
     if (!result || !VALID_RESULTS.includes(result)) {
       return NextResponse.json({ error: 'Resultado inválido' }, { status: 400 });
     }
-    // Rating e "decisor presente" só existem quando a reunião aconteceu.
+    // Qualificação, divergências e rating só existem quando a reunião aconteceu.
     const needsMeetingFields = result === 'meeting_done';
-    if (needsMeetingFields && (!rating || typeof rating !== 'number' || rating < 1 || rating > 5)) {
+
+    // Rating (chance de fechar) é opcional; se enviado, precisa ser 1–5.
+    if (rating != null && (typeof rating !== 'number' || rating < 1 || rating > 5)) {
       return NextResponse.json({ error: 'Nota deve ser entre 1 e 5' }, { status: 400 });
     }
-    // Obrigatório em meeting_done para não deixar buraco na métrica "Decisor na
-    // Call %" do Sales Hub. Para no_show/rescheduled o valor é ignorado (NULL).
-    if (needsMeetingFields && typeof decisor_presente !== 'boolean') {
-      return NextResponse.json({ error: 'Informe se o decisor estava presente na call' }, { status: 400 });
+
+    // Qualificação é obrigatória quando a reunião foi realizada.
+    if (needsMeetingFields && (!qualificacao_aderente || !VALID_QUALIFICACAO.includes(qualificacao_aderente))) {
+      return NextResponse.json({ error: 'Informe se a qualificação bateu com a reunião' }, { status: 400 });
     }
+
+    // Normaliza divergências para um array validado (ou nulo), espelhando os três
+    // constraints do banco para devolver erro amigável em vez de 500.
+    let divergenciasClean: string[] | null = null;
+    if (needsMeetingFields && qualificacao_aderente === 'divergiu') {
+      if (!Array.isArray(divergencias) || divergencias.length === 0) {
+        return NextResponse.json({ error: 'Marque ao menos um item que não conferiu.' }, { status: 400 });
+      }
+      // closer_feedback_divergencias_validas: só os cinco valores conhecidos.
+      const invalid = divergencias.filter((d: unknown) => typeof d !== 'string' || !VALID_DIVERGENCIAS.includes(d as string));
+      if (invalid.length > 0) {
+        return NextResponse.json({ error: 'Item de divergência inválido' }, { status: 400 });
+      }
+      // Dedup preservando ordem.
+      divergenciasClean = [...new Set(divergencias as string[])];
+    }
+    // 'bateu' / 'nao_validado' (e no_show/rescheduled) mantêm divergências nulas
+    // (closer_feedback_divergencias_somente_se_divergiu).
 
     const supabase = createServiceRoleClient();
 
@@ -91,11 +117,15 @@ export async function POST(request: Request) {
     const { data: updated, error: updateError } = await from(supabase, 'closer_feedback_requests')
       .update({
         result,
-        rating: rating ?? null,
+        // Rating (chance de fechar) é subjetivo e opcional; nulo em no_show/rescheduled.
+        rating: needsMeetingFields ? (rating ?? null) : null,
         comment: comment || null,
-        // Só grava o booleano quando a reunião aconteceu; nos demais fica NULL
-        // (não se aplica). Fonte da métrica "Decisor na Call %" do Sales Hub.
-        decisor_presente: needsMeetingFields ? decisor_presente : null,
+        // Conferência objetiva da qualificação — nula fora de meeting_done.
+        qualificacao_aderente: needsMeetingFields ? qualificacao_aderente : null,
+        // Só 'divergiu' carrega itens; demais casos ficam nulos (constraints do banco).
+        divergencias: divergenciasClean,
+        // decisor_presente foi removido do formulário; a coluna permanece no banco
+        // por compatibilidade e não é mais preenchida por este fluxo.
         responded_at: new Date().toISOString(),
       } as Record<string, unknown>)
       .eq('id', feedbackReq.id)

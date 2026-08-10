@@ -7,29 +7,78 @@ interface FeedbackFormProps {
 }
 
 const RESULT_OPTIONS = [
-  { value: 'meeting_done', label: 'Reunião realizada' },
-  { value: 'no_show', label: 'Não compareceu' },
-  { value: 'rescheduled', label: 'Remarcou' },
+  { value: 'meeting_done', label: 'Realizada' },
+  { value: 'no_show', label: 'No-show' },
+  { value: 'rescheduled', label: 'Remarcada' },
+] as const;
+
+const QUALIFICACAO_OPTIONS = [
+  { value: 'bateu', label: 'Bateu' },
+  { value: 'divergiu', label: 'Divergiu' },
+  { value: 'nao_validado', label: 'Não deu pra validar' },
+] as const;
+
+// Rótulo exibido → valor gravado. Espelha o constraint
+// closer_feedback_divergencias_validas: só estes cinco valores são aceitos.
+const DIVERGENCIA_OPTIONS = [
+  { value: 'verba', label: 'Verba' },
+  { value: 'decisor', label: 'Decisor' },
+  { value: 'dor', label: 'Dor' },
+  { value: 'timing', label: 'Timing' },
+  { value: 'dados_cadastrais', label: 'Dados cadastrais' },
 ] as const;
 
 export function FeedbackForm({ token }: FeedbackFormProps) {
   const [result, setResult] = useState('');
+  // Conferência objetiva da qualificação — só quando a reunião foi realizada.
+  const [qualificacao, setQualificacao] = useState('');
+  // Subconjunto de DIVERGENCIA_OPTIONS — só quando qualificacao === 'divergiu'.
+  const [divergencias, setDivergencias] = useState<string[]>([]);
+  const [comment, setComment] = useState('');
+  // Leitura subjetiva do closer (chance de fechar). Reaproveita a coluna `rating`,
+  // sem peso na avaliação do pré-vendas. 0 = não avaliado.
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
-  // Decisor presente na call — booleano capturado só quando a reunião aconteceu.
-  // null = não respondido; fonte da métrica "Decisor na Call %" do Sales Hub.
-  const [decisorPresente, setDecisorPresente] = useState<boolean | null>(null);
-  const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
-  // Campos que só existem quando a reunião aconteceu (rating + decisor presente).
-  const needsMeetingFields = result === 'meeting_done';
+  const isMeetingDone = result === 'meeting_done';
+  const isDivergiu = isMeetingDone && qualificacao === 'divergiu';
+
+  function toggleDivergencia(value: string) {
+    setDivergencias((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+  }
+
+  function handleResultChange(value: string) {
+    setResult(value);
+    // Sair de "Realizada" limpa qualificação e divergências do estado.
+    if (value !== 'meeting_done') {
+      setQualificacao('');
+      setDivergencias([]);
+    }
+    setError('');
+  }
+
+  function handleQualificacaoChange(value: string) {
+    setQualificacao(value);
+    // Ao sair de "Divergiu", zerar o array (constraint só permite itens em 'divergiu').
+    if (value !== 'divergiu') setDivergencias([]);
+    setError('');
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!result || (needsMeetingFields && (!rating || decisorPresente === null))) return;
+    if (!result) return;
+    if (isMeetingDone && !qualificacao) return;
+    // Replica o constraint closer_feedback_divergencias_obrigatorias no cliente,
+    // para erro amigável em vez de 500 do banco.
+    if (isDivergiu && divergencias.length === 0) {
+      setError('Marque ao menos um item que não conferiu.');
+      return;
+    }
 
     setSubmitting(true);
     setError('');
@@ -41,9 +90,11 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         body: JSON.stringify({
           token,
           result,
-          rating: needsMeetingFields ? rating : null,
+          qualificacao_aderente: isMeetingDone ? qualificacao : null,
+          // Só 'divergiu' carrega itens; 'bateu'/'nao_validado' vão nulos.
+          divergencias: isDivergiu ? divergencias : null,
+          rating: isMeetingDone && rating > 0 ? rating : null,
           comment: comment.trim() || null,
-          decisor_presente: needsMeetingFields ? decisorPresente : null,
         }),
       });
 
@@ -64,115 +115,96 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
     return (
       <div className="text-center py-8">
         <div className="text-4xl mb-4 text-primary">&#10003;</div>
-        <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">Feedback enviado!</h2>
+        <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">Feedback enviado</h2>
         <p className="text-[var(--muted-foreground)]">Obrigado pela sua avaliação.</p>
       </div>
     );
   }
 
+  const submitDisabled = submitting || !result || (isMeetingDone && !qualificacao);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Result */}
+      {/* 1. Resultado da reunião */}
       <div>
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
-          Como foi a reunião? <span className="text-primary">*</span>
+          Resultado da reunião <span className="text-primary">*</span>
         </label>
-        <div className="space-y-2">
+        <div className="grid grid-cols-3 gap-2">
           {RESULT_OPTIONS.map((option) => (
-            <label
+            <button
               key={option.value}
-              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              type="button"
+              onClick={() => handleResultChange(option.value)}
+              className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
                 result === option.value
-                  ? 'border-primary bg-primary/5'
-                  : 'border-[var(--border)] hover:border-[var(--muted-foreground)]'
+                  ? 'border-primary bg-primary/5 text-[var(--foreground)]'
+                  : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--muted-foreground)]'
               }`}
             >
-              <input
-                type="radio"
-                name="result"
-                value={option.value}
-                checked={result === option.value}
-                onChange={() => {
-                  setResult(option.value);
-                  if (option.value !== 'meeting_done') { setRating(0); setDecisorPresente(null); }
-                }}
-                className="accent-primary"
-              />
-              <span className="text-sm text-[var(--foreground)]">{option.label}</span>
-            </label>
+              {option.label}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* Rating — only for meeting_done */}
-      {result === 'meeting_done' && (
+      {/* 2. A qualificação bateu com a reunião? — só quando Realizada */}
+      {isMeetingDone && (
         <div>
-          <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
-            Qualidade do lead (1-5) <span className="text-primary">*</span>
+          <label className="block text-sm font-semibold text-[var(--foreground)] mb-1">
+            A qualificação bateu com a reunião? <span className="text-primary">*</span>
           </label>
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5].map((star) => (
+          <p className="text-[var(--muted-foreground)] mb-3" style={{ fontSize: '13px' }}>
+            Considere o que o pré-vendas registrou antes da reunião: verba, decisor, dor e timing.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {QUALIFICACAO_OPTIONS.map((option) => (
               <button
-                key={star}
+                key={option.value}
                 type="button"
-                onClick={() => setRating(star)}
-                onMouseEnter={() => setHoverRating(star)}
-                onMouseLeave={() => setHoverRating(0)}
-                className="text-3xl transition-transform hover:scale-110 focus:outline-none"
+                onClick={() => handleQualificacaoChange(option.value)}
+                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
+                  qualificacao === option.value
+                    ? 'border-primary bg-primary/5 text-[var(--foreground)]'
+                    : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--muted-foreground)]'
+                }`}
               >
-                <span style={{ color: star <= (hoverRating || rating) ? 'var(--primary)' : 'var(--muted-foreground)' }}>
-                  &#9733;
-                </span>
+                {option.label}
               </button>
             ))}
           </div>
-          {rating > 0 && (
-            <p className="text-xs text-[var(--muted-foreground)] mt-1">
-              {rating === 1 && 'Muito baixa'}
-              {rating === 2 && 'Baixa'}
-              {rating === 3 && 'Regular'}
-              {rating === 4 && 'Boa'}
-              {rating === 5 && 'Excelente'}
-            </p>
-          )}
         </div>
       )}
 
-      {/* Decisor presente — só quando a reunião aconteceu. Obrigatório para não
-          deixar buraco na métrica "Decisor na Call %" do Sales Hub. */}
-      {result === 'meeting_done' && (
-        <div>
+      {/* 3. O que não conferiu — só quando Divergiu */}
+      {isDivergiu && (
+        <div className="ml-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-4">
           <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
-            O decisor estava presente na call? <span className="text-primary">*</span>
+            O que não conferiu <span className="text-primary">*</span>
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { value: true, label: 'Sim' },
-              { value: false, label: 'Não' },
-            ].map((option) => (
+          <div className="space-y-2">
+            {DIVERGENCIA_OPTIONS.map((option) => (
               <label
-                key={option.label}
-                className={`flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  decisorPresente === option.value
-                    ? 'border-primary bg-primary/5'
-                    : 'border-[var(--border)] hover:border-[var(--muted-foreground)]'
-                }`}
+                key={option.value}
+                className="flex items-center gap-3 cursor-pointer text-sm text-[var(--foreground)]"
               >
                 <input
-                  type="radio"
-                  name="decisor_presente"
-                  checked={decisorPresente === option.value}
-                  onChange={() => setDecisorPresente(option.value)}
-                  className="accent-primary"
+                  type="checkbox"
+                  checked={divergencias.includes(option.value)}
+                  onChange={() => {
+                    toggleDivergencia(option.value);
+                    setError('');
+                  }}
+                  className="accent-primary h-4 w-4"
                 />
-                <span className="text-sm text-[var(--foreground)]">{option.label}</span>
+                <span>{option.label}</span>
               </label>
             ))}
           </div>
         </div>
       )}
 
-      {/* Comment */}
+      {/* 4. Observações — opcional */}
       <div>
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-2">
           Observações <span className="text-[var(--muted-foreground)] font-normal">(opcional)</span>
@@ -180,10 +212,36 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="Como foi a conversa? O lead demonstrou interesse? Algum ponto de atenção para o time?"
-          rows={4}
+          placeholder="O que o SDR precisa saber para a próxima"
+          rows={2}
           className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-y"
         />
+      </div>
+
+      {/* 5. Chance de fechar — leitura subjetiva, opcional, no rodapé */}
+      <div className="border-t border-[var(--border)] pt-6">
+        <label className="block text-sm font-semibold text-[var(--foreground)] mb-1">
+          Chance de fechar <span className="text-[var(--muted-foreground)] font-normal">(opcional)</span>
+        </label>
+        <p className="text-[var(--muted-foreground)] mb-3" style={{ fontSize: '12px' }}>
+          Leitura sua. Não entra na avaliação do pré-vendas.
+        </p>
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={star}
+              type="button"
+              onClick={() => setRating(star === rating ? 0 : star)}
+              onMouseEnter={() => setHoverRating(star)}
+              onMouseLeave={() => setHoverRating(0)}
+              className="text-3xl transition-transform hover:scale-110 focus:outline-none"
+            >
+              <span style={{ color: star <= (hoverRating || rating) ? 'var(--primary)' : 'var(--muted-foreground)' }}>
+                &#9733;
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -192,10 +250,10 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
       <button
         type="submit"
-        disabled={submitting || !result || (needsMeetingFields && (!rating || decisorPresente === null))}
+        disabled={submitDisabled}
         className="w-full bg-primary hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
       >
-        {submitting ? 'Enviando...' : 'Enviar Feedback'}
+        {submitting ? 'Enviando...' : 'Enviar feedback'}
       </button>
     </form>
   );
