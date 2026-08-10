@@ -109,6 +109,22 @@ Testando o reagendamento real, ele parava em *"um especialista vai confirmar"* (
 
 **⭐ Pré-requisito de produção:** a agenda de **cada closer** (Pedro, Jhonata, …) precisa estar compartilhada com a conta Google do n8n em **"Fazer alterações nos eventos"** — senão o reagendamento deles bate no mesmo 403. Alternativa definitiva: Service Account + domain-wide delegation.
 
+## Checklist — compartilhamento das agendas dos closers
+
+Cada agenda de closer precisa estar compartilhada com a **conta Google do n8n** (credencial `"Google Calendar account"` = `YKCnnUciuewss3TG`; ver o e-mail em n8n → Credentials) no nível **"Fazer alterações nos eventos"**. Sem isso → `Mover Evento` = **403 Forbidden** (leitura/free-busy funciona só com compartilhamento básico; escrita não).
+
+Closers ativos (V4 Amaral, tabela `closers`) em 2026-08-09:
+
+| Closer | calendar_id (e-mail) | Compartilhado c/ edição? |
+|---|---|---|
+| Vinicius Mercante | vinicius.mercante@v4company.com | ✅ sim (reagendamento validado ponta a ponta) |
+| Pedro Neves | pedroneves@v4company.com | ⬜ pendente |
+| Jhonata Banqueri | jhonata.banqueri@v4company.com | ⬜ pendente |
+
+**Como compartilhar (cada closer, na própria conta Google):** Google Agenda → agenda principal → ⋮ → *Configurações e compartilhamento* → *Compartilhar com pessoas e grupos* → adicionar a conta do n8n → permissão **"Fazer alterações nos eventos"**.
+
+**Manter atualizado:** todo **novo closer** adicionado precisa do mesmo compartilhamento (ou resolver de vez com Service Account + domain-wide delegation, feito 1x pelo admin do Workspace).
+
 ## Pendências herdadas (não desta frente)
 
 - Grupo de WhatsApp do lead Imperius Fitness — Matheus re-agenda pelo app OU endpoint "recriar grupo".
