@@ -74,6 +74,21 @@ Resolvido na mesma sessão. Como o form parou de alimentar `closer_feedback_requ
 - **Validação ponta a ponta:** RPC deriva 15 sinais (12 TRUE / 3 FALSE) → **sync disparado manualmente** (execução n8n `1248837`, success) → `leads_pv` (SH) recebeu 15 (12/3) → view Ago/2026 = **80,0% decisor na call, cobertura 68,2%**. Meses anteriores ficam 0 porque o sync busca só o mês corrente (`p_from_date` = início do mês) e o sinal de decisor só existe desde ago.
 - ⭐ Como a qualificação é **obrigatória** em toda reunião realizada, a cobertura tende a subir mais rápido que com o `decisor_presente` opcional antigo.
 
+### Monitoramento pós-deploy (syncs agendados)
+
+O sync "Sync Leads PV" roda **a cada 15 min** (webhook nos minutos :07/:22/:37/:52), ~3s por execução, todas `success`. Acompanhamos vários ciclos agendados e a métrica evoluiu **organicamente com respostas reais do form novo** (não só o backfill):
+
+| Momento (UTC) | Reuniões | Respondidas | Decisor | Cobertura | Decisor na Call % |
+|---|---|---|---|---|---|
+| Backfill inicial (sync manual `1248837`) | 22 | 15 | 12 | 68,2% | 80,0% |
+| Sync agendado ~17:07 | 23 | 15 | 12 | 65,2% | 80,0% |
+| Sync agendado ~18:37 | 23 | 18 | 15 | 78,3% | 83,3% |
+| Baseline monitor 21:22Z | 24 | 19 | 16 | 79,2% | 84,2% |
+
+- Cada nova reunião realizada sem feedback ainda **derruba a cobertura** (denominador sobe); quando o closer responde pelo form novo, `respondidas` e `decisor` sobem e a métrica se recompõe.
+- Todas as respostas novas observadas vieram do regime novo (`qualificacao_aderente`) e derivaram `decisor_presente=TRUE` (nenhuma marcou "decisor" como divergência) → confirma a derivação da RPC ponta a ponta, em produção, com usuários reais.
+- Método: espera em background até cada slot + `search_executions` (n8n) + leitura da `v_decisor_na_call_mensal` (SH). Também deixamos um monitor de sessão lendo a view via REST (anon key) a cada 90s, emitindo só em mudança — **encerrado ao fim do acompanhamento**.
+
 ## Fora de escopo (intactos)
 
 Enum `closer_feedback_result`; envio do e-mail de solicitação; lembretes (`reminder_sent_at`/`reminder_count`); view `vw_sla_qualificacao_sdr`.
