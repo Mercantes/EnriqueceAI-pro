@@ -76,27 +76,27 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
 
   // Fetch user goals for current month
   const { data: currentUserGoals } = (await from(supabase, 'goals_per_user')
-    .select('user_id, opportunity_target, meetings_scheduled_target, meetings_held_target')
+    .select('user_id, leads_opened_target, meetings_scheduled_target, meetings_held_target')
     .eq('org_id', orgId)
     .eq('month', monthDate)) as {
     data:
       | {
           user_id: string;
-          opportunity_target: number;
+          leads_opened_target: number | null;
           meetings_scheduled_target: number | null;
           meetings_held_target: number | null;
         }[]
       | null;
   };
 
-  // Fetch user goals for previous month (reference)
+  // Fetch user goals for previous month (reference de leads abertos)
   const { data: prevUserGoals } = (await from(supabase, 'goals_per_user')
-    .select('user_id, opportunity_target')
+    .select('user_id, leads_opened_target')
     .eq('org_id', orgId)
-    .eq('month', prevMonth)) as { data: { user_id: string; opportunity_target: number }[] | null };
+    .eq('month', prevMonth)) as { data: { user_id: string; leads_opened_target: number }[] | null };
 
   const currentMap = new Map(currentUserGoals?.map((g) => [g.user_id, g]) ?? []);
-  const prevMap = new Map(prevUserGoals?.map((g) => [g.user_id, g.opportunity_target]) ?? []);
+  const prevMap = new Map(prevUserGoals?.map((g) => [g.user_id, g.leads_opened_target]) ?? []);
 
   return {
     success: true,
@@ -115,7 +115,7 @@ export async function getGoals(month: string): Promise<ActionResult<GoalsData>> 
           userId: sdr.user_id,
           userName: info?.name ?? sdr.user_id.slice(0, 8),
           avatarUrl: info?.avatarUrl,
-          opportunityTarget: current?.opportunity_target ?? 0,
+          leadsOpenedTarget: current?.leads_opened_target ?? 0,
           previousTarget: prevMap.get(sdr.user_id) ?? null,
           meetingsScheduledTarget: current?.meetings_scheduled_target ?? 0,
           meetingsHeldTarget: current?.meetings_held_target ?? 0,

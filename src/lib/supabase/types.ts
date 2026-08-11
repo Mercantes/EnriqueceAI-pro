@@ -816,6 +816,7 @@ export type Database = {
           conversion_target: number
           created_at: string
           id: string
+          leads_opened_target: number
           meetings_held_target: number
           meetings_scheduled_target: number
           month: string
@@ -829,6 +830,7 @@ export type Database = {
           conversion_target?: number
           created_at?: string
           id?: string
+          leads_opened_target?: number
           meetings_held_target?: number
           meetings_scheduled_target?: number
           month: string
@@ -842,6 +844,7 @@ export type Database = {
           conversion_target?: number
           created_at?: string
           id?: string
+          leads_opened_target?: number
           meetings_held_target?: number
           meetings_scheduled_target?: number
           month?: string

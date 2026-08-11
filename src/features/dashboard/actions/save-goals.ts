@@ -58,12 +58,15 @@ export async function saveGoals(input: SaveGoalsInput): Promise<ActionResult<{ s
     return { success: false, error: 'Erro ao salvar meta da organização' };
   }
 
-  // Upsert user goals
+  // Upsert user goals.
+  // opportunity_target (per-usuário) ficou vestigial — não é mais editado pela
+  // UI; omitido do payload pra preservar valores históricos no conflito e cair
+  // no default 0 em inserts novos.
   const userGoalRows = userGoals.map((ug) => ({
     org_id: member.org_id,
     user_id: ug.userId,
     month: monthDate,
-    opportunity_target: ug.opportunityTarget,
+    leads_opened_target: ug.leadsOpenedTarget ?? 0,
     meetings_scheduled_target: ug.meetingsScheduledTarget,
     meetings_held_target: ug.meetingsHeldTarget,
   }));
