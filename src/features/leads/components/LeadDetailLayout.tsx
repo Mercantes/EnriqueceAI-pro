@@ -56,6 +56,20 @@ const FEEDBACK_RESULT_LABELS: Record<string, string> = {
   no_show: 'Não compareceu',
   rescheduled: 'Remarcou',
 };
+
+const QUALIFICACAO_LABELS: Record<string, string> = {
+  bateu: 'Bateu',
+  divergiu: 'Divergiu',
+  nao_validado: 'Não deu pra validar',
+};
+
+const DIVERGENCIA_LABELS: Record<string, string> = {
+  verba: 'Verba',
+  decisor: 'Decisor',
+  dor: 'Dor',
+  timing: 'Timing',
+  dados_cadastrais: 'Dados cadastrais',
+};
 import type { LeadRow } from '../types';
 import { CadenceProgressBar } from './CadenceProgressBar';
 import { EnrollInCadenceDialog } from './EnrollInCadenceDialog';
@@ -525,10 +539,27 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
               <p className="font-medium">{closerFeedback.result ? (FEEDBACK_RESULT_LABELS[closerFeedback.result] ?? closerFeedback.result) : '-'}</p>
             </div>
             <div>
-              <p className="text-xs text-[var(--muted-foreground)]">Nota</p>
-              <p className="font-medium">{closerFeedback.rating ? '★'.repeat(closerFeedback.rating) + '☆'.repeat(5 - closerFeedback.rating) : '-'}</p>
+              <p className="text-xs text-[var(--muted-foreground)]">A qualificação bateu?</p>
+              {closerFeedback.result === 'meeting_done' && closerFeedback.qualificacao_aderente ? (
+                <p className="font-medium">
+                  {QUALIFICACAO_LABELS[closerFeedback.qualificacao_aderente] ?? closerFeedback.qualificacao_aderente}
+                  {closerFeedback.qualificacao_aderente === 'divergiu' && closerFeedback.divergencias?.length ? (
+                    <span className="block text-xs font-normal text-red-600 dark:text-red-400">
+                      não conferiu: {closerFeedback.divergencias.map((d) => DIVERGENCIA_LABELS[d] ?? d).join(', ')}
+                    </span>
+                  ) : null}
+                </p>
+              ) : (
+                <p className="font-medium text-[var(--muted-foreground)]">—</p>
+              )}
             </div>
           </div>
+          {closerFeedback.result === 'meeting_done' && closerFeedback.rating ? (
+            <div className="mt-3 pt-3 border-t border-[var(--border)]">
+              <p className="text-xs text-[var(--muted-foreground)] mb-1">Chance de fechar <span className="font-normal">(leitura do closer)</span></p>
+              <p className="font-medium text-primary">{'★'.repeat(closerFeedback.rating)}{'☆'.repeat(5 - closerFeedback.rating)}</p>
+            </div>
+          ) : null}
           {closerFeedback.comment && (
             <div className="mt-3 pt-3 border-t border-[var(--border)]">
               <p className="text-xs text-[var(--muted-foreground)] mb-1">Observações</p>

@@ -51,7 +51,7 @@ export function CloserFeedbackTable({ feedbacks }: CloserFeedbackTableProps) {
             <th className="p-3 text-left font-medium">Lead</th>
             <th className="p-3 text-left font-medium">Closer</th>
             <th className="p-3 text-left font-medium">Resultado</th>
-            <th className="p-3 text-center font-medium">Nota</th>
+            <th className="p-3 text-center font-medium">Chance de fechar</th>
             <th className="p-3 text-left font-medium">Comentário</th>
             <th className="p-3 text-left font-medium">Status</th>
             <th className="p-3 text-left font-medium">Enviado</th>

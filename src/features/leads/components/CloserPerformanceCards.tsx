@@ -81,7 +81,7 @@ export function CloserPerformanceCards({ feedbacks }: { feedbacks: CloserFeedbac
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Total de feedbacks" value={String(global.total)} subtitle={`${global.responded} respondidos`} />
         <MetricCard label="Taxa de resposta" value={`${global.responseRate.toFixed(0)}%`} />
-        <MetricCard label="Nota média" value={global.avgRating !== null ? `${global.avgRating.toFixed(1)}/5` : '—'} subtitle={global.avgRating !== null ? '★'.repeat(Math.round(global.avgRating)) : undefined} />
+        <MetricCard label="Chance de fechar" value={global.avgRating !== null ? `${global.avgRating.toFixed(1)}/5` : '—'} subtitle={global.avgRating !== null ? `${'★'.repeat(Math.round(global.avgRating))} · leitura do closer` : 'leitura do closer'} />
         <MetricCard label="Reuniões realizadas" value={`${global.meetingDoneRate.toFixed(0)}%`} subtitle="dos respondidos" />
       </div>
 
@@ -98,7 +98,7 @@ export function CloserPerformanceCards({ feedbacks }: { feedbacks: CloserFeedbac
                   <th className="p-3 text-center font-medium">Realizadas</th>
                   <th className="p-3 text-center font-medium">No-show</th>
                   <th className="p-3 text-center font-medium">Remarcou</th>
-                  <th className="p-3 text-center font-medium">Nota média</th>
+                  <th className="p-3 text-center font-medium">Chance de fechar</th>
                   <th className="p-3 text-center font-medium">Resposta</th>
                 </tr>
               </thead>
