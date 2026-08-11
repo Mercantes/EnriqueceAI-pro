@@ -21,12 +21,19 @@ const RESULT_LABELS: Record<string, string> = {
   rescheduled: 'Remarcou',
 };
 
-const RATING_LABELS: Record<number, string> = {
-  1: 'Muito baixa',
-  2: 'Baixa',
-  3: 'Regular',
-  4: 'Boa',
-  5: 'Excelente',
+// Conferência da qualificação (form novo) — rótulos para e-mails/notificações.
+const QUALIFICACAO_LABELS: Record<string, string> = {
+  bateu: 'Bateu',
+  divergiu: 'Divergiu',
+  nao_validado: 'Não deu pra validar',
+};
+
+const DIVERGENCIA_LABELS: Record<string, string> = {
+  verba: 'Verba',
+  decisor: 'Decisor',
+  dor: 'Dor',
+  timing: 'Timing',
+  dados_cadastrais: 'Dados cadastrais',
 };
 
 interface FeedbackRequestFull {
@@ -223,24 +230,29 @@ export async function POST(request: Request) {
       );
     }
 
+    // Qualificação/divergências só se aplicam a meeting_done.
+    const qualForNotify = needsMeetingFields ? qualificacao_aderente : null;
+
     // Notify SDR in background after response is sent
     after(() =>
-      notifySdr(supabase, feedbackReq, result, rating, comment).catch((err) =>
+      notifySdr(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean).catch((err) =>
         console.error('[api/feedback] SDR notification error:', err),
       ),
     );
 
     // Notify managers only when there's an actionable signal — keeps their inbox
-    // clean on healthy feedbacks (meeting_done with good rating) while ensuring
-    // they hear about: no-show, reschedule, or low rating.
+    // clean on healthy feedbacks (bateu / não validado) while ensuring they hear
+    // about: no-show, reschedule, or a qualification that diverged in the
+    // meeting. Rating ("chance de fechar") is a subjective closer read and does
+    // NOT trigger alerts.
     const isActionable =
       result === 'no_show'
       || result === 'rescheduled'
-      || (typeof rating === 'number' && rating >= 1 && rating <= 2);
+      || (needsMeetingFields && qualificacao_aderente === 'divergiu');
 
     if (isActionable) {
       after(() =>
-        notifyManagers(supabase, feedbackReq, result, rating, comment).catch((err) =>
+        notifyManagers(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean).catch((err) =>
           console.error('[api/feedback] Manager notification error:', err),
         ),
       );
@@ -314,6 +326,8 @@ async function notifySdr(
   result: string,
   rating: number,
   comment: string | null,
+  qualificacaoAderente: string | null,
+  divergencias: string[] | null,
 ) {
   // Get lead info + who marked as won (SDR)
   const { data: lead } = (await from(supabase, 'leads')
@@ -349,8 +363,13 @@ async function notifySdr(
     notifTitle = `📅 ${leadName} reaberto — reunião remarcada`;
     notifBody = `${closerName} marcou que a reunião foi remarcada. Lead reaberto — combine nova data${comment ? `. Observação: ${comment}` : '.'}`;
   } else {
+    // meeting_done: destaca a conferência da qualificação (não mais o rating).
+    const qualLabel = qualificacaoAderente ? (QUALIFICACAO_LABELS[qualificacaoAderente] ?? qualificacaoAderente) : null;
+    const divTxt = qualificacaoAderente === 'divergiu' && divergencias?.length
+      ? ` (${divergencias.map((d) => DIVERGENCIA_LABELS[d] ?? d).join(', ')})`
+      : '';
     notifTitle = `${closerName} respondeu o feedback`;
-    notifBody = `${leadName} — ${resultLabel} (${rating}/5)${comment ? `: ${comment}` : ''}`;
+    notifBody = `${leadName} — ${resultLabel}${qualLabel ? `: qualificação ${qualLabel.toLowerCase()}${divTxt}` : ''}${comment ? `. ${comment}` : ''}`;
   }
 
   // Create in-app notification for the SDR (triggers Realtime)
@@ -363,16 +382,20 @@ async function notifySdr(
       body: notifBody,
       resource_type: 'lead',
       resource_id: feedbackReq.lead_id,
-      metadata: { closer_name: closerName, result, rating, comment },
+      metadata: { closer_name: closerName, result, qualificacao_aderente: qualificacaoAderente, divergencias, rating, comment },
     });
   } catch (err) {
     console.error('[api/feedback] Failed to create notification:', err);
   }
-  // Rating is only required for meeting_done; no_show/rescheduled responses
-  // have rating=null. Guard the star renderer so we don't crash.
+  // "Chance de fechar" (rating) só existe em meeting_done — leitura subjetiva do
+  // closer, sem peso no SLA do SDR. Guarda o renderer de estrelas.
+  const isMeetingDone = result === 'meeting_done';
   const safeRating = typeof rating === 'number' && rating >= 1 && rating <= 5 ? rating : 0;
-  const ratingLabel = safeRating > 0 ? (RATING_LABELS[safeRating] ?? `${safeRating}/5`) : '—';
   const stars = safeRating > 0 ? '★'.repeat(safeRating) + '☆'.repeat(5 - safeRating) : '';
+  const qualLabelHtml = qualificacaoAderente ? (QUALIFICACAO_LABELS[qualificacaoAderente] ?? qualificacaoAderente) : '—';
+  const divergenciasHtml = qualificacaoAderente === 'divergiu' && divergencias?.length
+    ? divergencias.map((d) => DIVERGENCIA_LABELS[d] ?? d).join(', ')
+    : '';
   const isReopen = result === 'no_show' || result === 'rescheduled';
   const ctaLine = result === 'no_show'
     ? 'Lead reaberto. Retome o contato com o lead.'
@@ -414,12 +437,21 @@ async function notifySdr(
                     <strong style="color: #1a1a1a; font-size: 15px;">${resultLabel}</strong>
                   </td>
                 </tr>
-                ${safeRating > 0 ? `
+                ${isMeetingDone && qualificacaoAderente ? `
                 <tr>
                   <td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
-                    <span style="color: #6b7280; font-size: 13px;">Qualidade do lead</span><br>
+                    <span style="color: #6b7280; font-size: 13px;">A qualificação bateu?</span><br>
+                    <strong style="color: #1a1a1a; font-size: 15px;">${qualLabelHtml}</strong>
+                    ${divergenciasHtml ? `<span style="color: #b91c1c; font-size: 14px;"> — não conferiu: ${divergenciasHtml}</span>` : ''}
+                  </td>
+                </tr>
+                ` : ''}
+                ${isMeetingDone && safeRating > 0 ? `
+                <tr>
+                  <td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 13px;">Chance de fechar (leitura do closer)</span><br>
                     <span style="color: #E53935; font-size: 20px; letter-spacing: 2px;">${stars}</span>
-                    <span style="color: #1a1a1a; font-size: 14px; margin-left: 8px;">${ratingLabel} (${safeRating}/5)</span>
+                    <span style="color: #1a1a1a; font-size: 14px; margin-left: 8px;">${safeRating}/5</span>
                   </td>
                 </tr>
                 ` : ''}
@@ -472,9 +504,10 @@ async function notifySdr(
 
 /**
  * Notify managers when a feedback signals something actionable:
- * no_show, rescheduled, or low rating (<= 2). Healthy feedbacks
- * (meeting_done with rating >= 3) are intentionally silent for managers
- * to avoid inbox noise.
+ * no_show, rescheduled, or a qualification that diverged in the meeting
+ * (qualificacao_aderente = 'divergiu'). Healthy feedbacks (bateu / não
+ * validado) are intentionally silent for managers to avoid inbox noise.
+ * Rating ("chance de fechar") is subjective and never triggers an alert.
  */
 async function notifyManagers(
   supabase: ReturnType<typeof createServiceRoleClient>,
@@ -482,6 +515,8 @@ async function notifyManagers(
   result: string,
   rating: number,
   comment: string | null,
+  qualificacaoAderente: string | null,
+  divergencias: string[] | null,
 ) {
   // Pull lead, closer, sdr names for context
   const { data: lead } = (await from(supabase, 'leads')
@@ -512,11 +547,14 @@ async function notifyManagers(
   }
 
   // Build the reason line — what made this feedback actionable
+  const divergenciasTxt = qualificacaoAderente === 'divergiu' && divergencias?.length
+    ? divergencias.map((d) => DIVERGENCIA_LABELS[d] ?? d).join(', ')
+    : '';
   const reasons: string[] = [];
   if (result === 'no_show') reasons.push('reunião não aconteceu (no-show)');
   if (result === 'rescheduled') reasons.push('closer remarcou a reunião');
-  if (typeof rating === 'number' && rating >= 1 && rating <= 2) {
-    reasons.push(`closer avaliou o lead com nota baixa (${rating}/5)`);
+  if (result === 'meeting_done' && qualificacaoAderente === 'divergiu') {
+    reasons.push(`a qualificação do pré-vendas divergiu na reunião${divergenciasTxt ? ` (${divergenciasTxt})` : ''}`);
   }
   const reasonLine = reasons.join(' • ');
 
@@ -537,14 +575,12 @@ async function notifyManagers(
     body: `${closerName} → ${resultLabel}. ${reasonLine}${comment ? `. "${comment}"` : ''}`,
     resourceType: 'lead',
     resourceId: feedbackReq.lead_id,
-    metadata: { closer_name: closerName, result, rating, comment, actionable: true },
+    metadata: { closer_name: closerName, result, qualificacao_aderente: qualificacaoAderente, divergencias, rating, comment, actionable: true },
     roleFilter: 'manager',
   }).catch((err) => console.error('[api/feedback/notifyManagers] in-app failed:', err));
 
   // Email each manager — same template style as the SDR mail
-  const safeRating = typeof rating === 'number' && rating >= 1 && rating <= 5 ? rating : 0;
-  const ratingLabel = safeRating > 0 ? (RATING_LABELS[safeRating] ?? `${safeRating}/5`) : '—';
-  const stars = safeRating > 0 ? '★'.repeat(safeRating) + '☆'.repeat(5 - safeRating) : '';
+  const qualLabelHtml = qualificacaoAderente ? (QUALIFICACAO_LABELS[qualificacaoAderente] ?? qualificacaoAderente) : '—';
 
   const htmlBody = `
 <!DOCTYPE html>
@@ -571,11 +607,11 @@ async function notifyManagers(
               <span style="color: #6b7280; font-size: 13px;">Resultado da reunião</span><br>
               <strong style="color: #1a1a1a; font-size: 15px;">${resultLabel}</strong>
             </td></tr>
-            ${safeRating > 0 ? `
+            ${result === 'meeting_done' && qualificacaoAderente ? `
             <tr><td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
-              <span style="color: #6b7280; font-size: 13px;">Qualidade do lead</span><br>
-              <span style="color: #E53935; font-size: 20px; letter-spacing: 2px;">${stars}</span>
-              <span style="color: #1a1a1a; font-size: 14px; margin-left: 8px;">${ratingLabel} (${safeRating}/5)</span>
+              <span style="color: #6b7280; font-size: 13px;">A qualificação bateu?</span><br>
+              <strong style="color: #1a1a1a; font-size: 15px;">${qualLabelHtml}</strong>
+              ${divergenciasTxt ? `<span style="color: #b91c1c; font-size: 14px;"> — não conferiu: ${divergenciasTxt}</span>` : ''}
             </td></tr>
             ` : ''}
             ${comment ? `
@@ -591,7 +627,7 @@ async function notifyManagers(
         </td></tr>
         <tr><td style="background: #f9fafb; padding: 16px 32px; border-top: 1px solid #e5e7eb;">
           <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-            Você recebe este email porque é manager da organização. Gestores são notificados apenas em casos acionáveis (no-show, reagendamento ou avaliação baixa).
+            Você recebe este email porque é manager da organização. Gestores são notificados apenas em casos acionáveis (no-show, reagendamento ou qualificação divergente).
           </p>
         </td></tr>
       </table>
