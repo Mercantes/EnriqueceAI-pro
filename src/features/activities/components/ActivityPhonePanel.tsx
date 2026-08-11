@@ -90,6 +90,9 @@ export function ActivityPhonePanel({
   const currentAttemptNumber = attempts.length + 1;
   const canRetry = currentAttemptNumber < MAX_CALL_ATTEMPTS;
   const hasAnyPhone = selectedPhone !== '';
+  // Qual contato (lead_contacts) dono do número escolhido — para registrar na
+  // ligação. null quando o número é de sócio/enriquecido (sem contato).
+  const selectedContactId = availablePhones.find((p) => p.formatted === selectedPhone)?.contactId ?? null;
 
   // Timer for call duration
   useEffect(() => {
@@ -141,6 +144,7 @@ export function ActivityPhonePanel({
         provider: dialerProvider,
         phone: selectedPhone,
         leadId,
+        contactId: selectedContactId,
       });
 
       if (!result.success) {

@@ -13,6 +13,7 @@ import { normalizePhone } from '@/lib/utils/phone';
 const initiateCallSchema = z.object({
   phone: z.string().min(8, 'Telefone inválido'),
   leadId: z.string().uuid().optional(),
+  contactId: z.string().uuid().nullable().optional(),
   extraMetadata: z.record(z.string()).optional(),
 });
 
@@ -21,6 +22,7 @@ const callIdSchema = z.string().min(1, 'ID da chamada é obrigatório');
 interface InitiateCallInput {
   phone: string;
   leadId?: string;
+  contactId?: string | null;
   extraMetadata?: Record<string, string>;
 }
 
@@ -61,6 +63,7 @@ export async function initiateApi4ComCall(
         org_id: orgId,
         user_id: userId,
         lead_id: input.leadId ?? null,
+        contact_id: input.contactId ?? null,
         origin: ramal,
         destination: normalizedPhone,
         duration_seconds: 0,
@@ -85,6 +88,7 @@ export async function initiateApi4ComCall(
         .insert({
           org_id: orgId,
           lead_id: input.leadId,
+          contact_id: input.contactId ?? null,
           type: 'sent',
           channel: 'phone',
           message_content: `Ligação iniciada pela plataforma para ${normalizedPhone}`,

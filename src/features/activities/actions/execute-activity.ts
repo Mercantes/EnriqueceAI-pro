@@ -33,6 +33,7 @@ const executeActivitySchema = z.object({
   cadenceCreatedBy: z.string().min(1),
   channel: z.string().min(1),
   to: z.string(),
+  contactId: z.string().uuid().nullable().optional(),
   subject: z.string(),
   body: z.string(),
   aiGenerated: z.boolean(),
@@ -64,6 +65,7 @@ export async function executeActivity(
     cadenceCreatedBy: _cadenceCreatedBy,
     channel,
     to,
+    contactId,
     subject,
     body,
     aiGenerated,
@@ -131,6 +133,7 @@ export async function executeActivity(
       .insert({
         org_id: orgId,
         lead_id: leadId,
+        contact_id: contactId ?? null,
         cadence_id: cadenceId,
         step_id: stepId,
         channel: channel || 'email',

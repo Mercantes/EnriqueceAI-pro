@@ -123,7 +123,7 @@ export function ActivityExecutionSheet({
 
   const isScheduled = activity?.enrollmentId.startsWith('scheduled:') ?? false;
 
-  const handleSend = (subject: string, body: string, aiGenerated: boolean, phone?: string) => {
+  const handleSend = (subject: string, body: string, aiGenerated: boolean, phone?: string, contactId?: string | null) => {
     if (!activity) return;
     const act = activity;
 
@@ -169,6 +169,7 @@ export function ActivityExecutionSheet({
           cadenceCreatedBy: act.cadenceCreatedBy!,
           channel: act.channel,
           to,
+          contactId: contactId ?? null,
           subject,
           body,
           aiGenerated,

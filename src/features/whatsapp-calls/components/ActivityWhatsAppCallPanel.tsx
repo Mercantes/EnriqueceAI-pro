@@ -176,6 +176,7 @@ export function ActivityWhatsAppCallPanel({
       stepId,
       cadenceId,
       leadId,
+      contactId: selected?.contactId ?? null,
       sid: sidRef.current ?? '',
       callId,
       destination: selectedPhone,

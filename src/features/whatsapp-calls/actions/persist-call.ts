@@ -20,6 +20,9 @@ const persistSchema = z.object({
   stepId: z.string().uuid().optional(),
   cadenceId: z.string().uuid().optional(),
   leadId: z.string().uuid(),
+  // Contato (lead_contacts) dono do número discado — para relatório. Null quando
+  // o número é de sócio/enriquecido, sem contato vinculado.
+  contactId: z.string().uuid().nullable().optional(),
   sid: z.string().min(1),
   callId: z.string().optional().default(''),
   // Número discado (lead).
@@ -123,6 +126,7 @@ export async function persistWhatsAppCall(
     const base = {
       org_id: orgId,
       lead_id: p.leadId,
+      contact_id: p.contactId ?? null,
       cadence_id: p.cadenceId ?? null,
       channel: 'phone',
       type: 'sent',
@@ -215,6 +219,7 @@ export async function persistWhatsAppCall(
       org_id: orgId,
       user_id: user.id,
       lead_id: p.leadId,
+      contact_id: p.contactId ?? null,
       origin: 'whatsapp',
       destination,
       started_at: p.startedAt,
