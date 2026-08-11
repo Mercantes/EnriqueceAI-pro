@@ -26,6 +26,7 @@ import { RDStationAdapter } from '@/features/integrations/services/rdstation.ada
 import { KommoAdapter } from '@/features/integrations/services/kommo.adapter';
 
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
+import { nextBusinessDayAt9hBRT } from '@/app/api/cron/meeting-outcome-check/route';
 
 export interface CrmPipelinesEntry {
   provider: CrmProvider;
@@ -332,10 +333,10 @@ export async function markLeadAsWon(
     // graded twice. We still upsert status='won' (a no-op) so the legitimate
     // reopen→re-win path (status='qualified' at that point) stamps fresh.
     const { data: currentLead } = (await from(supabase, 'leads')
-      .select('status, custom_field_values')
+      .select('status, custom_field_values, assigned_to')
       .eq('id', leadId)
       .eq('org_id', orgId)
-      .single()) as { data: { status: string; custom_field_values: Record<string, unknown> | null } | null };
+      .single()) as { data: { status: string; custom_field_values: Record<string, unknown> | null; assigned_to: string | null } | null };
     const wasAlreadyWon = currentLead?.status === 'won';
 
     let customFieldUpdate: Record<string, unknown> | null = null;
@@ -388,6 +389,21 @@ export async function markLeadAsWon(
       .update({ status: 'cancelled' } as Record<string, unknown>)
       .eq('lead_id', leadId)
       .eq('status', 'pending');
+
+    // 2a-bis. Feedback da reunião: cria uma tarefa de ligação (API4COM) para o
+    // SDR ligar ao lead e ouvir como foi a reunião com o closer. Só na transição
+    // real qualified→won (guard wasAlreadyWon) e DEPOIS do cancelamento acima,
+    // para não empilhar nem ser cancelada. Some se o lead reabrir — ver
+    // /api/feedback, branch no_show/rescheduled. Awaited (mas com try/catch
+    // próprio) para já estar na fila quando /atividades revalidar; nunca
+    // derruba a marcação de Ganho.
+    if (!wasAlreadyWon) {
+      try {
+        await scheduleWonFeedbackCall(orgId, leadId, currentLead?.assigned_to ?? userId);
+      } catch (err) {
+        console.error('[markLeadAsWon] feedback call task error:', err);
+      }
+    }
 
     // 2b. Record system interaction for timeline visibility
     await from(supabase, 'interactions')
@@ -471,4 +487,73 @@ export async function markLeadAsWon(
     console.error('[markLeadAsWon] Error:', message, error);
     return { success: false, error: `Erro ao marcar lead como ganho: ${message}` };
   }
+}
+
+/**
+ * Cria a tarefa de "feedback da reunião": uma ligação (API4COM) na fila do SDR
+ * para ele ligar ao lead e ouvir como foi a reunião com o closer.
+ *
+ * - `channel:'phone'` + `call_provider:null` → o painel de execução é sempre o
+ *   ActivityPhonePanel (API4COM), não a ligação WhatsApp.
+ * - Vence no próximo dia útil às 9h BRT (mesmo helper do follow-up de reabertura).
+ * - Aparece na aba "Retornos" da fila; o texto do `notes` vira o roteiro da
+ *   ligação e o subtítulo na linha.
+ *
+ * Usa service role: o dono (`user_id`) pode ser um SDR diferente de quem clicou
+ * "Ganho" (ex.: manager marcando pelo SDR), o que a RLS de INSERT barraria.
+ * Guard anti-duplicata para não empilhar retornos no mesmo lead.
+ */
+async function scheduleWonFeedbackCall(
+  orgId: string,
+  leadId: string,
+  sdrUserId: string,
+): Promise<void> {
+  const service = createServiceRoleClient();
+
+  // Não empilha: se já há retorno pendente para o lead, não cria outro.
+  const { data: existing } = (await from(service, 'scheduled_activities')
+    .select('id')
+    .eq('lead_id', leadId)
+    .eq('status', 'pending')
+    .limit(1)) as { data: Array<{ id: string }> | null };
+  if (existing?.length) return;
+
+  // Nome do closer para dar contexto à ligação (best-effort).
+  const { data: lead } = (await from(service, 'leads')
+    .select('closer_id')
+    .eq('id', leadId)
+    .single()) as { data: { closer_id: string | null } | null };
+  let closerName: string | null = null;
+  if (lead?.closer_id) {
+    const { data: closer } = (await from(service, 'closers')
+      .select('name')
+      .eq('id', lead.closer_id)
+      .single()) as { data: { name: string | null } | null };
+    closerName = closer?.name ?? null;
+  }
+
+  const notes = closerName
+    ? `Feedback da reunião: ligar para o lead e ouvir como foi a reunião com o closer ${closerName}.`
+    : 'Feedback da reunião: ligar para o lead e ouvir como foi a reunião com o closer.';
+
+  await from(service, 'scheduled_activities' as never).insert({
+    org_id: orgId,
+    lead_id: leadId,
+    user_id: sdrUserId,
+    channel: 'phone',
+    call_provider: null,
+    scheduled_at: nextBusinessDayAt9hBRT(new Date()),
+    status: 'pending',
+    notes,
+  } as Record<string, unknown>);
+
+  // Auditoria na timeline, espelhando o system_event de scheduleActivity.
+  await from(service, 'interactions').insert({
+    org_id: orgId,
+    lead_id: leadId,
+    channel: 'system',
+    type: 'sent',
+    message_content: 'Tarefa de feedback da reunião agendada (ligação) — coletar a percepção do lead',
+    metadata: { system_event: 'activity_scheduled', auto: true, source: 'won_feedback_call' },
+  } as Record<string, unknown>);
 }

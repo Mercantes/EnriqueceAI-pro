@@ -186,6 +186,16 @@ export async function POST(request: Request) {
         .eq('org_id', feedbackReq.org_id)
         .eq('status', 'won');
 
+      // Cancela a tarefa de "feedback da reunião" (e qualquer retorno pendente)
+      // criada no won-time: a reunião não aconteceu, então esse feedback perde o
+      // sentido. Precisa vir ANTES de scheduleReopenFollowUp, cujo guard pula a
+      // criação se já houver qualquer atividade pendente — sem este cancel, o
+      // follow-up de reabertura seria silenciosamente ignorado.
+      await from(supabase, 'scheduled_activities' as never)
+        .update({ status: 'cancelled' } as Record<string, unknown>)
+        .eq('lead_id', feedbackReq.lead_id)
+        .eq('status', 'pending');
+
       // Audit trail in the lead timeline
       await from(supabase, 'interactions').insert({
         org_id: feedbackReq.org_id,
