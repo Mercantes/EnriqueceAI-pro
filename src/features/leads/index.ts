@@ -12,6 +12,9 @@ export type {
   EnrichmentProvider,
   LeadAddress,
   LeadSocio,
+  LeadContact,
+  LeadPhone,
+  LeadEmail,
   LeadInsert,
   LeadImportInsert,
   LeadImportErrorInsert,
@@ -50,6 +53,13 @@ export { bulkDeleteLeads, bulkArchiveLeads, exportLeadsCsv } from './actions/bul
 export { fetchUserMap } from './actions/fetch-user-map';
 export { archiveLead } from './actions/lead-lifecycle';
 export { updateLead } from './actions/update-lead';
+export {
+  listLeadContacts,
+  upsertLeadContact,
+  deleteLeadContact,
+  setPrimaryLeadContact,
+} from './actions/lead-contacts';
+export type { LeadContactInput } from './actions/lead-contacts';
 
 // Components
 export { ImportView } from './components/ImportView';

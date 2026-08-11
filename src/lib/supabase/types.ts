@@ -1630,6 +1630,7 @@ export type Database = {
       user_org_id: { Args: never; Returns: string }
       get_distinct_lead_canais: { Args: never; Returns: { canal: string }[] }
       get_distinct_lead_cnaes: { Args: never; Returns: { cnae: string }[] }
+      set_primary_lead_contact: { Args: { p_contact_id: string }; Returns: undefined }
     }
     Enums: {
       cadence_status: "draft" | "active" | "paused" | "archived"
