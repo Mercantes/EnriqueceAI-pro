@@ -25,6 +25,14 @@ export interface MeetingWebhookCandidate {
   whatsapp_phone: string | null;
   /** E-mail do closer responsável (closers.email = calendar_id da agenda dele). */
   responsavel_email: string | null;
+  /** Nome do closer responsável (closers.name), dono do responsavel_email. */
+  responsavel: string | null;
+  /**
+   * user_id do SDR que MARCOU a reunião (performed_by da interação
+   * meeting_scheduled). null em lead inbound que agendou sozinho — o nome é
+   * resolvido no runner via auth.users.
+   */
+  sdr_user_id: string | null;
 }
 
 /** Corpo enviado ao webhook do n8n. */
@@ -37,6 +45,13 @@ export interface MeetingWebhookPayload {
   event_id: string | null;
   /** E-mail do closer = calendar_id da agenda que o n8n lê/move. */
   responsavel_email: string | null;
+  /**
+   * Nome do SDR que MARCOU a reunião. null quando não há SDR (ex.: lead inbound
+   * que agendou sozinho) — a chave é sempre enviada, nunca omitida.
+   */
+  sdr: string | null;
+  /** Nome do closer que vai CONDUZIR a reunião (dono do responsavel_email). */
+  responsavel: string | null;
   momento: MeetingWebhookMomento;
 }
 
@@ -137,6 +152,7 @@ export function toNationalPhone(normalized: string | null): string | null {
 export function buildWebhookPayload(
   c: MeetingWebhookCandidate,
   momento: MeetingWebhookMomento,
+  sdrName: string | null,
 ): MeetingWebhookPayload {
   return {
     lead_id: c.lead_id,
@@ -146,8 +162,37 @@ export function buildWebhookPayload(
     link: c.meet_link ?? null,
     event_id: c.calendar_event_id ?? null,
     responsavel_email: c.responsavel_email ?? null,
+    sdr: sdrName,
+    responsavel: c.responsavel ?? null,
     momento,
   };
+}
+
+/**
+ * Resolve user_id → nome de exibição via auth.users (full_name > name > prefixo
+ * do e-mail). Só pra preencher o campo `sdr` do payload. Best-effort: um id que
+ * não resolve fica fora do mapa e o payload manda `sdr: null` (não inventa
+ * valor). Espelha o padrão de meeting-reminders.service.ts.
+ */
+async function resolveSdrNames(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const unique = [...new Set(ids.filter(Boolean))];
+  await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const { data } = await supabase.auth.admin.getUserById(id);
+        const meta = data?.user?.user_metadata as { full_name?: string; name?: string } | undefined;
+        const name = meta?.full_name || meta?.name || data?.user?.email?.split('@')[0] || '';
+        if (name) map.set(id, name);
+      } catch {
+        // best-effort — id não resolvido cai em sdr=null
+      }
+    }),
+  );
+  return map;
 }
 
 /** Chave de idempotência (lead|início-UTC|momento). */
@@ -216,6 +261,12 @@ export async function runMeetingWebhookDispatch(
   summary.candidates = rows.length;
   if (rows.length === 0) return summary;
 
+  // 1b. Nome do SDR que marcou (resolvido de auth.users — não fica na view).
+  const sdrNames = await resolveSdrNames(
+    supabase,
+    rows.map((r) => r.sdr_user_id).filter((id): id is string => Boolean(id)),
+  );
+
   // 2. Chaves já disparadas com sucesso (idempotência).
   const { data: sentRaw } = (await from(supabase, 'meeting_webhook_dispatch_log' as never)
     .select('lead_id, meeting_starts_at, momento')
@@ -241,7 +292,11 @@ export async function runMeetingWebhookDispatch(
         continue;
       }
 
-      const payload = buildWebhookPayload(row, momento);
+      const payload = buildWebhookPayload(
+        row,
+        momento,
+        row.sdr_user_id ? (sdrNames.get(row.sdr_user_id) ?? null) : null,
+      );
 
       // Dry-run: reporta o que SERIA enviado sem tocar em nada.
       if (!options.enabled) {
