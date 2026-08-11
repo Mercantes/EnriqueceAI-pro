@@ -161,9 +161,10 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
           subtitle={`${kpis.totalResponded} respondidos · ${kpis.pendingCount} pendentes`}
         />
         <KpiCard
-          label="Nota Média"
+          label="Chance de fechar"
           value={kpis.averageRating != null ? `${kpis.averageRating}/5` : '—'}
           icon={Star}
+          subtitle="leitura subjetiva do closer"
         />
         <KpiCard
           label="Tempo Médio Resposta"
@@ -239,7 +240,7 @@ export function FeedbackAnalyticsView({ data, filters }: FeedbackAnalyticsViewPr
               <tr className="border-b border-[var(--border)] text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
                 <th className="px-5 py-3">Lead</th>
                 <th className="px-5 py-3">Closer</th>
-                <th className="px-5 py-3">Rating</th>
+                <th className="px-5 py-3">Chance de fechar</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Enviado</th>
                 <th className="px-5 py-3">Respondido</th>
