@@ -16,6 +16,24 @@ export interface LeadEmail {
   email: string;
 }
 
+// Contact person attached to a lead (table lead_contacts, 1-N).
+// The is_primary contact is mirrored back onto the lead's scalar/JSONB columns
+// (first_name/last_name/job_title/email/telefone/emails/phones) by a DB trigger,
+// so dialer/cadences keep reading "the" lead contact transparently.
+export interface LeadContact {
+  id: string;
+  org_id: string;
+  lead_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  job_title: string | null;
+  emails: LeadEmail[];
+  phones: LeadPhone[];
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Lead address (stored as JSONB)
 export interface LeadAddress {
   logradouro?: string;

@@ -6,13 +6,11 @@ import {
   CalendarDays,
   ChevronDown,
   Clock,
-  Copy,
   FileText,
   Pencil,
   Plus,
   Save,
   Sparkles,
-  Trash2,
   User,
   X,
 } from 'lucide-react';
@@ -38,14 +36,12 @@ import type { CustomFieldRow } from '@/features/settings-prospecting/types/custo
 import type { StandardFieldSettingRow } from '@/features/settings-prospecting/actions/standard-field-settings';
 import { STANDARD_FIELDS } from '@/features/settings-prospecting/constants/standard-fields';
 import { OrgContext } from '@/features/auth/components/OrganizationProvider';
-import { normalizePhone } from '@/lib/utils/phone';
 
 import { formatDateOnly, formatDateTimeBR } from '@/lib/utils/format';
 
 import type { LeadSourceOption } from '../actions/get-lead-source-options';
 import { LEAD_SOURCE_OPTIONS, SEGMENTO_OPTIONS } from '../schemas/lead.schemas';
 import { getCanalOptions } from '../utils/canal-options';
-import type { LeadPhone, LeadEmail } from '../types';
 import { updateLead } from '../actions/update-lead';
 
 import { CurrencyInput, formatBRL } from './CurrencyInput';
@@ -54,27 +50,11 @@ import { InlineEditField } from './InlineEditField';
 import { MeetimeFieldRow } from './MeetimeFieldRow';
 import type { LeadInfoPanelData } from './lead-info-panel.utils';
 import { LeadInfoPanelHeader } from './LeadInfoPanelHeader';
+import { LeadContactsSection, type PrimaryContactMirror } from './LeadContactsSection';
 import { LeadTimelineTab } from './LeadTimelineTab';
 import { LeadActivityTab } from './LeadActivityTab';
 import { LeadScheduleTab } from './LeadScheduleTab';
 import { GenerateBantDialog } from './GenerateBantDialog';
-
-/**
- * Normaliza uma entrada do array `phones`. A coluna JSONB armazena objetos
- * `{ tipo, numero }`, mas alguns leads legados/importados guardaram telefones
- * como strings simples (ex.: `["+55 19 3516-3500"]`). Acessar `.numero` nesses
- * casos retornava `undefined` e quebrava a página de detalhe do lead. Aceita
- * ambos os formatos e sempre devolve um `LeadPhone` válido (ou null se vazio).
- */
-function coercePhoneEntry(raw: LeadPhone | string | null | undefined): LeadPhone | null {
-  if (raw == null) return null;
-  if (typeof raw === 'string') {
-    const numero = raw.trim();
-    return numero ? { tipo: 'fixo', numero } : null;
-  }
-  if (!raw.numero) return null;
-  return raw;
-}
 
 /**
  * Fallback de Cargo: quando o surface que renderiza este painel não passa
@@ -222,8 +202,6 @@ export function LeadInfoPanel({
   // the lead timeline logs all of them as "changed" instead of just the edit.
   const editSnapshotRef = useRef<{
     editFields: Record<string, string>;
-    phoneEntries: LeadPhone[];
-    emailEntries: LeadEmail[];
     customFieldValues: Record<string, string>;
   } | null>(null);
   const [isBantDialogOpen, setIsBantDialogOpen] = useState(false);
@@ -284,152 +262,46 @@ export function LeadInfoPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackedLeadId]);
 
-  // Build initial phone entries a partir SÓ dos telefones próprios do lead
-  // (phones JSONB + telefone legado). Os celulares dos sócios (auto-enriquecidos
-  // do CNPJ) NÃO entram aqui: eles não são persistidos por este save, então
-  // apareciam como dezenas de campos "editáveis" que voltavam a cada reload
-  // (o SDR excluía e salvava, mas re-derivavam de socios.celulares). Agora vivem
-  // numa subseção separada só-leitura (sociosPhones). Ver lead KAP (02f81149).
-  const buildInitialPhones = useCallback((): LeadPhone[] => {
-    const entries: LeadPhone[] = [];
-    const seen = new Set<string>();
-
-    // Phones JSONB (user-edited list, has explicit type)
-    for (const raw of data.phones ?? []) {
-      const phone = coercePhoneEntry(raw);
-      if (!phone) continue;
-      const key = normalizePhone(phone.numero);
-      if (!seen.has(key)) {
-        seen.add(key);
-        entries.push({ tipo: phone.tipo, numero: phone.numero });
-      }
+  // Contatos (nome, cargo, telefones, e-mails) agora vivem em LeadContactsSection,
+  // gravados na tabela lead_contacts. O contato principal é espelhado de volta
+  // nas colunas do lead por trigger no banco. Quando ele muda, atualizamos o
+  // estado local aqui para o cabeçalho/discador refletirem o novo principal.
+  const handlePrimaryContactChange = useCallback((mirror: PrimaryContactMirror) => {
+    setData((prev) => ({
+      ...prev,
+      first_name: mirror.first_name,
+      last_name: mirror.last_name,
+      job_title: mirror.job_title,
+      email: mirror.email,
+      emails: mirror.emails,
+      telefone: mirror.telefone,
+      phones: mirror.phones,
+    }));
+    setEditFields((prev) => ({
+      ...prev,
+      first_name: mirror.first_name ?? '',
+      last_name: mirror.last_name ?? '',
+      job_title: mirror.job_title ?? '',
+    }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('lead:updated', { detail: { leadId: data.id } }));
     }
-
-    // Legacy company-level telefone fallback
-    if (data.telefone) {
-      const key = normalizePhone(data.telefone);
-      if (!seen.has(key)) {
-        seen.add(key);
-        let local = key;
-        if (local.length >= 12 && local.startsWith('55')) local = local.slice(2);
-        if (local.length >= 10) local = local.slice(2);
-        const isCelular = local.length >= 9 && local.startsWith('9');
-        const isWhatsAppSource = data.lead_source === 'Leadbroker' || data.lead_source === 'Blackbox';
-        const tipo: LeadPhone['tipo'] = isWhatsAppSource ? 'whatsapp' : (isCelular ? 'celular' : 'fixo');
-        entries.push({ tipo, numero: data.telefone });
-      }
-    }
-
-    if (entries.length === 0) {
-      entries.push({ tipo: 'celular', numero: '' });
-    }
-
-    return entries;
-  }, [data.telefone, data.phones, data.lead_source]);
-
-  const [phoneEntries, setPhoneEntries] = useState<LeadPhone[]>(buildInitialPhones);
-
-  // Reset phone entries when lead changes (buildInitialPhones depends on data which updates on next render)
-  useEffect(() => {
-    setPhoneEntries(buildInitialPhones());
-  }, [trackedLeadId, buildInitialPhones]);
-
-  const handleAddPhone = useCallback(() => {
-    setPhoneEntries((prev) => [...prev, { tipo: 'celular', numero: '' }]);
-  }, []);
-
-  const handleRemovePhone = useCallback((index: number) => {
-    setPhoneEntries((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handlePhoneChange = useCallback((index: number, field: 'tipo' | 'numero', value: string) => {
-    setPhoneEntries((prev) =>
-      prev.map((entry, i) =>
-        i === index ? { ...entry, [field]: value } : entry,
-      ),
-    );
-  }, []);
-
-  // Build initial email entries from emails JSONB or socios + email fallback
-  const buildInitialEmails = useCallback((): LeadEmail[] => {
-    if (Array.isArray(data.emails)) {
-      if (data.emails.length > 0) {
-        return data.emails.map((e) => ({ tipo: e.tipo, email: e.email }));
-      }
-      return [{ tipo: 'corporativo', email: '' }];
-    }
-
-    // Bootstrap: merge socios emails + lead.email
-    const entries: LeadEmail[] = [];
-    const seen = new Set<string>();
-
-    for (const socio of data.socios ?? []) {
-      for (const se of socio.emails ?? []) {
-        const key = se.email.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          entries.push({ tipo: 'corporativo', email: se.email });
-        }
-      }
-    }
-
-    if (data.email) {
-      const key = data.email.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        entries.push({ tipo: 'corporativo', email: data.email });
-      }
-    }
-
-    if (entries.length === 0) {
-      entries.push({ tipo: 'corporativo', email: '' });
-    }
-
-    return entries;
-  }, [data.email, data.emails, data.socios]);
-
-  const [emailEntries, setEmailEntries] = useState<LeadEmail[]>(buildInitialEmails);
-
-  useEffect(() => {
-    setEmailEntries(buildInitialEmails());
-  }, [trackedLeadId, buildInitialEmails]);
-
-  const handleAddEmail = useCallback(() => {
-    setEmailEntries((prev) => [...prev, { tipo: 'corporativo', email: '' }]);
-  }, []);
-
-  const handleRemoveEmail = useCallback((index: number) => {
-    setEmailEntries((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleEmailEntryChange = useCallback((index: number, field: 'tipo' | 'email', value: string) => {
-    setEmailEntries((prev) =>
-      prev.map((entry, i) =>
-        i === index ? { ...entry, [field]: value } : entry,
-      ),
-    );
-  }, []);
+  }, [data.id]);
 
   const handleStartEdit = useCallback(() => {
     // Capture the baseline the form shows now, so save can diff against it.
     editSnapshotRef.current = {
       editFields: { ...editFields },
-      phoneEntries: phoneEntries.map((p) => ({ ...p })),
-      emailEntries: emailEntries.map((e) => ({ ...e })),
       customFieldValues: { ...editCustomFieldValues },
     };
     setIsEditing(true);
-  }, [editFields, phoneEntries, emailEntries, editCustomFieldValues]);
+  }, [editFields, editCustomFieldValues]);
 
   const handleSave = useCallback(() => {
     startTransition(async () => {
-      const { email: _editEmail, ...leadFields } = editFields;
-
-      // Filter out empty phone/email entries
-      const validPhones = phoneEntries.filter((p) => (p.numero ?? '').trim() !== '');
-      const primaryPhone = validPhones[0]?.numero ?? '';
-      const validEmails = emailEntries.filter((e) => (e.email ?? '').trim() !== '');
-      const primaryEmailValue = validEmails[0]?.email ?? '';
+      // Nome/cargo/telefones/e-mails do contato não são gravados aqui — pertencem
+      // a lead_contacts (seção Contatos). Removidos do payload da empresa.
+      const { email: _editEmail, first_name: _fn, last_name: _ln, job_title: _jt, ...leadFields } = editFields;
 
       // Remove empty cnpj/canal/segmento to avoid check constraint violations
       const cleanFields: Record<string, unknown> = { ...leadFields };
@@ -450,20 +322,6 @@ export function LeadInfoPanel({
         if (!snap || !same(val, snap.editFields[key])) updatePayload[key] = val;
       }
 
-      // Phones/emails/custom are arrays/objects — compare structurally.
-      const phonesChanged = !snap || JSON.stringify(validPhones) !== JSON.stringify(snap.phoneEntries.filter((p) => (p.numero ?? '').trim() !== ''));
-      if (phonesChanged) {
-        updatePayload.telefone = primaryPhone;
-        updatePayload.phones = validPhones;
-      }
-      const emailsChanged = !snap || JSON.stringify(validEmails) !== JSON.stringify(snap.emailEntries.filter((e) => (e.email ?? '').trim() !== ''));
-      if (emailsChanged) {
-        updatePayload.email = primaryEmailValue;
-        // Only send emails if column exists (migration applied)
-        if (Array.isArray(data.emails) || validEmails.length > 0) {
-          updatePayload.emails = validEmails;
-        }
-      }
       const customChanged = !snap || JSON.stringify(editCustomFieldValues) !== JSON.stringify(snap.customFieldValues);
       if (customChanged) {
         updatePayload.custom_field_values = editCustomFieldValues;
@@ -479,14 +337,7 @@ export function LeadInfoPanel({
       if (result.success) {
         setData((prev) => ({
           ...prev,
-          first_name: editFields.first_name || null,
-          last_name: editFields.last_name || null,
           nome_fantasia: editFields.nome_fantasia || null,
-          email: primaryEmailValue || null,
-          emails: validEmails,
-          telefone: primaryPhone || null,
-          phones: validPhones,
-          job_title: editFields.job_title || null,
           lead_source: editFields.lead_source || null,
           canal: editFields.canal || null,
           segmento: editFields.segmento || null,
@@ -498,10 +349,6 @@ export function LeadInfoPanel({
         }));
         toast.success('Lead atualizado');
         setIsEditing(false);
-        // Avisa painéis irmãos (ex.: o discador da tela de execução de atividades) que
-        // os dados do lead mudaram, para re-buscarem telefones/campos sem depender de
-        // remontar a tela. O listener filtra pelo leadId. Sem isso, adicionar um telefone
-        // que faltava só era reconhecido ao sair e voltar da tarefa.
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('lead:updated', { detail: { leadId: data.id } }));
         }
@@ -509,7 +356,7 @@ export function LeadInfoPanel({
         toast.error(result.error);
       }
     });
-  }, [data.id, data.emails, editFields, editCustomFieldValues, phoneEntries, emailEntries]);
+  }, [data.id, editFields, editCustomFieldValues]);
 
   const handleCancelEdit = useCallback(() => {
     setEditFields({
@@ -526,10 +373,9 @@ export function LeadInfoPanel({
       linkedin: data.linkedin ?? '',
       website: data.website ?? '',
     });
-    setPhoneEntries(buildInitialPhones());
     setEditCustomFieldValues(data.custom_field_values ?? {});
     setIsEditing(false);
-  }, [data, primarySocio, primaryEmail, buildInitialPhones]);
+  }, [data, primarySocio, primaryEmail]);
 
   const contactFullName = data.first_name ? `${data.first_name} ${data.last_name ?? ''}`.trim() : null;
   const fullName = contactFullName ?? primarySocio?.nome ?? data.razao_social ?? null;
@@ -538,85 +384,6 @@ export function LeadInfoPanel({
   const _cargo = data.job_title
     || primarySocio?.qualificacao
     || (primarySocio?.nome ? (primarySocio.nome.trim().split(/\s+/)[0]?.toLowerCase().endsWith('a') ? 'Sócia' : 'Sócio') : null);
-
-  // Gather all phones with type, deduplicating by normalized number
-  const seenPhones = new Set<string>();
-  const allPhones: Array<{ tipo: string; numero: string; href: string; whatsapp: boolean; nome?: string }> = [];
-
-  // Normalize phone to digits only for dedup
-
-  // Celulares dos sócios (auto-enriquecidos do CNPJ) — vão para uma subseção
-  // separada, SÓ LEITURA. NÃO entram em allPhones (telefones próprios do lead)
-  // nem no editor: senão viram dezenas de campos não-persistíveis que "voltam"
-  // a cada reload (o save só grava leads.phones/telefone, não socios.celulares).
-  const sociosPhones: Array<{ nome: string; numero: string; href: string; whatsapp: boolean }> = [];
-  {
-    const seenSocioPhones = new Set<string>();
-    for (const socio of data.socios ?? []) {
-      for (const cel of socio.celulares ?? []) {
-        const formatted = `(${cel.ddd}) ${cel.numero}`;
-        const key = normalizePhone(formatted);
-        if (seenSocioPhones.has(key)) continue;
-        seenSocioPhones.add(key);
-        sociosPhones.push({
-          nome: socio.nome ?? '',
-          numero: formatted,
-          href: `tel:+55${cel.ddd}${cel.numero}`,
-          whatsapp: !!cel.whatsapp,
-        });
-      }
-    }
-  }
-
-  // Phones from phones JSONB (has explicit type — preferred source)
-  for (const raw of data.phones ?? []) {
-    const phone = coercePhoneEntry(raw);
-    if (!phone) continue;
-    const key = normalizePhone(phone.numero);
-    if (!seenPhones.has(key)) {
-      seenPhones.add(key);
-      allPhones.push({
-        tipo: phone.tipo === 'celular' ? 'Celular' : phone.tipo === 'whatsapp' ? 'WhatsApp' : 'Fixo',
-        numero: phone.numero,
-        href: `tel:${phone.numero}`,
-        whatsapp: phone.tipo === 'whatsapp',
-      });
-    }
-  }
-
-  // Company-level phone fallback (only if not already in phones JSONB)
-  if (data.telefone) {
-    const key = normalizePhone(data.telefone);
-    if (!seenPhones.has(key)) {
-      let local = key;
-      if (local.length >= 12 && local.startsWith('55')) local = local.slice(2);
-      if (local.length >= 10) local = local.slice(2);
-      const isCelular = local.length >= 9 && local.startsWith('9');
-      const isWhatsAppSource = data.lead_source === 'Leadbroker' || data.lead_source === 'Blackbox';
-      const isWhatsApp = isWhatsAppSource || false;
-      allPhones.push({
-        tipo: isWhatsApp ? 'WhatsApp' : (isCelular ? 'Celular' : 'Fixo'),
-        numero: data.telefone,
-        href: `tel:${data.telefone}`,
-        whatsapp: isWhatsApp,
-      });
-      seenPhones.add(key);
-    }
-  }
-
-  // Gather all emails for read mode. Ignora entradas sem endereço: uma linha de
-  // `emails` (JSONB) com tipo/descrição mas email vazio renderizava a "Descrição"
-  // com a caixa de e-mail em branco. Se nenhuma sobrar, cai no e-mail primário.
-  const allEmails: Array<{ tipo: string; email: string }> = [];
-  if (Array.isArray(data.emails)) {
-    for (const e of data.emails) {
-      if (!e.email?.trim()) continue;
-      allEmails.push({ tipo: e.tipo === 'pessoal' ? 'Pessoal' : 'Corporativo', email: e.email });
-    }
-  }
-  if (allEmails.length === 0 && primaryEmail) {
-    allEmails.push({ tipo: 'Corporativo', email: primaryEmail });
-  }
 
   const avatarInitial = (firstName ?? companyName ?? data.cnpj ?? '?')[0]?.toUpperCase() ?? '?';
   const headerName = fullName ?? companyName ?? data.cnpj ?? '—';
@@ -717,13 +484,6 @@ export function LeadInfoPanel({
     );
   };
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard?.writeText(text).then(
-      () => toast.success('Copiado!'),
-      () => toast.error('Não foi possível copiar'),
-    );
-  };
-
   return (
     <div className={`flex h-full shrink-0 flex-col ${showLeadHeader ? 'w-full' : 'w-96'}`}>
       {/* Lead header — avatar + name + actions shown only in activity execution */}
@@ -803,29 +563,9 @@ export function LeadInfoPanel({
             <CollapsibleSection title="Geral">
               {isEditing ? (
                 <>
-                  {isFieldVisible('first_name') && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Primeiro nome</p>
-                      <Input
-                        value={editFields.first_name}
-                        onChange={(e) => setEditFields({ ...editFields, first_name: e.target.value })}
-                        className="h-8 text-sm"
-                        placeholder="Primeiro nome"
-                      />
-                    </div>
-                  )}
-                  {isFieldVisible('last_name') && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Sobrenome</p>
-                      <Input
-                        value={editFields.last_name}
-                        onChange={(e) => setEditFields({ ...editFields, last_name: e.target.value })}
-                        className="h-8 text-sm"
-                        placeholder="Sobrenome"
-                      />
-                    </div>
-                  )}
-                  {/* Email is now in the E-MAIL(S) section below */}
+                  {/* Nome, sobrenome e cargo do contato agora são editados na
+                      seção "Contatos" (card do contato principal). Aqui ficam
+                      apenas os dados da empresa. */}
                   {isFieldVisible('nome_fantasia') && (
                     <div className="space-y-1">
                       <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Empresa</p>
@@ -834,32 +574,6 @@ export function LeadInfoPanel({
                         onChange={(e) => setEditFields({ ...editFields, nome_fantasia: e.target.value })}
                         className="h-8 text-sm"
                       />
-                    </div>
-                  )}
-                  {isFieldVisible('job_title') && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Cargo</p>
-                      {/* Dropdown da lista gerenciada (Ajustes > Prospecção). Se o lead já
-                          tiver um cargo fora da lista, ele é incluído para não ser perdido. */}
-                      <Select
-                        value={editFields.job_title || 'none'}
-                        onValueChange={(value) => {
-                          setEditFields((prev) => ({ ...prev, job_title: value === 'none' ? '' : value }));
-                        }}
-                      >
-                        <SelectTrigger className="w-full text-sm">
-                          <SelectValue placeholder="Selecione o cargo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">—</SelectItem>
-                          {(editFields.job_title && !cargoOptions.some((o) => o.value === editFields.job_title)
-                            ? [{ value: editFields.job_title, label: editFields.job_title }, ...cargoOptions]
-                            : cargoOptions
-                          ).map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                     </div>
                   )}
                   {isFieldVisible('lead_source') && (
@@ -999,203 +713,11 @@ export function LeadInfoPanel({
             <hr className="border-t-2 border-[var(--border)]" />
 
             <CollapsibleSection title="Contatos">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail(s)</p>
-              {isEditing ? (
-                <div className="space-y-2">
-                  {emailEntries.map((entry, index) => (
-                    <div key={`email-edit-${index}`} className="flex items-end gap-1.5">
-                      <div className="w-[100px] shrink-0 space-y-1">
-                        {index === 0 && <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>}
-                        <Select
-                          value={entry.tipo}
-                          onValueChange={(val) => handleEmailEntryChange(index, 'tipo', val)}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="corporativo">Corporativo</SelectItem>
-                            <SelectItem value="pessoal">Pessoal</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        {index === 0 && <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail</p>}
-                        <Input
-                          value={entry.email}
-                          onChange={(e) => handleEmailEntryChange(index, 'email', e.target.value)}
-                          className="h-8 text-sm"
-                          placeholder="email@empresa.com"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Remover email"
-                        className="h-8 w-8 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-500"
-                        onClick={() => handleRemoveEmail(index)}
-                        disabled={emailEntries.length <= 1}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="mt-1 h-7 text-xs text-[var(--primary)]"
-                    onClick={handleAddEmail}
-                  >
-                    <Plus className="mr-1 h-3 w-3" />
-                    Adicionar email
-                  </Button>
-                </div>
-              ) : allEmails.length === 0 ? (
-                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nenhum email informado.</p>
-              ) : (
-                allEmails.map((em, i) => (
-                  <div key={`email-${i}`} className="flex gap-2">
-                    <div className="w-28 shrink-0 space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
-                      <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-sm font-medium">
-                        {em.tipo}
-                      </div>
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">E-mail:</p>
-                      <div className="rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
-                        <a href={`mailto:${em.email}`} className="text-[var(--primary)] hover:underline truncate">
-                          {em.email}
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-              </div>
-
-              <div className="space-y-2 pt-3 border-t border-[var(--border)]">
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Telefone(s)</p>
-              {isEditing ? (
-                <div className="space-y-2">
-                  {phoneEntries.map((entry, index) => (
-                    <div key={`phone-edit-${index}`} className="flex items-end gap-1.5">
-                      <div className="w-[100px] shrink-0 space-y-1">
-                        {index === 0 && <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Tipo</p>}
-                        <Select
-                          value={entry.tipo}
-                          onValueChange={(val) => handlePhoneChange(index, 'tipo', val)}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="celular">Celular</SelectItem>
-                            <SelectItem value="fixo">Fixo</SelectItem>
-                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        {index === 0 && <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Número</p>}
-                        <Input
-                          value={entry.numero}
-                          onChange={(e) => handlePhoneChange(index, 'numero', e.target.value)}
-                          className="h-8 text-sm"
-                          placeholder="(11) 99000-0000"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Remover telefone"
-                        className="h-8 w-8 shrink-0 text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-500"
-                        onClick={() => handleRemovePhone(index)}
-                        disabled={phoneEntries.length <= 1}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="mt-1 h-7 text-xs text-[var(--primary)]"
-                    onClick={handleAddPhone}
-                  >
-                    <Plus className="mr-1 h-3 w-3" />
-                    Adicionar telefone
-                  </Button>
-                </div>
-              ) : allPhones.length === 0 ? (
-                <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Nenhum telefone informado.</p>
-              ) : (
-                allPhones.map((phone, i) => (
-                  <div key={`phone-${i}`} className="flex gap-2">
-                    <div className="w-28 shrink-0 space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Descrição:</p>
-                      <div className="rounded-md bg-[var(--muted)] px-2 py-1.5 text-sm font-medium">
-                        {phone.tipo}
-                      </div>
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Telefone:</p>
-                      <div className="flex items-center gap-1.5 rounded-md bg-[var(--muted)] px-3 py-2 text-base">
-                        <a href={phone.href} className="min-w-0 flex-1 truncate text-[var(--primary)] hover:underline">
-                          {phone.numero}
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(phone.numero)}
-                          className="shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-                          title="Copiar telefone"
-                          aria-label="Copiar telefone"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-
-              {/* Telefones dos sócios (enriquecidos do CNPJ) — só leitura, recolhível.
-                  NÃO fazem parte da lista editável do lead (não são persistidos). */}
-              {!isEditing && sociosPhones.length > 0 && (
-                <details className="mt-1 border-t border-[var(--border)] pt-2">
-                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                    Telefones dos sócios (enriquecido) · {sociosPhones.length}
-                  </summary>
-                  <div className="mt-2 space-y-1.5">
-                    {sociosPhones.map((p, i) => (
-                      <div key={`socio-phone-${i}`} className="flex items-center gap-1.5 rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
-                        <a href={p.href} className="shrink-0 text-[var(--primary)] hover:underline">{p.numero}</a>
-                        {p.whatsapp && (
-                          <span className="shrink-0 rounded bg-green-100 px-1 text-[10px] font-medium text-green-700 dark:bg-green-950 dark:text-green-400">WhatsApp</span>
-                        )}
-                        {p.nome && (
-                          <span className="min-w-0 flex-1 truncate text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]">· {p.nome}</span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(p.numero)}
-                          className="ml-auto shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-                          title="Copiar telefone"
-                          aria-label="Copiar telefone"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
-              </div>
+              <LeadContactsSection
+                leadId={data.id}
+                socios={data.socios}
+                onPrimaryChange={handlePrimaryContactChange}
+              />
             </CollapsibleSection>
             </>
             )}
