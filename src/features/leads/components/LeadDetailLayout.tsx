@@ -120,13 +120,21 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [selectedCloserId, setSelectedCloserId] = useState<string>(lead.closer_id ?? '');
   const [isReassigning, setIsReassigning] = useState(false);
 
-  useEffect(() => {
+  // Rebusca o estado do feedback do closer (nome/respondido) do banco. É a fonte
+  // do texto "Aguardando feedback de {closer}". Precisa ser chamada após trocar
+  // o closer — senão o texto fica preso no closer antigo (router.refresh() só
+  // reidrata o server component, não este estado de cliente).
+  const loadCloserFeedback = useCallback(() => {
     if (lead.status === 'qualified' || lead.status === 'won') {
       fetchCloserFeedback(lead.id).then((result) => {
-        if (result.success && result.data) setCloserFeedback(result.data);
+        setCloserFeedback(result.success && result.data ? result.data : null);
       });
     }
   }, [lead.id, lead.status]);
+
+  useEffect(() => {
+    loadCloserFeedback();
+  }, [loadCloserFeedback]);
 
   useEffect(() => {
     if (!isManager) return;
@@ -220,6 +228,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
           parts.push(br.success ? 'Briefing reenviado.' : `Falha ao reenviar briefing: ${br.error}`);
         }
         toast.success(parts.join(' '));
+        // Reidrata o texto "Aguardando feedback de {closer}" com o novo closer
+        // (o banco já foi atualizado; router.refresh() não re-executa esta busca).
+        loadCloserFeedback();
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Erro ao atualizar closer');
@@ -227,7 +238,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         setIsReassigning(false);
       }
     })();
-  }, [selectedCloserId, lead.id, lead.closer_id, router]);
+  }, [selectedCloserId, lead.id, lead.closer_id, router, loadCloserFeedback]);
 
   // Won dialog — closer info & selection
   const [_wonCloserName, setWonCloserName] = useState<string | null>(null);
