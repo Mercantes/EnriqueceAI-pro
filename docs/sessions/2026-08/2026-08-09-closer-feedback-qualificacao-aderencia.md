@@ -12,6 +12,7 @@ Reformulação do **formulário público de feedback do closer** (acessado por t
 |----|-----------------|----------|
 | #251 | `1274d84` | troca "qualidade do lead" por conferência da qualificação no feedback do closer |
 | #254 | `1bb755c` | re-fonteia "Decisor na Call %" a partir das divergências do closer (RPC `get_leads_for_v4sales`) |
+| #266 | `22aa2d1` | alinha o output do feedback (e-mails/alerta + dashboards) à nova semântica |
 
 ---
 
@@ -89,6 +90,15 @@ O sync "Sync Leads PV" roda **a cada 15 min** (webhook nos minutos :07/:22/:37/:
 - Todas as respostas novas observadas vieram do regime novo (`qualificacao_aderente`) e derivaram `decisor_presente=TRUE` (nenhuma marcou "decisor" como divergência) → confirma a derivação da RPC ponta a ponta, em produção, com usuários reais.
 - Método: espera em background até cada slot + `search_executions` (n8n) + leitura da `v_decisor_na_call_mensal` (SH). Também deixamos um monitor de sessão lendo a view via REST (anon key) a cada 90s, emitindo só em mudança — **encerrado ao fim do acompanhamento**.
 
+## Correção do output do feedback (#266 — `22aa2d1`)
+
+Um e-mail real de alerta ao gestor revelou que a **camada de output** ficou com a semântica antiga (o form + endpoint foram migrados, mas as notificações/dashboards não). O e-mail mostrava "Qualidade do lead ★★☆☆☆" e disparava por "nota baixa (2/5)" — mas `rating` virou **"Chance de fechar"** (leitura subjetiva do closer, sem peso no SLA do SDR). ⭐ **Lição:** ao mudar a semântica de uma coluna, varrer TODOS os consumidores — e-mails, notificações in-app, dashboards, analytics — não só o form/endpoint.
+
+- **`route.ts` (e-mails + alerta):** gatilho do alerta ao gestor deixa de ser `rating <= 2` e passa a ser **no-show / remarcada / `qualificacao_aderente = 'divergiu'`**; motivo do alerta lista as divergências; "Qualidade do lead" → "A qualificação bateu?" + itens que não conferiram; rating vira "Chance de fechar (leitura do closer)"; remove `RATING_LABELS` obsoleto. Notificação in-app e metadata passam a carregar `qualificacao_aderente`/`divergencias`.
+- **Dashboards:** `FeedbackAnalyticsView` / `CloserPerformanceCards` / `CloserFeedbackTable` — "Nota/Nota média/Rating" → **"Chance de fechar"**. `LeadDetailLayout` — card do closer passa a exibir **"A qualificação bateu?"** (com divergências) como sinal primário; `fetch-closer-feedback` traz `qualificacao_aderente`/`divergencias`.
+- **Decisão de produto (via AskUserQuestion):** alerta ao gestor = no-show/remarcada/divergiu; rating baixo **não** alerta mais.
+- 2 commits no mesmo PR (`fix(feedback)` + `refactor(dashboards)`). typecheck/lint/testes verdes. E-mails revisados por prévia HTML (não disparei e-mail real — vai a managers reais).
+
 ## Fora de escopo (intactos)
 
 Enum `closer_feedback_result`; envio do e-mail de solicitação; lembretes (`reminder_sent_at`/`reminder_count`); view `vw_sla_qualificacao_sdr`.
@@ -97,5 +107,6 @@ Enum `closer_feedback_result`; envio do e-mail de solicitação; lembretes (`rem
 
 - [x] ~~Confirmar o formulário novo no ar em produção~~ — confirmado (screenshot de `app.enriqueceai.com.br` com o form reformulado)
 - [x] ~~Definir a origem da métrica "Decisor na Call %" no Sales Hub~~ — feito no #254 (derivada das divergências, ver seção acima)
-- [ ] (Opcional / futuro) Granularidade por dimensão no SH (verba/dor/timing além de decisor) — exigiria propagar `divergencias` até `leads_pv` + nova view/painel (Opção 2)
+- [x] ~~Alinhar o output do feedback (e-mails/alertas + dashboards) à nova semântica~~ — feito no #266
+- [ ] (Opcional / futuro) Granularidade por dimensão no SH (verba/dor/timing além de decisor) — exigiria propagar `divergencias` até `leads_pv` + nova view/painel (Opção 2). Vale também um KPI de **aderência da qualificação %** (bateu ÷ respondidas) nos dashboards internos.
 - [ ] (Opcional) Extrair o componente de estrelas para `src/shared` — hoje há 2 implementações (interativa inline no form + read-only na `CloserFeedbackTable`)
