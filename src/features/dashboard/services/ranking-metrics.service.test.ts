@@ -4,6 +4,7 @@ import {
   fetchActivitiesRanking,
   fetchAttendanceRateRanking,
   fetchLeadsFinishedRanking,
+  fetchLeadsOpenedRanking,
   fetchMeetingsHeldRanking,
   fetchRankingData,
 } from './ranking-metrics.service';
@@ -327,6 +328,57 @@ describe('fetchMeetingsHeldRanking — idealToDate (divisor por meta individual)
     // u2: sem meta individual → fallback compartilhado = 100 / 3 SDRs ≈ 33.
     expect(u2?.idealToDate).toBe(33);
     // u3 tem meta individual (30) mas 0 reuniões → não aparece no breakdown.
+    expect(result.sdrBreakdown.find((s) => s.userId === 'u3')).toBeUndefined();
+  });
+});
+
+describe('fetchLeadsOpenedRanking — idealToDate por meta individual de leads', () => {
+  it('uses each SDR individual leads_opened_target for per-SDR idealToDate (fallback to shared)', async () => {
+    // Mês passado (2026-01) → pace cheio, ideal = meta.
+    // u1 tem meta individual de leads (16) → ideal próprio = 16.
+    // u2 tem meta individual = 0 → cai no ideal compartilhado (100 / 3 ≈ 33).
+    const sdrsChain = createChainMock({
+      data: [{ user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u3' }],
+    });
+    const goalsChain = createChainMock({ data: { leads_opened_target: 100 } });
+    // Mesmo chain serve countSdrsForIdeal (opportunity_target) e
+    // fetchIndividualTargets (leads_opened_target) — inclui ambos os campos.
+    const goalsPerUserChain = createChainMock({
+      data: [
+        { user_id: 'u1', opportunity_target: 10, leads_opened_target: 16 },
+        { user_id: 'u2', opportunity_target: 10, leads_opened_target: 0 },
+        { user_id: 'u3', opportunity_target: 10, leads_opened_target: 30 },
+      ],
+    });
+
+    const supabase = createMockSupabase(
+      (table) => {
+        if (table === 'organization_members') return sdrsChain;
+        if (table === 'goals') return goalsChain;
+        if (table === 'goals_per_user') return goalsPerUserChain;
+        return createChainMock();
+      },
+      (fn) =>
+        // count por SDR (u1=2, u2=1); daily não importa pro idealToDate.
+        fn === 'count_leads_opened_by_sdr'
+          ? Promise.resolve({ data: [
+              { performer_id: 'u1', cnt: 2 },
+              { performer_id: 'u2', cnt: 1 },
+            ] })
+          : Promise.resolve({ data: [] }),
+    );
+
+    const result = await fetchLeadsOpenedRanking(supabase as never, ORG, baseFilters);
+
+    expect(result.total).toBe(3);
+    expect(result.monthTarget).toBe(100);
+    const u1 = result.sdrBreakdown.find((s) => s.userId === 'u1');
+    const u2 = result.sdrBreakdown.find((s) => s.userId === 'u2');
+    // u1: meta individual 16 (mês cheio) → ideal próprio 16.
+    expect(u1?.idealToDate).toBe(16);
+    // u2: sem meta individual → fallback compartilhado = 100 / 3 SDRs ≈ 33.
+    expect(u2?.idealToDate).toBe(33);
+    // u3 tem meta (30) mas 0 leads abertos → não aparece no breakdown.
     expect(result.sdrBreakdown.find((s) => s.userId === 'u3')).toBeUndefined();
   });
 });

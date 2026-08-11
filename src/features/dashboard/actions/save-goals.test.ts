@@ -35,7 +35,7 @@ const validInput = {
   meetingsScheduledTarget: 100,
   meetingsHeldTarget: 80,
   userGoals: [
-    { userId: '00000000-0000-0000-0000-000000000001', opportunityTarget: 20 },
+    { userId: '00000000-0000-0000-0000-000000000001', leadsOpenedTarget: 20 },
   ],
 };
 

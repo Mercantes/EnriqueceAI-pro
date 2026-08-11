@@ -108,8 +108,8 @@ export interface UserGoalRow {
   userId: string;
   userName: string;
   avatarUrl?: string;
-  opportunityTarget: number;
-  previousTarget: number | null; // previous month reference
+  leadsOpenedTarget: number; // meta individual de leads abertos no mês
+  previousTarget: number | null; // referência do mês anterior (leads abertos)
   meetingsScheduledTarget: number; // meta individual de reuniões marcadas
   meetingsHeldTarget: number; // meta individual de reuniões realizadas
 }

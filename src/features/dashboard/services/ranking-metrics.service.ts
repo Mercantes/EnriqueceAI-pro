@@ -95,15 +95,15 @@ async function countSdrsForIdeal(
 }
 
 /**
- * Metas individuais de reuniões por SDR (marcadas ou realizadas) no mês.
- * Retorna apenas quem tem meta > 0 — SDR sem meta individual cai no ideal
- * compartilhado (fatia da meta org ÷ nº de SDRs).
+ * Metas individuais por SDR no mês (leads abertos, reuniões marcadas ou
+ * realizadas). Retorna apenas quem tem meta > 0 — SDR sem meta individual cai
+ * no ideal compartilhado (fatia da meta org ÷ nº de SDRs).
  */
-async function fetchIndividualMeetingTargets(
+async function fetchIndividualTargets(
   supabase: SupabaseClient,
   orgId: string,
   month: string,
-  column: 'meetings_scheduled_target' | 'meetings_held_target',
+  column: 'leads_opened_target' | 'meetings_scheduled_target' | 'meetings_held_target',
 ): Promise<Map<string, number>> {
   const monthStart = `${month}-01`;
   const { data } = (await from(supabase, 'goals_per_user')
@@ -433,7 +433,20 @@ export async function fetchLeadsOpenedRanking(
   const dailyData = await fetchLeadsOpenedDaily(supabase, orgId, filters, sdrIds, monthTarget);
 
   const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
-  const card = buildRankingCardData(entries, totalOpened, monthTarget, filters.month, idealSdrCount);
+  const individualTargets = await fetchIndividualTargets(
+    supabase,
+    orgId,
+    filters.month,
+    'leads_opened_target',
+  );
+  const card = buildRankingCardData(
+    entries,
+    totalOpened,
+    monthTarget,
+    filters.month,
+    idealSdrCount,
+    individualTargets,
+  );
   return { ...card, dailyData };
 }
 
@@ -544,7 +557,7 @@ export async function fetchMeetingsScheduledRanking(
     entries.push({ userId, userName: '', value });
   }
   const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
-  const individualTargets = await fetchIndividualMeetingTargets(
+  const individualTargets = await fetchIndividualTargets(
     supabase,
     orgId,
     filters.month,
@@ -628,7 +641,7 @@ export async function fetchMeetingsHeldRanking(
     entries.push({ userId, userName: '', value });
   }
   const idealSdrCount = await countSdrsForIdeal(supabase, orgId, filters.month, sdrIds);
-  const individualTargets = await fetchIndividualMeetingTargets(
+  const individualTargets = await fetchIndividualTargets(
     supabase,
     orgId,
     filters.month,

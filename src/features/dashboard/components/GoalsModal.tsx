@@ -96,7 +96,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
         // Show SDRs that already have goals or had goals last month; fallback to all
         const qualified = result.data.userGoals
-          .filter((ug) => ug.opportunityTarget > 0 || ug.previousTarget !== null)
+          .filter((ug) => ug.leadsOpenedTarget > 0 || ug.previousTarget !== null)
           .map((ug) => ug.userId);
         setVisibleUserIds(
           new Set(qualified.length > 0 ? qualified : result.data.userGoals.map((ug) => ug.userId)),
@@ -119,7 +119,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
 
   function updateUserGoalField(
     userId: string,
-    field: 'opportunityTarget' | 'meetingsScheduledTarget' | 'meetingsHeldTarget',
+    field: 'leadsOpenedTarget' | 'meetingsScheduledTarget' | 'meetingsHeldTarget',
     value: number,
   ) {
     setUserGoals((prev) =>
@@ -139,7 +139,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
         meetingsHeldTarget,
         userGoals: userGoals.map((ug) => ({
           userId: ug.userId,
-          opportunityTarget: ug.opportunityTarget,
+          leadsOpenedTarget: ug.leadsOpenedTarget,
           meetingsScheduledTarget: ug.meetingsScheduledTarget,
           meetingsHeldTarget: ug.meetingsHeldTarget,
         })),
@@ -386,7 +386,7 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                       {/* Nome */}
                       <span className="flex-1 truncate text-sm font-medium">{ug.userName}</span>
 
-                      {/* Mês anterior (referência de oportunidades) */}
+                      {/* Mês anterior (referência de leads abertos) */}
                       <div className="text-center">
                         <p className="text-xs text-[var(--foreground)] opacity-70">{prevMonthName}</p>
                         <p className="text-sm text-[var(--foreground)] opacity-70">
@@ -394,18 +394,18 @@ export function GoalsModal({ open, onOpenChange, month }: GoalsModalProps) {
                         </p>
                       </div>
 
-                      {/* Meta de oportunidades */}
+                      {/* Meta de leads abertos */}
                       <div className="text-center">
-                        <p className="text-xs text-[var(--foreground)] opacity-70">oportunidades</p>
+                        <p className="text-xs text-[var(--foreground)] opacity-70">leads</p>
                         <Input
                           type="number"
                           min={0}
                           className="w-20 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          value={ug.opportunityTarget}
+                          value={ug.leadsOpenedTarget}
                           onChange={(e) =>
-                            updateUserGoalField(ug.userId, 'opportunityTarget', Number(e.target.value) || 0)
+                            updateUserGoalField(ug.userId, 'leadsOpenedTarget', Number(e.target.value) || 0)
                           }
-                          aria-label={`Meta de oportunidades de ${ug.userName}`}
+                          aria-label={`Meta de leads abertos de ${ug.userName}`}
                         />
                       </div>
 

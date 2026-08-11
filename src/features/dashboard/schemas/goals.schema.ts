@@ -2,11 +2,14 @@ import { z } from 'zod';
 
 const userGoalSchema = z.object({
   userId: z.string().uuid(),
-  opportunityTarget: z.number().int().min(0),
   // opcionais com default: clientes antigos (deployment skew) não enviam esses
   // campos; o upsert grava 0 nesse caso, sem quebrar a validação.
+  leadsOpenedTarget: z.number().int().min(0).optional().default(0),
   meetingsScheduledTarget: z.number().int().min(0).optional().default(0),
   meetingsHeldTarget: z.number().int().min(0).optional().default(0),
+  // legado (deployment skew): clientes antigos ainda enviam "oportunidades".
+  // Aceito e ignorado — a coluna opportunity_target virou vestigial.
+  opportunityTarget: z.number().int().min(0).optional(),
 });
 
 export const saveGoalsSchema = z.object({
