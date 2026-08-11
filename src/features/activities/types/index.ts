@@ -88,6 +88,7 @@ export interface ExecuteActivityInput {
   cadenceCreatedBy: string;
   channel: ChannelType;
   to: string;
+  contactId?: string | null;
   subject: string;
   body: string;
   aiGenerated: boolean;

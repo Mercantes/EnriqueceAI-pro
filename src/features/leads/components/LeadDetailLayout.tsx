@@ -48,6 +48,9 @@ import { reassignCloser } from '../actions/reassign-closer';
 import { resendMeetingBriefing } from '../actions/resend-meeting-briefing';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { initiateCall } from '@/features/calls/actions/initiate-call';
+import { buildContactPhones, type ResolvedPhone } from '@/features/activities/utils/resolve-whatsapp-phone';
+import { listLeadContacts } from '../actions/lead-contacts';
+import type { LeadContact } from '../types';
 import { getMyWhatsAppCallStatus } from '@/features/whatsapp-calls/actions/get-my-call-status';
 import { LeadWhatsAppCallDialog } from '@/features/whatsapp-calls/components/LeadWhatsAppCallDialog';
 
@@ -101,6 +104,9 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [showMeeting, setShowMeeting] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
+  // Múltiplos contatos: para escolher pra quem ligar no botão "Ligar".
+  const [contacts, setContacts] = useState<LeadContact[]>([]);
+  const [showCallChooser, setShowCallChooser] = useState(false);
   const [canWhatsAppCall, setCanWhatsAppCall] = useState(false);
   const [showWhatsAppCall, setShowWhatsAppCall] = useState(false);
   // Synchronous guard: setIsCalling only flips on next render, so a fast
@@ -264,8 +270,34 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
   const [wonFieldValues, setWonFieldValues] = useState<Record<string, string>>({});
   const [loadingRequiredFields, setLoadingRequiredFields] = useState(false);
 
-  const handleCall = useCallback(async () => {
-    const phone = lead.telefone ?? lead.phones?.[0]?.numero;
+  // Carrega os contatos do lead (para o seletor de "pra quem ligar") e reflete
+  // edições feitas no painel (lead:updated).
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      void listLeadContacts(lead.id).then((r) => {
+        if (!cancelled && r.success) setContacts(r.data);
+      });
+    };
+    load();
+    const onUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<{ leadId?: string }>).detail;
+      if (!detail?.leadId || detail.leadId === lead.id) load();
+    };
+    window.addEventListener('lead:updated', onUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('lead:updated', onUpdated);
+    };
+  }, [lead.id]);
+
+  const callPhones = buildContactPhones(contacts, {
+    socios: lead.socios,
+    phones: lead.phones,
+    telefone: lead.telefone,
+  });
+
+  const dialPhone = useCallback(async (phone: string, contactId: string | null) => {
     if (!phone) {
       toast.error('Lead não possui telefone cadastrado');
       return;
@@ -280,7 +312,7 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         window.open(`tel:${phone}`, '_self');
         return;
       }
-      const result = await initiateCall({ provider: providerResult.data.provider, phone, leadId: lead.id });
+      const result = await initiateCall({ provider: providerResult.data.provider, phone, leadId: lead.id, contactId });
       if (result.success) {
         toast('Ligação iniciada — certifique-se de que a extensão API4COM está aberta para atender.', {
           icon: '📞',
@@ -295,7 +327,18 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
       setIsCalling(false);
       inFlightRef.current = false;
     }
-  }, [lead.id, lead.telefone, lead.phones]);
+  }, [lead.id]);
+
+  const handleCall = useCallback(async () => {
+    // Com mais de um número, abre o seletor pra o SDR escolher de quem é o
+    // telefone (ex.: ligar pro sócio vs a responsável). Com um só, disca direto.
+    if (callPhones.length > 1) {
+      setShowCallChooser(true);
+      return;
+    }
+    const only = callPhones[0];
+    await dialPhone(only?.formatted ?? lead.telefone ?? '', only?.contactId ?? null);
+  }, [callPhones, dialPhone, lead.telefone]);
 
   // Enrichment via the n8n automation (Receita + Maps + Meta/Google Ads + Apollo
   // + phone). It's async (~40-120s): dispatch, then poll enrichment_status until
@@ -510,6 +553,37 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
         open={showWhatsAppCall}
         onOpenChange={setShowWhatsAppCall}
       />
+
+      <Dialog open={showCallChooser} onOpenChange={setShowCallChooser}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ligar para qual contato?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {callPhones.map((p: ResolvedPhone, i: number) => (
+              <button
+                key={`${p.raw}-${i}`}
+                type="button"
+                disabled={isCalling}
+                onClick={() => {
+                  setShowCallChooser(false);
+                  void dialPhone(p.formatted, p.contactId ?? null);
+                }}
+                className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-left text-sm transition-colors hover:border-[var(--primary)] hover:bg-[var(--muted)] disabled:opacity-50"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">
+                    {p.contactName ?? 'Número do lead'}
+                    {p.contactRole ? <span className="text-[var(--muted-foreground)]"> · {p.contactRole}</span> : null}
+                  </span>
+                  <span className="block truncate text-xs text-[var(--muted-foreground)]">{p.formatted}</span>
+                </span>
+                <span className="shrink-0 text-xs text-[var(--primary)]">Ligar</span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {enrollmentData.enrollments.length > 0 && (
         <div className="rounded-lg border bg-[var(--card)] divide-y divide-[var(--border)]">

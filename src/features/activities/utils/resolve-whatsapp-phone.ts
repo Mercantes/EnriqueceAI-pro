@@ -1,10 +1,16 @@
+import type { LeadContact } from '@/features/leads/types';
+
 import type { ActivityLead } from '../types';
 
 export interface ResolvedPhone {
   formatted: string;
   raw: string;
   label: string;
-  source: 'socio_whatsapp' | 'socio_celular' | 'lead_telefone';
+  source: 'socio_whatsapp' | 'socio_celular' | 'lead_telefone' | 'contact';
+  /** Contact this number belongs to (lead_contacts). Null for socio/enriquecido numbers. */
+  contactId?: string | null;
+  contactName?: string | null;
+  contactRole?: string | null;
 }
 
 /**
@@ -145,4 +151,60 @@ export function getAllLeadPhones(
 export function resolveWhatsAppPhone(lead: ActivityLead): ResolvedPhone | null {
   const phones = getAllLeadPhones(lead);
   return phones[0] ?? null;
+}
+
+function contactPhoneTypeLabel(tipo: 'celular' | 'fixo' | 'whatsapp'): string {
+  return tipo === 'whatsapp' ? 'WhatsApp' : tipo === 'celular' ? 'Celular' : 'Fixo';
+}
+
+/**
+ * Builds the phone picker list from lead_contacts (múltiplos contatos), tagging
+ * each number with the contact it belongs to so the SDR can pick "ligar pro
+ * sócio" vs "zap pra responsável". Contacts come primary-first (from
+ * listLeadContacts). Socio/enriquecido numbers that aren't a contact yet are
+ * appended untagged (fallback) so nothing that was dialable before disappears.
+ *
+ * When the lead has no contacts (legacy), returns getAllLeadPhones(lead) as-is.
+ */
+export function buildContactPhones(
+  contacts: LeadContact[],
+  fallbackLead: Pick<ActivityLead, 'socios' | 'phones' | 'telefone'>,
+): ResolvedPhone[] {
+  if (!contacts || contacts.length === 0) {
+    return getAllLeadPhones(fallbackLead);
+  }
+
+  const out: ResolvedPhone[] = [];
+  const seen = new Set<string>();
+
+  for (const c of contacts) {
+    const nome = [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || 'Contato';
+    const who = c.job_title ? `${nome} · ${c.job_title}` : nome;
+    for (const p of c.phones ?? []) {
+      const digits = (p.numero ?? '').replace(/\D/g, '');
+      if (!digits) continue;
+      const dedupKey = digits.startsWith('55') && digits.length > 10 ? digits.slice(2) : digits;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      out.push({
+        formatted: p.numero,
+        raw: dedupKey,
+        label: `${who} — ${contactPhoneTypeLabel(p.tipo)} ${p.numero}`,
+        source: p.tipo === 'whatsapp' ? 'socio_whatsapp' : 'contact',
+        contactId: c.id,
+        contactName: nome,
+        contactRole: c.job_title ?? null,
+      });
+    }
+  }
+
+  // Append socio/enriquecido + legacy lead numbers that aren't already covered
+  // by a contact — untagged, still dialable.
+  for (const rp of getAllLeadPhones(fallbackLead)) {
+    if (seen.has(rp.raw)) continue;
+    seen.add(rp.raw);
+    out.push(rp);
+  }
+
+  return out;
 }

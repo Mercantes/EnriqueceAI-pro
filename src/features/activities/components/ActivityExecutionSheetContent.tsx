@@ -12,8 +12,11 @@ import { fetchGmailSignature } from '../actions/fetch-gmail-signature';
 import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepare-activity-email';
 import { fetchWhatsAppTemplates, type WhatsAppTemplateOption } from '../actions/fetch-whatsapp-templates';
 import { checkWhatsAppConnected } from '../actions/check-whatsapp-status';
-import { resolveWhatsAppPhone, getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
+import { resolveWhatsAppPhone, buildContactPhones } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity } from '../types';
+
+import { listLeadContacts } from '@/features/leads/actions/lead-contacts';
+import type { LeadContact } from '@/features/leads/types';
 
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 
@@ -28,7 +31,7 @@ import { ActivityWhatsAppCompose } from './ActivityWhatsAppCompose';
 interface ActivityExecutionSheetContentProps {
   activity: PendingActivity;
   isSending: boolean;
-  onSend: (subject: string, body: string, aiGenerated: boolean, phone?: string) => void;
+  onSend: (subject: string, body: string, aiGenerated: boolean, phone?: string, contactId?: string | null) => void;
   onSkip: () => void;
   onMarkDone: (notes: string) => void;
   onLeadLost?: () => void;
@@ -57,8 +60,35 @@ export function ActivityExecutionSheetContent({
   const [aiPersonalized, setAiPersonalized] = useState(false);
   const [signature, setSignature] = useState('');
 
+  // Múltiplos contatos: cada número passa a mostrar de quem é. Buscamos os
+  // contatos do lead e reconstruímos a lista quando o lead muda (lead:updated).
+  // Até carregar (ou se o lead não tiver contatos), buildContactPhones cai no
+  // getAllLeadPhones — mesma lista de antes.
+  const [contacts, setContacts] = useState<LeadContact[]>([]);
+  useEffect(() => {
+    if (activity.channel !== 'whatsapp' && activity.channel !== 'phone') return;
+    let cancelled = false;
+    const load = () => {
+      void listLeadContacts(activity.lead.id).then((r) => {
+        if (!cancelled && r.success) setContacts(r.data);
+      });
+    };
+    load();
+    const onUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<{ leadId?: string }>).detail;
+      if (!detail?.leadId || detail.leadId === activity.lead.id) load();
+    };
+    window.addEventListener('lead:updated', onUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('lead:updated', onUpdated);
+    };
+  }, [activity.lead.id, activity.channel]);
+
   // Phone resolution for WhatsApp and Phone channels
-  const phones = (activity.channel === 'whatsapp' || activity.channel === 'phone') ? getAllLeadPhones(activity.lead) : [];
+  const phones = (activity.channel === 'whatsapp' || activity.channel === 'phone')
+    ? buildContactPhones(contacts, activity.lead)
+    : [];
   const defaultPhone = activity.channel === 'whatsapp'
     ? (resolveWhatsAppPhone(activity.lead)?.formatted ?? '')
     : '';
@@ -285,7 +315,7 @@ export function ActivityExecutionSheetContent({
         onPhoneChange={setTo}
         onBodyChange={setBody}
         onTemplateChange={handleTemplateChange}
-        onSend={() => onSend('', renderedPreview, aiPersonalized, to)}
+        onSend={() => onSend('', renderedPreview, aiPersonalized, to, phones.find((p) => p.formatted === to)?.contactId ?? null)}
         onSkip={onSkip}
         onReportInvalid={onReportWhatsAppInvalid ?? (() => undefined)}
       />

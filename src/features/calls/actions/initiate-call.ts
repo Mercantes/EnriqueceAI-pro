@@ -8,6 +8,8 @@ interface InitiateCallInput {
   provider: DialerProvider;
   phone: string;
   leadId?: string;
+  /** Contact (lead_contacts) whose number is being dialed, for reporting. */
+  contactId?: string | null;
 }
 
 /**
@@ -26,6 +28,7 @@ export async function initiateCall(
     const result = await initiateApi4ComCall({
       phone: input.phone,
       leadId: input.leadId,
+      contactId: input.contactId,
     });
     if (!result.success) return result;
     return {

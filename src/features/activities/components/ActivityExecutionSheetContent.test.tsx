@@ -49,6 +49,12 @@ vi.mock('../actions/fetch-gmail-signature', () => ({
   }),
 }));
 
+// Múltiplos contatos: o hub busca lead_contacts para rotular os telefones.
+// Sem mock, a server action roda em jsdom e rejeita (unhandled).
+vi.mock('@/features/leads/actions/lead-contacts', () => ({
+  listLeadContacts: vi.fn().mockResolvedValue({ success: true, data: [] }),
+}));
+
 // Stub the WhatsApp call panel — its server-action imports would run at import
 // time in jsdom. We only assert WHICH panel gets chosen, not its internals.
 vi.mock('@/features/whatsapp-calls/components/ActivityWhatsAppCallPanel', () => ({
