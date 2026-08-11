@@ -11,7 +11,7 @@ import { Button } from '@/shared/components/ui/button';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
-import type { DailyProgress } from '../actions/fetch-daily-progress';
+import { fetchDailyProgress, type DailyProgress } from '../actions/fetch-daily-progress';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import type { PendingActivity } from '../types';
 import { OVERDUE_THRESHOLD_HOURS, hoursOverdue } from '../utils/overdue';
@@ -136,6 +136,25 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
       : defaultFilters;
   });
   const [startNewLeadsOpen, setStartNewLeadsOpen] = useState(false);
+
+  // Progresso por-SDR: quando um manager filtra por um SDR, o card "Meu progresso"
+  // passa a refletir aquele SDR (não o usuário logado). Com filtro 'all' (ou SDR),
+  // usa o `progress` do servidor (do próprio usuário logado).
+  const [sdrProgress, setSdrProgress] = useState<DailyProgress | null>(null);
+  useEffect(() => {
+    if (!isManager || filters.sdr === 'all') {
+      setSdrProgress(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchDailyProgress(filters.sdr).then((res) => {
+      if (!cancelled && res.success) setSdrProgress(res.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [filters.sdr, isManager]);
+  const effectiveProgress = isManager && filters.sdr !== 'all' && sdrProgress ? sdrProgress : progress;
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -402,11 +421,11 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
         </Button>
       </div>
 
-      {/* Progress card */}
+      {/* Progress card — segue o SDR do filtro quando um manager seleciona um */}
       <ProgressCard
-        completed={progress.completed}
-        total={progress.total}
-        target={progress.target}
+        completed={effectiveProgress.completed}
+        total={effectiveProgress.total}
+        target={effectiveProgress.target}
         availableLeadIds={availableLeadIds}
       />
 

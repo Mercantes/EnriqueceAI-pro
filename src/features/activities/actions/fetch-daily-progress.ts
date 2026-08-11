@@ -2,6 +2,7 @@
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
+import { isManager } from '@/lib/auth/require-manager';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
@@ -12,10 +13,25 @@ export interface DailyProgress {
   target: number;
 }
 
-export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>> {
+/**
+ * Progresso diário do SDR. Sem argumento, é o do usuário logado; um manager pode
+ * passar `sdrUserId` para ver o progresso de um SDR específico (o card segue o
+ * filtro de SDR da tela de Atividades).
+ */
+export async function fetchDailyProgress(sdrUserId?: string): Promise<ActionResult<DailyProgress>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
+
+  // Alvo da contagem: o próprio usuário, ou o SDR escolhido por um manager.
+  let targetUserId = userId;
+  if (sdrUserId && sdrUserId !== userId) {
+    const manager = await isManager();
+    if (!manager) {
+      return { success: false, error: 'Apenas gestores podem ver o progresso de outro SDR', code: 'FORBIDDEN' };
+    }
+    targetUserId = sdrUserId;
+  }
 
   // Count today's completed activities (interactions created today by this user)
   // BRT midnight: shift "now" by -3h then truncate to UTC midnight, shift back
@@ -39,21 +55,43 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   //    `neq.true` é null-safe: atividade real não tem a chave, então fica.
   //  - ENVIOS FALHOS (type='failed'): tentativa que não saiu não é toque
   //    concluído (eram 22 WhatsApp failed no mesmo dia).
-  const { count: completed } = (await from(supabase, 'interactions')
-    .select('id', { count: 'exact', head: true })
+  //  - E-MAILS DE CADÊNCIA AUTOMÁTICA (cadências type='auto_email'): são
+  //    enviados pelo MOTOR (cron 8h-18h), não pelo SDR. Vinicius via "36 feitas"
+  //    sem ter feito nada — 34 eram e-mails da "Inbound — E-mail (auto)". A meta
+  //    é atividade MANUAL, então esses saem. E-mail manual (cadência standard)
+  //    continua contando.
+  const { data: autoCadences } = (await from(supabase, 'cadences')
+    .select('id')
     .eq('org_id', orgId)
-    .eq('performed_by', userId)
+    .eq('type', 'auto_email')) as { data: Array<{ id: string }> | null };
+  const autoEmailCadenceIds = new Set((autoCadences ?? []).map((c) => c.id));
+
+  // Busca as candidatas (não head) para poder excluir as de cadência automática.
+  // Também exclui os toques da RÉGUA de reunião (metadata.meeting_reminder=true):
+  // são disparos automáticos gravados com performed_by=SDR (desde a régua entrar
+  // no histórico do lead) — não são atividade manual. Os dois `.or` viram AND de
+  // grupos OR no PostgREST (cada um null-safe).
+  const { data: completedRows } = (await from(supabase, 'interactions')
+    .select('id, cadence_id')
+    .eq('org_id', orgId)
+    .eq('performed_by', targetUserId)
     .in('channel', SDR_CHANNELS)
     .neq('type', 'failed')
     .or('metadata->>is_note.is.null,metadata->>is_note.neq.true')
-    .gte('created_at', todayStart.toISOString())) as { count: number | null };
+    .or('metadata->>meeting_reminder.is.null,metadata->>meeting_reminder.neq.true')
+    .gte('created_at', todayStart.toISOString())
+    .limit(5000)) as { data: Array<{ id: string; cadence_id: string | null }> | null };
+
+  const completed = (completedRows ?? []).filter(
+    (r) => !r.cadence_id || !autoEmailCadenceIds.has(r.cadence_id),
+  ).length;
 
   // Count pending activities for THIS SDR only:
   // Step 1: Get lead IDs assigned to this user
   const { data: myLeads } = (await from(supabase, 'leads')
     .select('id')
     .eq('org_id', orgId)
-    .eq('assigned_to', userId)
+    .eq('assigned_to', targetUserId)
     .is('deleted_at', null)
     .limit(1000)) as { data: Array<{ id: string }> | null };
 
@@ -134,7 +172,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
   const { data: userGoal } = (await from(supabase, 'daily_activity_goals')
     .select('target')
     .eq('org_id', orgId)
-    .eq('user_id', userId)
+    .eq('user_id', targetUserId)
     .single()) as { data: { target: number } | null };
 
   let target = userGoal?.target ?? null;
@@ -149,7 +187,7 @@ export async function fetchDailyProgress(): Promise<ActionResult<DailyProgress>>
     target = orgGoal?.target ?? 20; // default 20
   }
 
-  const comp = completed ?? 0;
+  const comp = completed;
   const pend = pending ?? 0;
 
   return {
