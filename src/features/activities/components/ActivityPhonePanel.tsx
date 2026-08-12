@@ -263,7 +263,6 @@ export function ActivityPhonePanel({
         callProvider: returnSchedule.callProvider,
         scheduledAt: returnSchedule.scheduledAt,
         notes: resultNotes ? `Retorno: ${resultNotes}` : undefined,
-        completeEnrollments: true,
       }).catch((err) => console.error('[ActivityPhonePanel] scheduleActivity failed:', err));
     }
 
