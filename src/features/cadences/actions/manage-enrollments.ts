@@ -132,9 +132,9 @@ export async function updateEnrollmentStatus(
 
   // Fetch enrollment + cadence name before update
   const { data: enrollment } = (await from(supabase, 'cadence_enrollments')
-    .select('lead_id, cadence:cadences(name)')
+    .select('lead_id, cadence_id, cadence:cadences(name)')
     .eq('id', enrollmentId)
-    .single()) as { data: { lead_id: string; cadence: { name: string } | null } | null };
+    .single()) as { data: { lead_id: string; cadence_id: string | null; cadence: { name: string } | null } | null };
 
   const { error } = await from(supabase, 'cadence_enrollments')
     .update({ status } as Record<string, unknown>)
@@ -144,18 +144,30 @@ export async function updateEnrollmentStatus(
   if (qErr3) return qErr3;
 
   if (enrollment) {
-    const statusLabels: Record<string, string> = {
-      active: 'retomada', paused: 'pausada', completed: 'concluída',
-    };
     const cadenceName = enrollment.cadence?.name ?? 'Cadência';
-    logLeadEvent(supabase, {
-      orgId,
-      leadId: enrollment.lead_id,
-      userId,
-      event: 'enrollment_status_changed',
-      message: `Cadência ${cadenceName}: ${statusLabels[status] ?? status}`,
-      metadata: { enrollment_id: enrollmentId, new_status: status },
-    });
+    // Pausa/retomada usam eventos distintos (cadence_paused / cadence_resumed)
+    // com reason, para serem contáveis e auditáveis. Outros status seguem no
+    // evento genérico enrollment_status_changed.
+    if (status === 'paused' || status === 'active') {
+      logLeadEvent(supabase, {
+        orgId,
+        leadId: enrollment.lead_id,
+        userId,
+        event: status === 'paused' ? 'cadence_paused' : 'cadence_resumed',
+        message: `Cadência ${cadenceName} ${status === 'paused' ? 'pausada' : 'retomada'}`,
+        metadata: { enrollment_id: enrollmentId, cadence_id: enrollment.cadence_id, reason: 'Alteração manual' },
+      });
+    } else {
+      const statusLabels: Record<string, string> = { completed: 'concluída' };
+      logLeadEvent(supabase, {
+        orgId,
+        leadId: enrollment.lead_id,
+        userId,
+        event: 'enrollment_status_changed',
+        message: `Cadência ${cadenceName}: ${statusLabels[status] ?? status}`,
+        metadata: { enrollment_id: enrollmentId, cadence_id: enrollment.cadence_id, new_status: status },
+      });
+    }
   }
 
   revalidatePath('/cadences');

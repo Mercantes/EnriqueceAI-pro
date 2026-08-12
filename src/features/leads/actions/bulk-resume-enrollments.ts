@@ -50,8 +50,9 @@ export async function bulkResumeEnrollments(
     orgId,
     leadIds: affectedLeadIds,
     userId,
-    event: 'enrollment_status_changed',
+    event: 'cadence_resumed',
     message: 'Cadência retomada',
+    metadata: { reason: 'Retomada manual em massa' },
   });
 
   revalidatePath('/leads');
