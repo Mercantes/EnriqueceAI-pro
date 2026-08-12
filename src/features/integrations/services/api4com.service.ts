@@ -192,6 +192,8 @@ interface Api4ComIntegration {
  * compatibility but no longer used — the real gateway comes from the
  * GET response so we don't fight whatever the customer's CRM picked.
  */
+const WEBHOOK_REGISTER_MAX_ATTEMPTS = 3;
+
 export async function registerWebhook(
   userId: string,
   webhookUrl: string,
@@ -200,21 +202,50 @@ export async function registerWebhook(
   const creds = await getCredentials(userId);
   if (!creds) throw new Error('API4COM não configurada para este usuário');
 
-  const integrations = await api4comFetch<Api4ComIntegration[]>(creds, 'GET', '/integrations');
-  if (!Array.isArray(integrations) || integrations.length === 0) {
-    throw new Error('Integração API4COM não encontrada para este usuário');
-  }
-  const integration = integrations[0]!;
+  // Registro com VERIFICAÇÃO + RETRY. Antes era GET+PATCH "dispara e esquece":
+  // se o PATCH falhasse (rede transitória, 5xx) ou não "pegasse", o ramal ficava
+  // SEM channel-answer/channel-hangup e ninguém percebia até faltar dado no BI.
+  // Foi o que aconteceu com o ramal 1045 (João, ago/2026). Agora: após o PATCH,
+  // relemos a integração e confirmamos `webhook === true`; se não bater, tentamos
+  // de novo. O cron `reregister-api4com-webhooks` é a rede de segurança adicional.
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= WEBHOOK_REGISTER_MAX_ATTEMPTS; attempt++) {
+    try {
+      const integrations = await api4comFetch<Api4ComIntegration[]>(creds, 'GET', '/integrations');
+      if (!Array.isArray(integrations) || integrations.length === 0) {
+        throw new Error('Integração API4COM não encontrada para este usuário');
+      }
+      const integration = integrations[0]!;
 
-  await api4comFetch(creds, 'PATCH', '/integrations', {
-    id: integration.id,
-    webhook: true,
-    webhookConstraint: { metadata: { gateway: integration.gateway } },
-    metadata: {
-      ...(integration.metadata ?? {}),
-      webhookUrl,
-      webhookVersion: 'v1.4',
-      webhookTypes: ['channel-hangup', 'channel-answer'],
-    },
-  });
+      await api4comFetch(creds, 'PATCH', '/integrations', {
+        id: integration.id,
+        webhook: true,
+        webhookConstraint: { metadata: { gateway: integration.gateway } },
+        metadata: {
+          ...(integration.metadata ?? {}),
+          webhookUrl,
+          webhookVersion: 'v1.4',
+          webhookTypes: ['channel-hangup', 'channel-answer'],
+        },
+      });
+
+      // Verificação: relê e confirma que o webhook ficou de fato habilitado.
+      const verify = await api4comFetch<Api4ComIntegration[]>(creds, 'GET', '/integrations');
+      const updated = Array.isArray(verify)
+        ? (verify.find((i) => i.id === integration.id) ?? verify[0])
+        : undefined;
+      if (updated?.webhook === true) return;
+
+      throw new Error('Webhook não confirmado após PATCH (webhook !== true na releitura)');
+    } catch (err) {
+      lastError = err;
+      if (attempt < WEBHOOK_REGISTER_MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Falha ao registrar webhook API4COM após múltiplas tentativas');
 }

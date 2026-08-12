@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { verifyCronSecret } from '@/lib/auth/verify-cron-secret';
 import { verifyServiceRole } from '@/lib/auth/verify-service-role';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
@@ -9,7 +10,10 @@ import { getAppUrl } from '@/lib/utils/app-url';
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  if (!verifyServiceRole(request)) {
+  // Aceita service-role (chamada manual/admin) OU CRON_SECRET (cron diário de
+  // reregister — rede de segurança que reaplica o webhook em TODAS as conexões,
+  // pegando qualquer ramal novo cujo registro no cadastro tenha falhado).
+  if (!verifyServiceRole(request) && !verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
