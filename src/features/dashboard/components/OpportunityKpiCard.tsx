@@ -168,14 +168,14 @@ export function OpportunityKpiCard({
   const absPercent = Math.abs(kpi.percentOfTarget);
   // Pace the "esperado" on business days (Mon–Fri), not calendar days, so weekends
   // don't inflate the expectation. Matches the dashed "Meta" line, computed
-  // server-side with the same helper. `currentDay` é o último dia CONCLUÍDO (=ontem
-  // no mês corrente), então o rótulo diz "até ontem" — não "até hoje": o valor é a
-  // meta acumulada até o dia fechado, enquanto a linha "Meta" do gráfico mostra a
-  // meta do dia corrente (maior). Em mês fechado a régua é o mês inteiro.
+  // server-side with the same helper. O VALOR (`currentDay` = último dia fechado =
+  // ontem) é a meta acumulada até o dia fechado; o RÓTULO diz "até hoje" para bater
+  // com o Sales Hub (que escreve "esperado até hoje" com esse mesmo valor). Contagem
+  // vai até hoje, pacing até ontem — assimetria intencional. Mês fechado = mês inteiro.
   const [kpiYear, kpiMonth] = month.split('-').map(Number) as [number, number];
   const expectedByNow = Math.round(expectedByBusinessDay(kpi.monthTarget, kpiYear, kpiMonth, kpi.currentDay));
   const isCurrentMonth = month === currentMonthBrt();
-  const expectedLabel = isCurrentMonth ? 'esperado até ontem' : 'esperado no mês';
+  const expectedLabel = isCurrentMonth ? 'esperado até hoje' : 'esperado no mês';
 
   // A série já vem cortada na fonte: `actual` é o acumulado até hoje e `null` nos
   // dias que ainda não aconteceram. Plotamos direto — o último ponto (hoje) bate

@@ -186,14 +186,17 @@ describe('fetchOpportunityKpi', () => {
     expect(result.percentOfTarget).toBe(0);
   });
 
-  it('recua a janela e a série para o último dia fechado (ontem) no mês corrente', async () => {
-    // Régua "último dia fechado": hoje = 13/ago (BRT) → conta só até o fim do dia 12.
+  it('conta até HOJE (número grande = último ponto da série); pacing usa o dia fechado (ontem)', async () => {
+    // Régua dupla — espelha o Sales Hub: CONTAGEM (total + série) vai até HOJE (13/ago),
+    // então o evento de hoje aparece no número grande E no último ponto do gráfico; o
+    // PACING ("esperado"/%) usa o dia fechado de ONTEM (12).
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-13T12:00:00Z')); // 09:00 BRT do dia 13
     try {
       const leads = [
         { id: 'a', won_at: '2026-08-05T10:00:00Z', assigned_to: null, won_by: null },
         { id: 'b', won_at: '2026-08-12T10:00:00Z', assigned_to: null, won_by: null },
+        { id: 'c', won_at: '2026-08-13T10:00:00Z', assigned_to: null, won_by: null }, // hoje
       ];
       const leadsChain = createChainMock({ data: leads });
       const goalsChain = createChainMock({
@@ -211,16 +214,20 @@ describe('fetchOpportunityKpi', () => {
         userIds: [],
       });
 
-      // A query de won leads termina no fim de ONTEM (dia 12), não no fim do mês.
+      // A query de won leads vai até o fim do MÊS (conta até hoje: won_at nunca é futuro).
       const ltCalls = (leadsChain.lt as ReturnType<typeof vi.fn>).mock.calls;
       const wonAtLt = ltCalls.find((c: unknown[]) => c[0] === 'won_at');
-      expect(wonAtLt?.[1]).toBe('2026-08-12T23:59:59-03:00');
+      expect(wonAtLt?.[1]).toBe('2026-08-31T23:59:59-03:00');
 
-      // currentDay = ontem = 12; série acumula até o dia 12 e é null a partir de hoje.
-      expect(result.currentDay).toBe(12);
-      expect(result.dailyData[11]?.actual).toBe(2); // dia 12 (fechado)
-      expect(result.dailyData[12]?.actual).toBeNull(); // dia 13 (hoje, em andamento)
+      // Número grande inclui o evento de hoje.
+      expect(result.totalOpportunities).toBe(3);
+      // Série acumula até HOJE (dia 13) — último ponto = número grande; futuro é null.
+      expect(result.dailyData[11]?.actual).toBe(2); // dia 12
+      expect(result.dailyData[12]?.actual).toBe(3); // dia 13 (hoje) = número grande
+      expect(result.dailyData[13]?.actual).toBeNull(); // dia 14 (futuro)
       expect(result.dailyData[30]?.actual).toBeNull(); // dia 31 (futuro)
+      // Pacing continua no dia fechado de ontem (12) — régua separada da contagem.
+      expect(result.currentDay).toBe(12);
     } finally {
       vi.useRealTimers();
     }
