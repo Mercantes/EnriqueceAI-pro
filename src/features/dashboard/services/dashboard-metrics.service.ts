@@ -15,9 +15,17 @@ import type {
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate();
+  const start = `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`;
+  // Régua "último dia fechado": no mês corrente a janela vai só até o fim de ONTEM
+  // (o dia em andamento entra no card quando fecha); em mês passado, o mês inteiro.
+  // `currentDayOfMonthBrt` = ontem no corrente, último dia no passado. Dia 1 do mês
+  // corrente → 0 → janela vazia (nada fechado ainda). Alinha `total`/`%`/série ao pacing.
+  const throughDay = currentDayOfMonthBrt(month);
+  if (throughDay < 1) return { start, end: start };
+  const endDay = Math.min(throughDay, lastDay);
   return {
-    start: `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`,
-    end: `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59-03:00`,
+    start,
+    end: `${year}-${String(mon).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T23:59:59-03:00`,
   };
 }
 
@@ -44,10 +52,9 @@ function computeDailyData(
 ): DailyDataPoint[] {
   const days = getDaysInMonth(month);
   const [year, mon] = month.split('-').map(Number) as [number, number];
-  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const isCurrentMonth =
-    nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
-  const maxDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
+  // Série vai até o último dia FECHADO (ontem no mês corrente) — mesma régua da
+  // janela de contagem (getMonthRange) e do pacing. O dia em andamento fica null.
+  const maxDay = currentDayOfMonthBrt(month);
 
   const countByDay = new Map<number, number>();
   for (const dateStr of leadDates) {

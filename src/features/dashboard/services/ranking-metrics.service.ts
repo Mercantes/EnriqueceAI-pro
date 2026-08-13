@@ -18,9 +18,18 @@ import type {
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate();
+  const start = `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`;
+  // Régua "último dia fechado": no mês corrente a janela vai só até o fim de ONTEM
+  // (o dia em andamento entra no card quando fecha); em mês passado, o mês inteiro.
+  // `currentDayOfMonthBrt` = ontem no corrente, último dia no passado. Dia 1 do mês
+  // corrente → 0 → janela vazia (nada fechado ainda). Assim `total`, `%` e séries
+  // param no mesmo dia do pacing, e card + gráfico contam a mesma história.
+  const throughDay = currentDayOfMonthBrt(month);
+  if (throughDay < 1) return { start, end: start };
+  const endDay = Math.min(throughDay, lastDay);
   return {
-    start: `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`,
-    end: `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59-03:00`,
+    start,
+    end: `${year}-${String(mon).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T23:59:59-03:00`,
   };
 }
 
@@ -464,9 +473,9 @@ async function fetchLeadsOpenedDaily(
   const { start, end } = getDateRange(filters);
   const days = getDaysInMonth(filters.month);
   const [year, mon] = filters.month.split('-').map(Number) as [number, number];
-  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const isCurrentMonth = nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
-  const maxDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
+  // Série vai até o último dia FECHADO (ontem no mês corrente) — mesma régua da
+  // janela de contagem e do pacing. O dia em andamento fica null.
+  const maxDay = currentDayOfMonthBrt(filters.month);
 
   // chunked here would only kick in for huge cadenceIds; for the daily series
   // we just pull leads opened in the window and bucket in memory.
@@ -572,11 +581,10 @@ export async function fetchMeetingsScheduledRanking(
     individualTargets,
   );
 
-  // Daily cumulative for the KPI chart
+  // Daily cumulative for the KPI chart — série vai até o último dia FECHADO (ontem
+  // no mês corrente), mesma régua da janela de contagem e do pacing.
   const [year, mon] = filters.month.split('-').map(Number) as [number, number];
-  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const isCurrent = nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
-  const maxDay = isCurrent ? nowBrt.getUTCDate() : days;
+  const maxDay = currentDayOfMonthBrt(filters.month);
   const dailyData = [] as Array<{ date: string; day: number; actual: number | null; target: number }>;
   let cumulative = 0;
   for (let d = 1; d <= days; d++) {
