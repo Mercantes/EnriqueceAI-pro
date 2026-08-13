@@ -712,6 +712,80 @@ export class KommoAdapter implements CRMAdapter {
   }
 
   /**
+   * Read a deal's current core fields from Kommo. Returns null if the deal does
+   * not exist (404 / "Lead not found"). Used by the baseline-restore to compare
+   * current state against the target before patching (idempotency).
+   */
+  async getDealFull(
+    credentials: CrmCredentials,
+    dealExternalId: string,
+  ): Promise<{ statusId: number; pipelineId: number; lossReasonId: number | null; closedAt: number | null } | null> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+    interface KommoLead {
+      status_id?: number;
+      pipeline_id?: number;
+      loss_reason_id?: number | null;
+      closed_at?: number | null;
+    }
+    try {
+      const r = await kommoFetch<KommoLead>(subdomain, `/leads/${dealExternalId}`, credentials.access_token, {
+        method: 'GET',
+      });
+      return {
+        statusId: r.status_id ?? 0,
+        pipelineId: r.pipeline_id ?? 0,
+        lossReasonId: r.loss_reason_id ?? null,
+        closedAt: r.closed_at ?? null,
+      };
+    } catch (err) {
+      if (err instanceof Error && (/\(404\)/.test(err.message) || /lead not found/i.test(err.message))) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Restore a deal to a target status, including loss metadata when moving to the
+   * "Venda perdida" status (143). Kommo sets a deal's loss_reason via the same
+   * update that moves it to 143. `closed_at` is best-effort (Kommo may treat it
+   * as read-only and re-stamp it) — sent when provided so we at least try to
+   * preserve the original loss date.
+   */
+  async updateDealFull(
+    credentials: CrmCredentials,
+    dealExternalId: string,
+    target: { pipelineId: number; statusId: number; lossReasonId?: number | null; closedAt?: number | null },
+  ): Promise<void> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+    const body: Record<string, unknown> = {
+      pipeline_id: target.pipelineId,
+      status_id: target.statusId,
+    };
+    if (target.lossReasonId != null) body.loss_reason_id = target.lossReasonId;
+    if (target.closedAt != null) body.closed_at = target.closedAt;
+    await kommoFetch<unknown>(subdomain, `/leads/${dealExternalId}`, credentials.access_token, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * Delete a deal in Kommo. Used ONLY to remove deals the backfill wrongly
+   * recreated (they did not exist at the restore baseline). Caller MUST guard the
+   * id against the known recreated-list — never delete a real deal.
+   */
+  async deleteDeal(credentials: CrmCredentials, dealExternalId: string): Promise<void> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+    await kommoFetch<unknown>(subdomain, `/leads/${dealExternalId}`, credentials.access_token, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
    * Read a deal's status-change history from Kommo's events log. Each entry is a
    * `lead_status_changed` event with the status id before/after and its unix
    * timestamp. Used to reverse-engineer exactly which stage a deal sat in before
