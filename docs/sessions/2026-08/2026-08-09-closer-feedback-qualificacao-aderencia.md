@@ -13,6 +13,7 @@ Reformulação do **formulário público de feedback do closer** (acessado por t
 | #251 | `1274d84` | troca "qualidade do lead" por conferência da qualificação no feedback do closer |
 | #254 | `1bb755c` | re-fonteia "Decisor na Call %" a partir das divergências do closer (RPC `get_leads_for_v4sales`) |
 | #266 | `22aa2d1` | alinha o output do feedback (e-mails/alerta + dashboards) à nova semântica |
+| #275 | `9698d09` | gestor volta a receber TODO feedback do closer (alerta × informativo) |
 
 ---
 
@@ -98,6 +99,12 @@ Um e-mail real de alerta ao gestor revelou que a **camada de output** ficou com 
 - **Dashboards:** `FeedbackAnalyticsView` / `CloserPerformanceCards` / `CloserFeedbackTable` — "Nota/Nota média/Rating" → **"Chance de fechar"**. `LeadDetailLayout` — card do closer passa a exibir **"A qualificação bateu?"** (com divergências) como sinal primário; `fetch-closer-feedback` traz `qualificacao_aderente`/`divergencias`.
 - **Decisão de produto (via AskUserQuestion):** alerta ao gestor = no-show/remarcada/divergiu; rating baixo **não** alerta mais.
 - 2 commits no mesmo PR (`fix(feedback)` + `refactor(dashboards)`). typecheck/lint/testes verdes. E-mails revisados por prévia HTML (não disparei e-mail real — vai a managers reais).
+
+### Efeito colateral do #266: gestor parou de receber (#275 — `9698d09`)
+
+Dias depois, o gestor reportou não estar recebendo os feedbacks dos closers novos. **Não era bug** — diagnóstico via dados: desde o form novo, as 11 respostas foram **todas "Bateu"**, e o #266 (correto na época) silenciava os casos saudáveis para o gestor. O pipeline estava intacto (o `rescheduled` de 11/ago notificou normalmente; os alertas de `meeting_done` até 11/ago 16:18 eram do **código antigo** ainda no ar, que alertava por nota baixa). ⭐ **Lição:** silenciar "casos saudáveis" pode virar "o gestor não recebe nada" quando o caso saudável é a maioria.
+
+**Decisão do gestor (via AskUserQuestion):** receber **todo** feedback respondido. Fix (`route.ts`): `notifyManagers` é **sempre** chamado (removido o gate `isActionable` no POST); `isActionable` vira parâmetro e só muda a **moldura** — **alerta** (⚠️ assunto + caixa "Motivo do alerta") para no-show/remarcada/divergiu; **informativo** ("Feedback do closer", sem caixa) para bateu/não validado. `metadata.actionable` reflete o caso real. Afeta só feedbacks futuros (os "Bateu" já respondidos ficam visíveis em Estatísticas → Feedbacks). typecheck/lint verdes.
 
 ## Fora de escopo (intactos)
 
