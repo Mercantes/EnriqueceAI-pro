@@ -146,15 +146,37 @@ mesmo dia.
 - **Em aberto (opcional):** alinhar os gráficos de Insights à mesma régua (edição trivial em
   `insights-metrics.service.ts`, mesmo `getMonthRange`).
 
+## ⚠️ ATUALIZAÇÃO (fim do dia 13/ago): #310 foi REVERTIDO — dashboard conta até HOJE
+
+A "resolução final #310" acima (contar até ONTEM) **não vingou**. Comparando com o **Sales Hub**
+(referência da operação), o time viu que o SH conta o **realizado até HOJE** (marcadas 51, realizadas
+39) e paceia a **meta até o dia fechado** (ontem, 50/39) — uma **régua dupla intencional**. O #310
+unificou tudo em "ontem" (43/32) e desalinhou do SH.
+
+Desfecho real (tudo NO AR):
+- **#313** (`2091a5de`) — reverte o #310: contagem (nº grande + série) volta a **HOJE**
+  (`getMonthRange.end` = fim do mês; `maxDay` = hoje); pacing segue em ontem (`currentDayOfMonthBrt`).
+  Handoff dedicado: `docs/sessions/2026-08/2026-08-13-dashboard-kpi-conta-ate-hoje-e-meta-ponto-hoje.md`.
+- **#315** (`3ef3b9bf`) — a Meta do gráfico no ponto de HOJE usa a régua do dia fechado (helper
+  `seriesTargetForDay`), então o tooltip do dia corrente mostra 50/39 = card (antes 56/44).
+- **#314 → #316** (`85d79892`, esta sessão) — aliei os gráficos de **Insights** à régua ONTEM (#314)
+  por premissa desatualizada; como os cards já estavam em HOJE (#313), isso os desalinhou.
+  **#316 corrigiu** — Insights voltam a contar até HOJE. Agora cards + ranking + Insights usam a
+  mesma régua de contagem.
+
+⭐ **Régua vigente do dashboard = CONTAGEM até HOJE, PACING até ONTEM** (espelha o Sales Hub). As
+lições abaixo escritas na fase #310 ("contar tudo até ontem") ficam como registro histórico — a
+decisão final foi a régua dupla, não a régua única de ontem.
+
 ## ⭐ Lições
 
 - **A régua de dia de um dashboard é decisão de PRODUTO, não de código.** O ponto de controle
   certo é a **janela de contagem** (`getMonthRange.end`), não recortes espalhados no componente:
   mude lá e `total`/`%`/`sdrBreakdown`/séries/cards-de-taxa se alinham sozinhos. Backend = fonte
   única — não duplicar a régua no front (foi o que o #310 desfez do paliativo).
-- **`currentDayOfMonthBrt` (= ontem, último dia CONCLUÍDO) é a régua canônica** de pacing E de
-  contagem. Número, série e "esperado" têm de parar TODOS no mesmo dia, senão colidem (origem do
-  47×43 e do 50×56).
+- **`currentDayOfMonthBrt` (= ontem, último dia CONCLUÍDO) é a régua do PACING** ("esperado"/%/
+  ideal-dia). ⚠️ **Correção pós-#313:** a CONTAGEM (nº grande + série) NÃO usa ontem — usa HOJE,
+  espelhando o Sales Hub (régua dupla intencional). O #310 tentou unificar em ontem e desalinhou.
 - **Dia futuro/em-andamento numa série acumulada = `null`, não `0`** (`0` é ambíguo com começo de
   mês sem eventos; recharts `connectNulls={false}` já não plota null).
 - **Contar até "ontem" esconde o dia corrente do card até fechar** — comunicar o trade-off (uma
