@@ -780,8 +780,11 @@ export class KommoAdapter implements CRMAdapter {
   async deleteDeal(credentials: CrmCredentials, dealExternalId: string): Promise<void> {
     const subdomain = credentials.subdomain;
     if (!subdomain) throw new Error('Kommo subdomain missing');
-    await kommoFetch<unknown>(subdomain, `/leads/${dealExternalId}`, credentials.access_token, {
+    // Kommo v4 deleta via DELETE na COLEÇÃO /leads com corpo [{id}] (não por id
+    // na URL — isso retorna 405). Deletamos um por vez para manter o guard.
+    await kommoFetch<unknown>(subdomain, `/leads`, credentials.access_token, {
       method: 'DELETE',
+      body: JSON.stringify([{ id: parseInt(dealExternalId, 10) }]),
     });
   }
 
