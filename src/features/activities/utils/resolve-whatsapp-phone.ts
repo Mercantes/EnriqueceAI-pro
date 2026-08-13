@@ -1,4 +1,4 @@
-import type { LeadContact } from '@/features/leads/types';
+import type { LeadContact, LeadPhone } from '@/features/leads/types';
 
 import type { ActivityLead } from '../types';
 
@@ -23,6 +23,36 @@ function isMobileBR(value: string): boolean {
   const digits = value.replace(/\D/g, '');
   const local = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
   return local.length === 11;
+}
+
+/**
+ * Normaliza uma entrada de `phones` para o formato canônico { tipo, numero }.
+ *
+ * Cargas externas (n8n/CRM Recovery) gravaram `phones` como array de strings
+ * puras — `["1991488456"]` em vez de `[{ tipo, numero }]`. O tipo declarado é
+ * LeadPhone[], mas o dado em runtime nem sempre respeita isso, então o número
+ * era lido como `entry.numero === undefined` e o lead ficava SEM telefone
+ * discável (sumia da fila/discador). Aqui aceitamos ambos os formatos: quando
+ * vier string, inferimos o tipo pela contagem de dígitos (celular BR = 11).
+ */
+export function normalizePhoneEntry(entry: unknown): LeadPhone | null {
+  if (entry == null) return null;
+  if (typeof entry === 'string') {
+    const numero = entry.trim();
+    if (numero.replace(/\D/g, '') === '') return null;
+    return { numero, tipo: isMobileBR(numero) ? 'celular' : 'fixo' };
+  }
+  if (typeof entry === 'object') {
+    const obj = entry as { numero?: unknown; tipo?: unknown };
+    const numero = typeof obj.numero === 'string' ? obj.numero.trim() : '';
+    if (numero.replace(/\D/g, '') === '') return null;
+    const tipo =
+      obj.tipo === 'celular' || obj.tipo === 'fixo' || obj.tipo === 'whatsapp'
+        ? obj.tipo
+        : isMobileBR(numero) ? 'celular' : 'fixo';
+    return { numero, tipo };
+  }
+  return null;
 }
 
 function formatPhone(ddd: number, numero: string): { formatted: string; raw: string } {
@@ -91,8 +121,10 @@ export function getAllLeadPhones(
     celular: [],
     fixo: [],
   };
-  for (const lp of lead.phones ?? []) {
-    const digits = (lp.numero ?? '').replace(/\D/g, '');
+  for (const rawLp of (lead.phones ?? []) as unknown[]) {
+    const lp = normalizePhoneEntry(rawLp);
+    if (!lp) continue;
+    const digits = lp.numero.replace(/\D/g, '');
     if (!digits) continue;
     const formatted = lp.numero;
     // Normalize Brazil country-code prefix so "55..." and the local form
@@ -180,8 +212,10 @@ export function buildContactPhones(
   for (const c of contacts) {
     const nome = [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || 'Contato';
     const who = c.job_title ? `${nome} · ${c.job_title}` : nome;
-    for (const p of c.phones ?? []) {
-      const digits = (p.numero ?? '').replace(/\D/g, '');
+    for (const rawP of (c.phones ?? []) as unknown[]) {
+      const p = normalizePhoneEntry(rawP);
+      if (!p) continue;
+      const digits = p.numero.replace(/\D/g, '');
       if (!digits) continue;
       const dedupKey = digits.startsWith('55') && digits.length > 10 ? digits.slice(2) : digits;
       if (seen.has(dedupKey)) continue;
