@@ -279,6 +279,8 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                   enrollment_status_changed: 'Cadência atualizada',
                   cadence_paused: 'Cadência pausada',
                   cadence_resumed: 'Cadência retomada',
+                  cadence_completed: 'Cadência concluída',
+                  cadence_ignored: 'Cadência encerrada',
                   enrollment_removed: 'Removido da cadência',
                   cadence_switched: 'Cadência trocada',
                   step_skipped_manual: 'Atividade pulada',

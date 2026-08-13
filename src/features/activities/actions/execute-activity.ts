@@ -20,6 +20,7 @@ import { toPlainText } from '@/lib/utils/html-to-plaintext';
 import { withTimeout } from '@/lib/utils/with-timeout';
 
 import { markLeadContacted } from '@/features/leads/actions/mark-contacted';
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 import { createNotification } from '@/features/notifications/services/notification.service';
 
 import type { ExecuteActivityInput } from '../types';
@@ -87,7 +88,7 @@ export async function executeActivity(
     .maybeSingle()) as { data: { id: string } | null };
 
   if (existingInteraction) {
-    await advanceEnrollment(supabase, { enrollmentId, stepId, userId, leadId, to: input.to, orgId });
+    await advanceEnrollment(supabase, { enrollmentId, cadenceId, stepId, userId, leadId, to: input.to, orgId });
     revalidatePath('/atividades');
     return { success: true, data: { interactionId: existingInteraction.id } };
   }
@@ -243,7 +244,7 @@ export async function executeActivity(
   // Advance step (or complete) atomically. Single RPC, row-locked e idempotente
   // — substitui os ~5 round-trips que antes podiam estrangular o avanço e deixar
   // o enrollment preso num step já feito. O RPC também audita steps pulados.
-  await advanceEnrollment(supabase, { enrollmentId, stepId, userId, leadId, to: input.to, orgId });
+  await advanceEnrollment(supabase, { enrollmentId, cadenceId, stepId, userId, leadId, to: input.to, orgId });
 
   revalidatePath('/atividades');
 
@@ -252,6 +253,7 @@ export async function executeActivity(
 
 interface AdvanceArgs {
   enrollmentId: string;
+  cadenceId: string;
   stepId: string;
   userId: string;
   leadId: string;
@@ -270,7 +272,7 @@ interface AdvanceArgs {
  */
 async function advanceEnrollment(
   supabase: SupabaseClient,
-  { enrollmentId, stepId, userId, leadId, to, orgId }: AdvanceArgs,
+  { enrollmentId, cadenceId, stepId, userId, leadId, to, orgId }: AdvanceArgs,
 ): Promise<void> {
   const { data, error } = await (supabase.rpc as unknown as (
     fn: string,
@@ -290,6 +292,16 @@ async function advanceEnrollment(
   }
 
   if (data?.[0]?.completed) {
+    // Rastro na timeline: fim natural da cadência (rodou todos os passos).
+    await logLeadEvent(supabase, {
+      orgId,
+      leadId,
+      userId,
+      event: 'cadence_completed',
+      message: 'Cadência concluída — todos os passos foram executados',
+      metadata: { cadence_id: cadenceId, enrollment_id: enrollmentId },
+    });
+
     const leadDisplay = to || leadId.slice(0, 8);
     createNotification({
       org_id: orgId,

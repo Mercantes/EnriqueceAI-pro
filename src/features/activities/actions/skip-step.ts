@@ -9,6 +9,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { createNotification } from '@/features/notifications/services/notification.service';
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 const skipStepSchema = z.object({
   enrollmentId: z.string().uuid('ID inválido'),
@@ -83,6 +84,16 @@ export async function skipStep(
   // Se pular o último step conclui a cadência, avisa o SDR (paridade com o
   // fluxo de execução — evita "sumiço" silencioso ao concluir).
   if (data?.[0]?.completed) {
+    // Rastro na timeline: pular o último passo concluiu a cadência.
+    await logLeadEvent(supabase, {
+      orgId: enrollment.org_id,
+      leadId: enrollment.lead_id,
+      userId,
+      event: 'cadence_completed',
+      message: 'Cadência concluída — último passo pulado pelo SDR',
+      metadata: { cadence_id: enrollment.cadence_id, enrollment_id: enrollmentId },
+    });
+
     createNotification({
       org_id: enrollment.org_id,
       user_id: userId,

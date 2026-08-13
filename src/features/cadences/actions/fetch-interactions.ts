@@ -8,6 +8,24 @@ import { from } from '@/lib/supabase/from';
 import type { TimelineEntry, CadenceMetrics } from '../cadences.contract';
 import type { CadenceEnrollmentRow, InteractionRow } from '../types';
 
+/**
+ * Eventos de ciclo de vida da cadência (inscrição e saída). Sempre incluídos no
+ * timeline mesmo que empurrados para além das `limit` interações recentes — em
+ * leads com muitas ligações o motivo de saída ("por que saiu da cadência")
+ * ficava fora da janela das 50 mais recentes e sumia.
+ */
+const CADENCE_LIFECYCLE_EVENTS = [
+  'cadence_enrolled',
+  'enrollment_added',
+  'cadence_switched',
+  'cadence_ignored',
+  'cadence_completed',
+  'cadence_paused',
+  'cadence_resumed',
+  'enrollment_removed',
+  'cadence_limbo_triaged',
+] as const;
+
 export async function fetchLeadTimeline(
   leadId: string,
   limit = 50,
@@ -16,7 +34,7 @@ export async function fetchLeadTimeline(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  const { data: interactions, error } = (await from(supabase, 'interactions')
+  const { data: recent, error } = (await from(supabase, 'interactions')
     .select('*')
     .eq('lead_id', leadId)
     .eq('org_id', orgId)
@@ -26,6 +44,23 @@ export async function fetchLeadTimeline(
   if (error) {
     return { success: false, error: 'Erro ao buscar interações' };
   }
+
+  // Sempre traz os eventos de ciclo de vida da cadência, mesmo fora da janela
+  // recente, e mescla (dedup por id) — garante que a "história da cadência"
+  // nunca fique invisível.
+  const { data: lifecycle } = (await from(supabase, 'interactions')
+    .select('*')
+    .eq('lead_id', leadId)
+    .eq('org_id', orgId)
+    .filter('metadata->>system_event', 'in', `(${CADENCE_LIFECYCLE_EVENTS.join(',')})`)
+    .order('created_at', { ascending: false })
+    .limit(50)) as { data: InteractionRow[] | null };
+
+  const byId = new Map<string, InteractionRow>();
+  for (const row of [...(recent ?? []), ...(lifecycle ?? [])]) byId.set(row.id, row);
+  const interactions = [...byId.values()].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 
   const cadenceIds = [...new Set(
     (interactions ?? []).map((i) => i.cadence_id).filter((id): id is string => id != null),
