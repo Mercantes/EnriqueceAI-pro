@@ -712,6 +712,55 @@ export class KommoAdapter implements CRMAdapter {
   }
 
   /**
+   * Read a deal's status-change history from Kommo's events log. Each entry is a
+   * `lead_status_changed` event with the status id before/after and its unix
+   * timestamp. Used to reverse-engineer exactly which stage a deal sat in before
+   * a given move (revert) — Kommo is the source of truth for stage history.
+   *
+   * Returns [] if the deal has no history or was deleted (404 / "Lead not found").
+   */
+  async getStatusChangeEvents(
+    credentials: CrmCredentials,
+    dealExternalId: string,
+  ): Promise<Array<{ before: number | null; after: number | null; createdAt: number }>> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+
+    interface KommoEvent {
+      created_at?: number;
+      value_after?: Array<{ lead_status?: { id?: number } }>;
+      value_before?: Array<{ lead_status?: { id?: number } }>;
+    }
+    interface KommoEventsResponse {
+      _embedded?: { events?: KommoEvent[] };
+    }
+
+    let res: KommoEventsResponse;
+    try {
+      res = await kommoFetch<KommoEventsResponse>(
+        subdomain,
+        `/events?filter[entity]=lead&filter[entity_id][]=${dealExternalId}&filter[type]=lead_status_changed&limit=100`,
+        credentials.access_token,
+        { method: 'GET' },
+      );
+    } catch (err) {
+      if (err instanceof Error && (/\(404\)/.test(err.message) || /lead not found/i.test(err.message))) {
+        return [];
+      }
+      throw err;
+    }
+
+    const events = res._embedded?.events ?? [];
+    return events
+      .map((e) => ({
+        before: e.value_before?.[0]?.lead_status?.id ?? null,
+        after: e.value_after?.[0]?.lead_status?.id ?? null,
+        createdAt: e.created_at ?? 0,
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /**
    * Fetch custom field definitions for an entity (leads or contacts).
    * Returns field type info and enum options for select/multiselect fields.
    */
