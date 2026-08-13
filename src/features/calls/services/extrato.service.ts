@@ -20,6 +20,8 @@ interface CallRow {
   duration_seconds: number;
   answered_at: string | null;
   sdr_disposition: CallDisposition | null;
+  hangup_cause: string | null;
+  recording_url: string | null;
   cost: number | null;
   started_at: string;
 }
@@ -32,7 +34,9 @@ export async function fetchExtratoData(
   userIds?: string[],
 ): Promise<ExtratoData> {
   let callsQuery = from(supabase, 'calls')
-    .select('id, user_id, status, duration_seconds, answered_at, sdr_disposition, cost, started_at')
+    .select(
+      'id, user_id, status, duration_seconds, answered_at, sdr_disposition, hangup_cause, recording_url, cost, started_at',
+    )
     .eq('org_id', orgId)
     .gte('started_at', periodStart)
     .lte('started_at', periodEnd)

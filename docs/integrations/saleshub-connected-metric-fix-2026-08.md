@@ -136,3 +136,39 @@ Going-forward: FIX A + C aplicados na Enriquece (migration `20260812120000_get_c
 | Vinicius (1014) | 159 | 62 | −97 |
 
 Correção de dois lados: ramais com webhook (inflados) foram deflacionados ao real; ramais sem webhook (Giovanni) foram corrigidos para cima (as conversas reais via duração que nunca tinham entrado). Agosto já estava correto (não alterado). Durável: o n8n só re-sincroniza o mês corrente, então o histórico não volta a inflar.
+
+---
+
+## Atualização 13/08/2026 — "Opção B" (remove o fallback de duração crua)
+
+**Motivo:** o dashboard do Enriquece mostrava conexão ainda altíssima (Matheus 43%, meta 17%), e a virada answered-first de 12/08 **ainda carregava `duration_seconds >= 30` como fallback**. Os dados de agosto provaram que esse fallback conta **fracasso de discagem** como conexão: a operadora deixa a gravação de aviso ("número alterado…") tocando 30-500s em não-atendimentos (NUMBER_CHANGED, ORIGINATOR_CANCEL, UNALLOCATED_NUMBER), todos com `answered_at` nulo e `status='not_connected'`. Em agosto: ~570 falsas conexões/mês na org. E nem "salvava" o ramal sem webhook — Giovanni/1042 tinha 197 dessas, `not_connected`, só 7 com gravação.
+
+**Regra nova (Opção B), alinhada ao `isConnectedCall` do app:**
+```
+conectada = answered_at válido
+         OU status='significant'
+         OU (hangup_cause='NORMAL_CLEARING' E tem gravação E duração>=30)   ← proxy sem-webhook
+         E  sdr_disposition <> 'voicemail'
+```
+O proxy resgata a conversa genuína de ramais sem webhook (`answered_at` nunca chega — defeito da API4COM que não emite `channel-answer`) exigindo **prova positiva**: encerramento normal de chamada atendida + gravação de áudio + duração real. `NORMAL_CLEARING` é o separador — fracasso de discagem tem outra causa.
+
+**Mudanças (13/08):**
+- **Enriquece** — export RPC `get_calls_for_v4sales` passa a exportar `hangup_cause` e `sdr_disposition` (p_from_date) e a usar Opção B no `ligacoes_conectadas` (p_year/p_month). Migration `20260813061500_get_calls_for_v4sales_option_b_connection.sql`.
+- **Sales Hub** — `sync_calls_from_enriquece` → `v_connected` passa à Opção B (usa `hangup_cause`/`recording_url`/`sdr_disposition` do payload). Aplicado via MCP.
+- **App** — `isConnectedCall` (`src/features/calls/connection.ts`) é a fonte única; a mesma regra vale pro card do dashboard, Painel de Ligações e Extrato.
+
+**Recompute do histórico (Abr-Ago):** o `raw_payload` histórico do SH **não tinha `answered_at` nem `hangup_cause`** (o export só passou a mandá-los em 12–13/08), então a recomputação exigiu **re-puxar do Enriquece** (única fonte com todos os campos). Feito server-side: `net.http_post` do Enriquece → RPC temporária `apply_conn_fix_v1` (gated por segredo, granted a anon, **já removida**), enviando `{id, connected_correto}` por mês. **2.451 linhas corrigidas** (Abr 100, Mai 393, Jun 823, Jul 832, Ago 303). `pdi_monthly_goals.ligacoes_conectadas` recalculado.
+
+**Connected por mês, antes → depois (Opção B), no `call_logs` do SH:**
+
+| Mês | answered-first (12/08) | **Opção B (13/08)** |
+|-----|------------------------|---------------------|
+| Abr | 182 | **282** * |
+| Mai | 1.869 | **1.486** |
+| Jun | 2.503 | **1.680** |
+| Jul | 3.636 | **2.804** |
+| Ago | 994 | **714** |
+
+\* *Abr subiu porque o SH não tinha `answered_at` no payload histórico e estava sub-contado; a Opção B, com os campos re-puxados do Enriquece, corrigiu pra cima até o valor real.*
+
+**Paridade por SDR (agosto) SH ↔ Enriquece Opção B:** Guilherme 222=222, Ismael 226=226, Matheus 194=194, João 57=57, Vinicius 7=7. Giovanni 8≈11 (baixo dos dois lados — telefonia dele quebrada na API4COM; ver relatório `api4com-webhook-report-2026-08.md`).

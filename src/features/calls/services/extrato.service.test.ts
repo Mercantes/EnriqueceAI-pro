@@ -95,7 +95,9 @@ describe('fetchExtratoData', () => {
   it('should group SDR breakdown by user', async () => {
     const calls = [
       { id: '1', user_id: 'u1', status: 'significant', duration_seconds: 120, cost: 0.50, started_at: '2026-01-15T10:00:00Z' },
-      { id: '2', user_id: 'u1', status: 'not_significant', duration_seconds: 60, cost: 0.20, started_at: '2026-01-15T11:00:00Z' },
+      // #2: sem answered_at, mas conecta pelo proxy sem-webhook (encerramento
+      // normal + gravação + duração). Duração crua sozinha não contaria mais.
+      { id: '2', user_id: 'u1', status: 'not_connected', duration_seconds: 60, answered_at: null, hangup_cause: 'NORMAL_CLEARING', recording_url: 'https://rec/2.mp3', cost: 0.20, started_at: '2026-01-15T11:00:00Z' },
       { id: '3', user_id: 'u2', status: 'not_connected', duration_seconds: 10, cost: 0.05, started_at: '2026-01-16T09:00:00Z' },
     ];
     const members = [

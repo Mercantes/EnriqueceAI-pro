@@ -14,10 +14,47 @@ describe('isConnectedCall', () => {
     ).toBe(true);
   });
 
-  it('conta como conectada a partir do piso de duração, sem outros sinais', () => {
+  it('proxy sem-webhook: conta com encerramento normal + gravação + duração >= piso', () => {
+    // Ramal sem channel-answer (ex. 1042): resgata a conversa genuína só com
+    // prova positiva — NORMAL_CLEARING + gravação + duração real.
     expect(
-      isConnectedCall({ status: 'no_contact', duration_seconds: CONNECTED_MIN_DURATION_SECONDS, answered_at: null }),
+      isConnectedCall({
+        status: 'not_connected',
+        duration_seconds: CONNECTED_MIN_DURATION_SECONDS,
+        answered_at: null,
+        hangup_cause: 'NORMAL_CLEARING',
+        recording_url: 'https://rec/1.mp3',
+      }),
     ).toBe(true);
+  });
+
+  it('NÃO conta duração crua sem prova positiva (bug de inflação removido)', () => {
+    // A regra antiga contava QUALQUER duração >= 30s. A operadora deixa a gravação
+    // de aviso tocando 30-500s em não-atendimentos — todos com answered_at nulo.
+    // Sem NORMAL_CLEARING e/ou sem gravação, não é conexão.
+    expect(
+      isConnectedCall({ status: 'not_connected', duration_seconds: 182, answered_at: null }),
+    ).toBe(false);
+    // O caso exato que inflava: NUMBER_CHANGED com gravação da operadora tocando.
+    expect(
+      isConnectedCall({
+        status: 'not_connected',
+        duration_seconds: 182,
+        answered_at: null,
+        hangup_cause: 'NUMBER_CHANGED',
+        recording_url: 'https://rec/aviso.mp3',
+      }),
+    ).toBe(false);
+    // NORMAL_CLEARING mas SEM gravação também não basta (linha não abriu áudio).
+    expect(
+      isConnectedCall({
+        status: 'not_connected',
+        duration_seconds: 90,
+        answered_at: null,
+        hangup_cause: 'NORMAL_CLEARING',
+        recording_url: null,
+      }),
+    ).toBe(false);
   });
 
   it('NÃO conta como conectada uma not_significant curta sem answered_at', () => {
@@ -31,12 +68,14 @@ describe('isConnectedCall', () => {
     ).toBe(false);
   });
 
-  it('não conta como conectada logo abaixo do piso de duração', () => {
+  it('proxy não conta logo abaixo do piso de duração', () => {
     expect(
       isConnectedCall({
         status: 'not_connected',
         duration_seconds: CONNECTED_MIN_DURATION_SECONDS - 1,
         answered_at: null,
+        hangup_cause: 'NORMAL_CLEARING',
+        recording_url: 'https://rec/1.mp3',
       }),
     ).toBe(false);
   });

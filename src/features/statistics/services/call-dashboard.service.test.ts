@@ -56,7 +56,10 @@ describe('call-dashboard.service', () => {
     const calls = [
       { id: '1', user_id: 'u1', destination: '1234', status: 'significant' as CallStatus, duration_seconds: 120, started_at: '2024-06-15T10:00:00Z' },
       { id: '2', user_id: 'u1', destination: '5678', status: 'not_connected' as CallStatus, duration_seconds: 0, started_at: '2024-06-15T11:00:00Z' },
-      { id: '3', user_id: 'u2', destination: '9012', status: 'not_significant' as CallStatus, duration_seconds: 60, started_at: '2024-06-15T14:00:00Z' },
+      // #3: ramal sem webhook (answered_at nulo), mas com prova positiva de
+      // conversa — encerramento normal + gravação + duração real. Conecta pelo
+      // proxy. (Duração crua sozinha NÃO conta mais — ver teste dedicado abaixo.)
+      { id: '3', user_id: 'u2', destination: '9012', status: 'not_connected' as CallStatus, duration_seconds: 60, answered_at: null, hangup_cause: 'NORMAL_CLEARING', recording_url: 'https://rec/3.mp3', started_at: '2024-06-15T14:00:00Z' },
     ];
     const members = [
       { user_id: 'u1', user_email: 'alice@test.com' },
@@ -73,10 +76,25 @@ describe('call-dashboard.service', () => {
 
     expect(result.kpis.totalCalls).toBe(3);
     expect(result.kpis.avgDurationSeconds).toBe(60); // (120+0+60)/3
-    expect(result.kpis.connectionRate).toBe(66.7); // 2/3 — significant + not_significant de 60s (>= 30s)
+    expect(result.kpis.connectionRate).toBe(66.7); // 2/3 — significant (#1) + proxy sem-webhook (#3)
     // Significativas é um SUBCONJUNTO de conectadas: só a de status
     // 'significant'. Antes os dois cards exibiam o mesmo número.
     expect(result.kpis.significantRate).toBe(33.3); // 1/3
+  });
+
+  it('não conta duração crua sem prova positiva (fallback de duração removido)', async () => {
+    // Regressão do bug de inflação: not_connected de 60s+ com a gravação de aviso
+    // da operadora tocando NÃO é conexão. Sem NORMAL_CLEARING, não conecta.
+    const calls = [
+      { id: '1', user_id: 'u1', destination: '1234', status: 'not_connected' as CallStatus, duration_seconds: 182, answered_at: null, hangup_cause: 'NUMBER_CHANGED', recording_url: 'https://rec/aviso.mp3', started_at: '2024-06-15T10:00:00Z' },
+      { id: '2', user_id: 'u1', destination: '5678', status: 'not_connected' as CallStatus, duration_seconds: 75, answered_at: null, hangup_cause: 'ORIGINATOR_CANCEL', recording_url: null, started_at: '2024-06-15T11:00:00Z' },
+    ];
+    const members = [{ user_id: 'u1', user_email: 'alice@test.com' }];
+
+    const supabase = createMockSupabase(calls, members);
+    const result = await fetchCallDashboardData(supabase, 'org-1', '2024-06-01T00:00:00Z', '2024-06-30T23:59:59Z');
+
+    expect(result.kpis.connectionRate).toBe(0);
   });
 
   it('não conta como conectada a not_significant curta sem answered_at', async () => {
