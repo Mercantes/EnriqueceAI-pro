@@ -61,6 +61,20 @@ export async function processStripeEvent(
             current_period_end: period.end,
           } as Record<string, unknown>)
           .eq('org_id', orgId);
+
+        // Persist the Stripe customer on the org so later subscription lifecycle
+        // events (renewal, cancellation, payment_failed) — which resolve the org
+        // by stripe_customer_id — can find it. This matters for standalone Payment
+        // Links, where the customer is created at payment time (not at checkout
+        // creation as in the in-app flow). Only set when absent to avoid
+        // clobbering an existing linkage.
+        const customerId = session.customer as string | null;
+        if (customerId) {
+          await from(supabase, 'organizations')
+            .update({ stripe_customer_id: customerId } as Record<string, unknown>)
+            .eq('id', orgId)
+            .is('stripe_customer_id', null);
+        }
       }
       break;
     }
