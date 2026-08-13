@@ -18,11 +18,13 @@ const scheduleActivitySchema = z.object({
   callProvider: z.enum(['whatsapp']).nullish(),
   scheduledAt: z.string().min(1),
   notes: z.string().optional(),
-  completeEnrollments: z.boolean().default(true),
+  // default false: agendar um retorno NÃO encerra a cadência (isso jogava o
+  // lead no limbo). Encerrar é explícito. Só true em opt-in deliberado.
+  completeEnrollments: z.boolean().default(false),
 });
 
 export async function scheduleActivity(
-  input: z.infer<typeof scheduleActivitySchema>,
+  input: z.input<typeof scheduleActivitySchema>,
 ): Promise<ActionResult<{ id: string }>> {
   const parsed = scheduleActivitySchema.safeParse(input);
   if (!parsed.success) return { success: false, error: 'Dados inválidos' };
@@ -51,9 +53,23 @@ export async function scheduleActivity(
     return { success: false, error: error?.message ?? 'Erro ao agendar atividade' };
   }
 
-  // Complete active cadence enrollments if requested (use service role to bypass RLS)
+  const serviceClient = createServiceRoleClient();
+
+  // Dedup dos retornos (sempre): ao agendar um novo retorno ("ligar de volta
+  // amanhã"), os retornos pendentes anteriores do mesmo lead saem da fila — o
+  // mais recente vence. Exclui a linha recém-inserida via .neq('id', data.id).
+  // Desacoplado do encerramento de cadência abaixo.
+  await from(serviceClient, 'scheduled_activities' as never)
+    .update({ status: 'cancelled' } as Record<string, unknown>)
+    .eq('lead_id', leadId)
+    .eq('status', 'pending')
+    .neq('id', data.id);
+
+  // Encerrar a cadência ao agendar um retorno NÃO acontece mais por padrão:
+  // isso jogava o lead no limbo (cadência morta ao marcar um follow-up — ex.
+  // Danilo Camacho encerrado no passo 1 de 21). Encerrar é sempre explícito
+  // (menu "Trocar cadência"/"Encerrar"). Só completa em opt-in deliberado.
   if (completeEnrollments) {
-    const serviceClient = createServiceRoleClient();
     const { error: enrollError } = await from(serviceClient, 'cadence_enrollments')
       .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
       .eq('lead_id', leadId)
@@ -61,16 +77,6 @@ export async function scheduleActivity(
     if (enrollError) {
       console.error('[schedule-activity] Failed to complete enrollments:', enrollError.message, 'leadId=', leadId);
     }
-
-    // Also cancel OTHER pending scheduled activities for the same lead — when
-    // the SDR schedules a new return ("ligar de volta amanhã"), older returns
-    // for the same lead should drop out of the queue. Excludes the row we
-    // just inserted via .neq('id', data.id).
-    await from(serviceClient, 'scheduled_activities' as never)
-      .update({ status: 'cancelled' } as Record<string, unknown>)
-      .eq('lead_id', leadId)
-      .eq('status', 'pending')
-      .neq('id', data.id);
   }
 
   // Record system interaction for timeline

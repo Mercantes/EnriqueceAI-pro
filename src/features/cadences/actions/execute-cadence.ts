@@ -14,6 +14,7 @@ import { buildLeadContext } from '@/features/ai/utils/build-lead-context';
 import { EmailService } from '@/features/integrations/services/email.service';
 
 import { createNotification } from '@/features/notifications/services/notification.service';
+import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
@@ -81,6 +82,18 @@ async function autoPauseEnrollment(
   console.error(`[cadence-engine] enrollment=${enrollmentId} status=auto_paused reason=${reason}`);
 
   if (notifyCtx) {
+    // Rastro na timeline do lead — antes a auto-pausa era invisível (só
+    // console + notificação), a maior fonte de "limbo de cadência" sem
+    // explicação. performed_by=null porque quem pausou foi o motor.
+    await logLeadEvent(supabase, {
+      orgId: notifyCtx.orgId,
+      leadId: notifyCtx.leadId,
+      userId: null,
+      event: 'cadence_paused',
+      message: `Cadência ${notifyCtx.cadenceName} pausada automaticamente — ${reason}`,
+      metadata: { reason, cadence_id: notifyCtx.cadenceId, enrollment_id: enrollmentId, auto: true },
+    });
+
     dispatchWebhookEvent(supabase, notifyCtx.orgId, 'enrollment.paused', {
       lead_id: notifyCtx.leadId,
       cadence_id: notifyCtx.cadenceId,

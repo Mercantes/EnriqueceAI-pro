@@ -64,7 +64,6 @@ export function ScheduleActivityForm({ leadId }: ScheduleActivityFormProps) {
         channel: channel as 'phone' | 'whatsapp' | 'email' | 'linkedin' | 'research',
         scheduledAt: scheduledAt.toISOString(),
         notes: notes.trim() || undefined,
-        completeEnrollments: true,
       });
 
       if (result.success) {

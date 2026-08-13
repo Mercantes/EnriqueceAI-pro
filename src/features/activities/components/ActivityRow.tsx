@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-
 import {
+  ArrowRightLeft,
   ChevronDown,
   Eye,
   Linkedin,
@@ -11,6 +10,7 @@ import {
   Phone,
   Play,
   Search,
+  SkipForward,
   UserCheck,
   UserX,
   X,
@@ -18,14 +18,6 @@ import {
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,10 +34,15 @@ import { OVERDUE_THRESHOLD_HOURS, hoursOverdue } from '../utils/overdue';
 interface ActivityRowProps {
   activity: PendingActivity;
   onExecute: () => void;
+  /** Cancela um retorno agendado (só linhas `scheduled:`). */
   onIgnore: () => void;
   onViewLead: () => void;
   onLeadWon: () => void;
   onLeadLost: () => void;
+  /** Pula esta atividade e avança a cadência (só linhas de cadência). */
+  onSkipStep?: () => void;
+  /** Move o lead para outra cadência (só linhas de cadência). */
+  onSwitchCadence?: () => void;
 }
 
 export function formatRelativeTime(dateStr: string): { text: string; isUrgent: boolean } {
@@ -98,13 +95,11 @@ function formatScheduledTime(dateStr: string): string {
   return `${date} ${time}`;
 }
 
-export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadWon, onLeadLost }: ActivityRowProps) {
+export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadWon, onLeadLost, onSkipStep, onSwitchCadence }: ActivityRowProps) {
   const { text: timeText, isUrgent } = formatRelativeTime(activity.nextStepDue);
   const Icon = channelIcon[activity.channel] ?? Mail;
   const label = channelLabel[activity.channel] ?? activity.channel;
   const isScheduled = activity.enrollmentId.startsWith('scheduled:');
-  const [confirmEndCadence, setConfirmEndCadence] = useState(false);
-  const leadName = activity.lead.nome_fantasia || activity.lead.razao_social || 'este lead';
 
   return (
     <div className={`${ACTIVITY_GRID_COLS} items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:bg-[var(--accent)]/50`}>
@@ -177,10 +172,28 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setConfirmEndCadence(true)}>
-              <X className="mr-2 h-3.5 w-3.5" />
-              Encerrar cadência
-            </DropdownMenuItem>
+            {isScheduled ? (
+              /* Retorno agendado: cancelar não gera limbo — só descarta o retorno. */
+              <DropdownMenuItem onClick={onIgnore}>
+                <X className="mr-2 h-3.5 w-3.5" />
+                Cancelar retorno
+              </DropdownMenuItem>
+            ) : (
+              <>
+                {/* "Pular" avança o passo sem encerrar a cadência — substitui o
+                    antigo "Encerrar cadência", que empurrava o lead pro limbo. */}
+                <DropdownMenuItem onClick={onSkipStep}>
+                  <SkipForward className="mr-2 h-3.5 w-3.5" />
+                  Pular esta atividade
+                </DropdownMenuItem>
+                {/* Encerrar a cadência agora exige destino: trocar de cadência,
+                    ou marcar ganho/perdido abaixo. Nunca "no vazio". */}
+                <DropdownMenuItem onClick={onSwitchCadence}>
+                  <ArrowRightLeft className="mr-2 h-3.5 w-3.5" />
+                  Trocar cadência
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onViewLead}>
               <Eye className="mr-2 h-3.5 w-3.5" />
@@ -197,36 +210,6 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      <Dialog open={confirmEndCadence} onOpenChange={setConfirmEndCadence}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Encerrar cadência?</DialogTitle>
-            <DialogDescription>
-              <strong>{leadName}</strong> vai sair da cadência <strong>{activity.cadenceName}</strong> e
-              todas as próximas atividades programadas para esse lead serão removidas. O lead permanece no funil
-              com o status atual — você ainda pode contatá-lo manualmente.
-              <br />
-              <br />
-              Para apenas adiar esta atividade, use <strong>Pular</strong> em vez disso.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmEndCadence(false)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setConfirmEndCadence(false);
-                onIgnore();
-              }}
-            >
-              Encerrar cadência
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

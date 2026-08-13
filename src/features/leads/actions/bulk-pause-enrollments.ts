@@ -50,8 +50,9 @@ export async function bulkPauseEnrollments(
     orgId,
     leadIds: affectedLeadIds,
     userId,
-    event: 'enrollment_status_changed',
+    event: 'cadence_paused',
     message: 'Cadência pausada',
+    metadata: { reason: 'Pausa manual em massa' },
   });
 
   revalidatePath('/leads');

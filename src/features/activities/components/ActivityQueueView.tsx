@@ -17,6 +17,7 @@ import type { PendingActivity } from '../types';
 import { OVERDUE_THRESHOLD_HOURS, hoursOverdue } from '../utils/overdue';
 
 import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
+import { EnrollInCadenceDialog } from '@/features/leads/components/EnrollInCadenceDialog';
 
 import { ActivityEmptyState } from './ActivityEmptyState';
 import { ActivityExecutionSheet } from './ActivityExecutionSheet';
@@ -196,6 +197,29 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
       );
     }
   }, [handleActivityDone]);
+
+  // "Pular esta atividade": avança a cadência para o próximo passo sem encerrá-la.
+  // Otimista (igual à conclusão): remove da fila já e devolve se o persist falhar.
+  const handleSkipStep = useCallback((activity: PendingActivity) => {
+    handleActivityDone(activity.enrollmentId, activity.stepId);
+    import('../actions/skip-step').then(({ skipStep }) =>
+      skipStep({ enrollmentId: activity.enrollmentId, stepId: activity.stepId }).then((r) => {
+        if (!r.success) {
+          handleActivityRestore(activity);
+          toast.error(r.error);
+        } else {
+          toast.success('Atividade pulada — cadência avançou');
+        }
+      }),
+    );
+  }, [handleActivityDone, handleActivityRestore]);
+
+  // "Trocar cadência": destino explícito ao tirar o lead da cadência atual, no
+  // lugar do antigo "Encerrar cadência" (que fechava sem destino → limbo).
+  const [switchActivity, setSwitchActivity] = useState<PendingActivity | null>(null);
+  const handleSwitchCadence = useCallback((activity: PendingActivity) => {
+    setSwitchActivity(activity);
+  }, []);
 
   const handleViewLead = useCallback((leadId: string) => {
     router.push(`/leads/${leadId}`);
@@ -572,11 +596,12 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
                           key={`${activity.enrollmentId}:${activity.stepId}`}
                           activity={activity}
                           onExecute={() => setSelectedKey(keyOf(activity))}
-
                           onIgnore={() => handleIgnore(activity)}
                           onViewLead={() => handleViewLead(activity.lead.id)}
                           onLeadWon={() => handleLeadWon(activity)}
                           onLeadLost={() => handleLeadLost(activity)}
+                          onSkipStep={() => handleSkipStep(activity)}
+                          onSwitchCadence={() => handleSwitchCadence(activity)}
                         />
                       ))}
                     </div>
@@ -603,6 +628,8 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
                   onViewLead={() => handleViewLead(activity.lead.id)}
                   onLeadWon={() => handleLeadWon(activity)}
                   onLeadLost={() => handleLeadLost(activity)}
+                  onSkipStep={() => handleSkipStep(activity)}
+                  onSwitchCadence={() => handleSwitchCadence(activity)}
                 />
               ))}
               <ActivityPagination
@@ -637,6 +664,14 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
           if (!open) setLostDialogActivity(null);
         }}
         onSuccess={handleLostDialogSuccess}
+      />
+      <EnrollInCadenceDialog
+        open={switchActivity !== null}
+        onOpenChange={(open) => {
+          if (!open) setSwitchActivity(null);
+        }}
+        leadIds={switchActivity ? [switchActivity.lead.id] : []}
+        mode="switch"
       />
     </div>
   );

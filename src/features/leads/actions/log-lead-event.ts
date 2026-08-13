@@ -1,7 +1,8 @@
 'use server';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { from } from '@/lib/supabase/from';
-import type { createServerSupabaseClient } from '@/lib/supabase/server';
 
 /**
  * Log a system event to the interactions table for lead timeline tracking.
@@ -14,11 +15,12 @@ function extractRefs(metadata?: Record<string, unknown>): { cadence_id: string |
 }
 
 export async function logLeadEvent(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: SupabaseClient,
   params: {
     orgId: string;
     leadId: string;
-    userId: string;
+    /** null = ação do sistema (ex.: auto-pausa pelo motor) → performed_by NULL */
+    userId: string | null;
     event: string;
     message: string;
     metadata?: Record<string, unknown>;
@@ -50,11 +52,11 @@ export async function logLeadEvent(
  * Log a system event for multiple leads at once.
  */
 export async function logLeadEventBulk(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: SupabaseClient,
   params: {
     orgId: string;
     leadIds: string[];
-    userId: string;
+    userId: string | null;
     event: string;
     message: string;
     metadata?: Record<string, unknown>;

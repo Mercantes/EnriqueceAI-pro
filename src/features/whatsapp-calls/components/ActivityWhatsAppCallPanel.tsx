@@ -350,9 +350,8 @@ export function ActivityWhatsAppCallPanel({
                 callProvider: returnSchedule.callProvider,
                 scheduledAt: returnSchedule.scheduledAt,
                 notes: notes || undefined,
-                // Só conclui enrollments ativos quando a ligação nasce de uma
-                // atividade de cadência; numa ligação avulsa não mexemos na cadência.
-                completeEnrollments: !!enrollmentId,
+                // Agendar um retorno não encerra mais a cadência (evita o limbo);
+                // encerrar é explícito. Ver schedule-activity.ts.
               });
               if (!r.success) {
                 toast.error(r.error);
