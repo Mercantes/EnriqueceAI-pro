@@ -15,17 +15,16 @@ import type {
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate();
-  const start = `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`;
-  // Régua "último dia fechado": no mês corrente a janela vai só até o fim de ONTEM
-  // (o dia em andamento entra no card quando fecha); em mês passado, o mês inteiro.
-  // `currentDayOfMonthBrt` = ontem no corrente, último dia no passado. Dia 1 do mês
-  // corrente → 0 → janela vazia (nada fechado ainda). Alinha `total`/`%`/série ao pacing.
-  const throughDay = currentDayOfMonthBrt(month);
-  if (throughDay < 1) return { start, end: start };
-  const endDay = Math.min(throughDay, lastDay);
+  // Janela de CONTAGEM = mês inteiro → o total e a série contam até HOJE (as datas
+  // de evento — won_at, meeting_scheduled_at — são sempre <= agora, nunca futuras,
+  // então "mês inteiro" == "até hoje"). Assim o número grande e o último ponto do
+  // gráfico batem entre si e com o Sales Hub (que também conta até hoje).
+  // ⚠️ NÃO recuar esta janela para "ontem": o PACING ("esperado até…"/%) é que usa a
+  // régua do dia fechado (`currentDayOfMonthBrt` = ontem) — contagem e pacing são
+  // réguas DIFERENTES de propósito, espelhando o Sales Hub (nº hoje × meta ontem).
   return {
-    start,
-    end: `${year}-${String(mon).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T23:59:59-03:00`,
+    start: `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`,
+    end: `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59-03:00`,
   };
 }
 
@@ -52,9 +51,13 @@ function computeDailyData(
 ): DailyDataPoint[] {
   const days = getDaysInMonth(month);
   const [year, mon] = month.split('-').map(Number) as [number, number];
-  // Série vai até o último dia FECHADO (ontem no mês corrente) — mesma régua da
-  // janela de contagem (getMonthRange) e do pacing. O dia em andamento fica null.
-  const maxDay = currentDayOfMonthBrt(month);
+  // Série vai até HOJE (dia corrente no mês) — mesma régua da janela de contagem,
+  // pra que o último ponto do gráfico = número grande do card. Dias futuros ficam
+  // null. (O pacing/"esperado" usa régua separada — o dia fechado de ontem.)
+  const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const isCurrentMonth =
+    nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
+  const maxDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
 
   const countByDay = new Map<number, number>();
   for (const dateStr of leadDates) {
