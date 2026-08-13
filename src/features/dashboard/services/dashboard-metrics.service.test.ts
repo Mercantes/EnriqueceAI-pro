@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { fetchAvailableCadences, fetchOpportunityKpi } from './dashboard-metrics.service';
+import { expectedByBusinessDay } from '../utils/pacing';
 
 // --- Chainable + thenable mock builder (Supabase queries are PromiseLike) ---
 function createChainMock(finalResult: unknown = { data: null }) {
@@ -228,6 +229,13 @@ describe('fetchOpportunityKpi', () => {
       expect(result.dailyData[30]?.actual).toBeNull(); // dia 31 (futuro)
       // Pacing continua no dia fechado de ontem (12) — régua separada da contagem.
       expect(result.currentDay).toBe(12);
+      // Meta da SÉRIE no ponto de HOJE (dia 13) = meta do dia FECHADO (ontem, 12),
+      // batendo com o "esperado até hoje" do card (não a meta do dia cheio, maior).
+      const expectedByYesterday = Math.round(expectedByBusinessDay(100, 2026, 8, 12));
+      expect(result.dailyData[12]?.target).toBe(expectedByYesterday); // dia 13 (hoje)
+      expect(result.dailyData[11]?.target).toBe(expectedByYesterday); // dia 12 (ontem) — mesmo valor
+      // Dia futuro segue a projeção normal do próprio dia (linha ainda sobe até a meta cheia).
+      expect(result.dailyData[13]?.target).toBe(Math.round(expectedByBusinessDay(100, 2026, 8, 14)));
     } finally {
       vi.useRealTimers();
     }

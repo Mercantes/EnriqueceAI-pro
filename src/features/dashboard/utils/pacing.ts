@@ -17,6 +17,7 @@
  * UTC calendar date directly — no timezone library needed.
  */
 import { isHolidayBr } from './holidays-br';
+import { currentDayOfMonthBrt } from './brt-now';
 
 /**
  * Count of weekdays (Mon–Fri, BRT) in the inclusive range [start, end]. Use this
@@ -78,4 +79,27 @@ export function expectedByBusinessDay(
   if (total <= 0) return 0;
   const elapsed = businessDaysThrough(year, month1, throughDay);
   return (target / total) * elapsed;
+}
+
+/**
+ * Meta acumulada (arredondada) para o ponto do dia `day` na SÉRIE do gráfico —
+ * a linha tracejada "Meta". Igual ao pace linear por dias úteis, EXCETO no dia
+ * em andamento (HOJE) do mês corrente: como o dia ainda não fechou, seu ponto
+ * usa a meta do último dia FECHADO (ontem) — a MESMA régua do "esperado até hoje"
+ * do card. Assim o tooltip do ponto de hoje mostra a meta do card (50/39), não a
+ * meta do dia cheio (56/44), que confundia (card × gráfico divergiam). Em mês
+ * fechado não há dia em andamento → pace normal por dia. Dias passados e futuros
+ * seguem a projeção normal (a linha ainda chega ao total no fim do mês).
+ */
+export function seriesTargetForDay(
+  monthTarget: number,
+  year: number,
+  month1: number,
+  day: number,
+  month: string,
+): number {
+  const closedDay = currentDayOfMonthBrt(month); // ontem no corrente, último dia no passado
+  const inProgressDay = closedDay + 1; // hoje (só casa com um `day` real no mês corrente)
+  const throughDay = day === inProgressDay ? closedDay : day;
+  return Math.round(expectedByBusinessDay(monthTarget, year, month1, throughDay));
 }

@@ -5,7 +5,7 @@ import { from } from '@/lib/supabase/from';
 
 import { OVERDUE_THRESHOLD_MS } from '@/features/activities/utils/overdue';
 
-import { expectedByBusinessDay } from '../utils/pacing';
+import { expectedByBusinessDay, seriesTargetForDay } from '../utils/pacing';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
 import type {
   DailyDataPoint,
@@ -501,7 +501,9 @@ async function fetchLeadsOpenedDaily(
       date: `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
       day,
       actual: day <= maxDay ? cumulative : null,
-      target: Math.round(expectedByBusinessDay(target, year, mon, day)),
+      // Meta do ponto: no dia de hoje usa a régua do dia fechado (ontem), igual ao
+      // "esperado até hoje" do card — o tooltip de hoje mostra a mesma meta.
+      target: seriesTargetForDay(target, year, mon, day, filters.month),
     });
   }
   return result;
@@ -593,7 +595,9 @@ export async function fetchMeetingsScheduledRanking(
       date: `${year}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
       day: d,
       actual: d <= maxDay ? cumulative : null,
-      target: Math.round(expectedByBusinessDay(monthTarget, year, mon, d)),
+      // Meta do ponto: no dia de hoje usa a régua do dia fechado (ontem), igual ao
+      // "esperado até hoje" do card — o tooltip de hoje mostra a mesma meta.
+      target: seriesTargetForDay(monthTarget, year, mon, d, filters.month),
     });
   }
   return { ...card, dailyData };

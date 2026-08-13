@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
-import { expectedByBusinessDay } from '../utils/pacing';
+import { expectedByBusinessDay, seriesTargetForDay } from '../utils/pacing';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
 import type {
   CadenceOption,
@@ -75,7 +75,9 @@ function computeDailyData(
       date: `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
       day,
       actual: day <= maxDay ? cumulative : null,
-      target: Math.round(expectedByBusinessDay(target, year, mon, day)),
+      // Meta do ponto: no dia de hoje usa a régua do dia fechado (ontem), igual ao
+      // "esperado até hoje" do card — o tooltip de hoje mostra a mesma meta.
+      target: seriesTargetForDay(target, year, mon, day, month),
     });
   }
 
