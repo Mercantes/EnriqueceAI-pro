@@ -14,6 +14,7 @@ export type WebhookEventType =
   | 'enrollment.paused'
   | 'crm.synced'
   | 'crm.deal_created'
+  | 'crm.deal_won'
   | 'lead.created'
   | 'lead.enriched'
   | 'lead.qualified'

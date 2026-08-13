@@ -14,6 +14,13 @@ const KOMMO_AUTH_URL = 'https://www.kommo.com/oauth';
 const KOMMO_CLIENT_ID = process.env.KOMMO_CLIENT_ID ?? '';
 const KOMMO_CLIENT_SECRET = process.env.KOMMO_CLIENT_SECRET ?? '';
 
+/**
+ * Kommo's built-in "Venda ganha" status. Every pipeline in Kommo ships with two
+ * system statuses: 142 = won ("Venda ganha") and 143 = lost ("Venda perdida").
+ * Used to move a deal to the won column when the lead is marked "Ganho".
+ */
+export const KOMMO_WON_STATUS_ID = 142;
+
 interface KommoTokenResponse {
   token_type: string;
   expires_in: number;
@@ -675,6 +682,33 @@ export class KommoAdapter implements CRMAdapter {
     }
 
     return { external_id: createdId.toString() };
+  }
+
+  /**
+   * Move an existing deal to a given pipeline status — used to reflect the
+   * "Ganho" (won) event, moving the deal into Kommo's "Venda ganha" column.
+   *
+   * Kommo requires pipeline_id alongside status_id when changing a deal's stage,
+   * so we always send both. Idempotent: re-sending the same status is a no-op.
+   */
+  async updateDealStatus(
+    credentials: CrmCredentials,
+    dealExternalId: string,
+    pipelineId: number,
+    statusId: number,
+  ): Promise<void> {
+    const subdomain = credentials.subdomain;
+    if (!subdomain) throw new Error('Kommo subdomain missing');
+
+    await kommoFetch<unknown>(
+      subdomain,
+      `/leads/${dealExternalId}`,
+      credentials.access_token,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ pipeline_id: pipelineId, status_id: statusId }),
+      },
+    );
   }
 
   /**

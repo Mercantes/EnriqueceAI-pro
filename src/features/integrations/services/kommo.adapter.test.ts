@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { KommoAdapter } from './kommo.adapter';
+import { KommoAdapter, KOMMO_WON_STATUS_ID } from './kommo.adapter';
 import type { CrmCredentials } from '../types/crm';
 
 const mockFetch = vi.fn();
@@ -75,5 +75,41 @@ describe('KommoAdapter.fetchPipelines', () => {
     await expect(adapter.fetchPipelines({ access_token: 't' } as CrmCredentials)).rejects.toThrow(
       'Kommo subdomain missing',
     );
+  });
+});
+
+describe('KommoAdapter.updateDealStatus', () => {
+  let adapter: KommoAdapter;
+  const credentials: CrmCredentials = {
+    access_token: 'test-token',
+    subdomain: 'v4amaral',
+  };
+
+  beforeEach(() => {
+    adapter = new KommoAdapter();
+    vi.clearAllMocks();
+  });
+
+  it('faz PATCH no deal enviando pipeline_id + status_id (ganho = 142)', async () => {
+    // Marcar "Ganho" precisa MOVER o deal existente para a coluna de venda ganha
+    // — não recriar. Kommo exige pipeline_id junto do status_id na mesma chamada.
+    mockFetch.mockResolvedValue(okJson({ id: 26321091 }));
+
+    await adapter.updateDealStatus(credentials, '26321091', 13390831, KOMMO_WON_STATUS_ID);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://v4amaral.kommo.com/api/v4/leads/26321091');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({
+      pipeline_id: 13390831,
+      status_id: 142,
+    });
+  });
+
+  it('exige subdomain', async () => {
+    await expect(
+      adapter.updateDealStatus({ access_token: 't' } as CrmCredentials, '1', 1, 142),
+    ).rejects.toThrow('Kommo subdomain missing');
   });
 });

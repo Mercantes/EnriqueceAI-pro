@@ -10,7 +10,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
-import { pushLeadToCrm } from '../services/crm-push.service';
+import { markDealWonInCrm } from '../services/crm-push.service';
 import { resyncCrmDealFields } from '../services/crm-resync.service';
 import { sendCloserFeedbackEmail } from './send-closer-feedback';
 import type {
@@ -417,13 +417,18 @@ export async function markLeadAsWon(
         metadata: { system_event: 'lead_won' },
       } as Record<string, unknown>);
 
-    // 3. Push to CRM if requested — extracted to crm-push.service so it can also
-    // be invoked by /api/feedback (closer-feedback flow), which has no UI form
-    // to gather pipeline/stage from and instead reads them from connection defaults.
+    // 3. Reflect the win in the org's CRM: ensure the deal exists AND move it to
+    // the CRM's "won" column. Runs on EVERY win regardless of crmOptions — when
+    // the SDR marks "Ganho" from the activity queue (no CRM form) we fall back to
+    // the connection defaults, so the win reaches the CRM from anywhere. The move
+    // is idempotent, so re-marking a won lead also force-resyncs it. Best-effort:
+    // markDealWonInCrm never throws, but we guard anyway so CRM never blocks the win.
     let dealCreated = false;
-    if (crmOptions) {
-      const pushResult = await pushLeadToCrm(orgId, leadId, crmOptions);
+    try {
+      const pushResult = await markDealWonInCrm(orgId, leadId, crmOptions);
       dealCreated = pushResult.dealCreated;
+    } catch (err) {
+      console.error('[markLeadAsWon] CRM won-sync error:', err);
     }
 
     // 4. Send closer feedback email (fire-and-forget)
