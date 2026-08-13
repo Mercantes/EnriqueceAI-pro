@@ -116,6 +116,7 @@ Um gestor apontou que o form reformulado **perdeu a pergunta sobre o decisor na 
 - **Métrica** (`get_leads_for_v4sales`, migration `20260813130000`, aplicada em prod): passa a **priorizar o campo explícito** — `COALESCE(decisor_presente, derivação)`. ⭐ **Corrige bug latente:** sem isso, um "Bateu" com decisor **ausente** era contado como **presente** (a derivação dava TRUE). Validado: gravou `decisor_presente=false` num "Bateu" → métrica retornou FALSE.
 - **`LeadDetailLayout` + `fetch-closer-feedback`**: card exibe "Decisor na call: Sim/Não".
 - ⚠️ Histórico: as ~13 respostas "Bateu" anteriores não têm `decisor_presente` (campo estava fora do form) → seguem pela derivação. Dado explícito vale a partir deste deploy.
+- ✅ **Deploy confirmado em prod:** `/api/version` = `705e579` (= merge do #292) **e** prova visual — o form de `app.enriqueceai.com.br` renderiza "O decisor estava na call? Sim/Não" (obrigatória) quando Realizada.
 
 ## Fora de escopo (intactos)
 
