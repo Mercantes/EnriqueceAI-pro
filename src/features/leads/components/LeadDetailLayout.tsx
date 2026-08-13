@@ -628,6 +628,14 @@ export function LeadDetailLayout({ lead, timeline, enrollmentData, customFieldDe
               )}
             </div>
           </div>
+          {closerFeedback.result === 'meeting_done' && closerFeedback.decisor_presente !== null ? (
+            <div className="mt-3 pt-3 border-t border-[var(--border)]">
+              <p className="text-xs text-[var(--muted-foreground)] mb-1">Decisor na call</p>
+              <p className={`font-medium ${closerFeedback.decisor_presente ? '' : 'text-red-600 dark:text-red-400'}`}>
+                {closerFeedback.decisor_presente ? 'Sim' : 'Não'}
+              </p>
+            </div>
+          ) : null}
           {closerFeedback.result === 'meeting_done' && closerFeedback.rating ? (
             <div className="mt-3 pt-3 border-t border-[var(--border)]">
               <p className="text-xs text-[var(--muted-foreground)] mb-1">Chance de fechar <span className="font-normal">(leitura do closer)</span></p>

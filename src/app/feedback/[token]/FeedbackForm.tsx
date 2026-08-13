@@ -18,11 +18,11 @@ const QUALIFICACAO_OPTIONS = [
   { value: 'nao_validado', label: 'Não deu pra validar' },
 ] as const;
 
-// Rótulo exibido → valor gravado. Espelha o constraint
-// closer_feedback_divergencias_validas: só estes cinco valores são aceitos.
+// Rótulo exibido → valor gravado. "decisor" saiu daqui — virou pergunta própria
+// ("O decisor estava na call?"). O constraint closer_feedback_divergencias_validas
+// ainda aceita 'decisor' (dados históricos), mas o form não o oferece mais.
 const DIVERGENCIA_OPTIONS = [
   { value: 'verba', label: 'Verba' },
-  { value: 'decisor', label: 'Decisor' },
   { value: 'dor', label: 'Dor' },
   { value: 'timing', label: 'Timing' },
   { value: 'dados_cadastrais', label: 'Dados cadastrais' },
@@ -34,6 +34,9 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
   const [qualificacao, setQualificacao] = useState('');
   // Subconjunto de DIVERGENCIA_OPTIONS — só quando qualificacao === 'divergiu'.
   const [divergencias, setDivergencias] = useState<string[]>([]);
+  // Presença do decisor na call — obrigatório quando Realizada. Fonte da métrica
+  // "Decisor na Call %" do Sales Hub. null = não respondido.
+  const [decisorPresente, setDecisorPresente] = useState<boolean | null>(null);
   const [comment, setComment] = useState('');
   // Leitura subjetiva do closer (chance de fechar). Reaproveita a coluna `rating`,
   // sem peso na avaliação do pré-vendas. 0 = não avaliado.
@@ -54,10 +57,11 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
 
   function handleResultChange(value: string) {
     setResult(value);
-    // Sair de "Realizada" limpa qualificação e divergências do estado.
+    // Sair de "Realizada" limpa qualificação, divergências e decisor do estado.
     if (value !== 'meeting_done') {
       setQualificacao('');
       setDivergencias([]);
+      setDecisorPresente(null);
     }
     setError('');
   }
@@ -73,6 +77,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
     e.preventDefault();
     if (!result) return;
     if (isMeetingDone && !qualificacao) return;
+    if (isMeetingDone && decisorPresente === null) return;
     // Replica o constraint closer_feedback_divergencias_obrigatorias no cliente,
     // para erro amigável em vez de 500 do banco.
     if (isDivergiu && divergencias.length === 0) {
@@ -93,6 +98,8 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
           qualificacao_aderente: isMeetingDone ? qualificacao : null,
           // Só 'divergiu' carrega itens; 'bateu'/'nao_validado' vão nulos.
           divergencias: isDivergiu ? divergencias : null,
+          // Presença do decisor — só em Realizada; fonte da métrica do Sales Hub.
+          decisor_presente: isMeetingDone ? decisorPresente : null,
           rating: isMeetingDone && rating > 0 ? rating : null,
           comment: comment.trim() || null,
         }),
@@ -121,7 +128,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
     );
   }
 
-  const submitDisabled = submitting || !result || (isMeetingDone && !qualificacao);
+  const submitDisabled = submitting || !result || (isMeetingDone && (!qualificacao || decisorPresente === null));
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -204,7 +211,37 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         </div>
       )}
 
-      {/* 4. Observações — opcional */}
+      {/* 4. O decisor estava na call? — só quando Realizada, obrigatório.
+          Sinal de presença (≠ da divergência de qualificação). Fonte da métrica
+          "Decisor na Call %" do Sales Hub. */}
+      {isMeetingDone && (
+        <div>
+          <label className="block text-sm font-semibold text-[var(--foreground)] mb-3">
+            O decisor estava na call? <span className="text-primary">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: true, label: 'Sim' },
+              { value: false, label: 'Não' },
+            ].map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => { setDecisorPresente(option.value); setError(''); }}
+                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
+                  decisorPresente === option.value
+                    ? 'border-primary bg-primary/5 text-[var(--foreground)]'
+                    : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--muted-foreground)]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Observações — opcional */}
       <div>
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-2">
           Observações <span className="text-[var(--muted-foreground)] font-normal">(opcional)</span>

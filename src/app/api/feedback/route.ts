@@ -12,8 +12,10 @@ const VALID_RESULTS = ['meeting_done', 'no_show', 'rescheduled'];
 // Conferência objetiva da qualificação feita pelo pré-vendas.
 const VALID_QUALIFICACAO = ['bateu', 'divergiu', 'nao_validado'];
 
-// Espelha o constraint closer_feedback_divergencias_validas.
-const VALID_DIVERGENCIAS = ['verba', 'decisor', 'dor', 'timing', 'dados_cadastrais'];
+// Valores aceitos como divergência no form atual. "decisor" saiu daqui (virou
+// a pergunta própria decisor_presente); o constraint do banco ainda permite
+// 'decisor' para não invalidar respostas históricas.
+const VALID_DIVERGENCIAS = ['verba', 'dor', 'timing', 'dados_cadastrais'];
 
 const RESULT_LABELS: Record<string, string> = {
   meeting_done: 'Reunião realizada',
@@ -60,7 +62,7 @@ function nextBusinessDayAt9hBRT(now: Date): string {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { token, result, rating, comment, qualificacao_aderente, divergencias } = body;
+    const { token, result, rating, comment, qualificacao_aderente, divergencias, decisor_presente } = body;
 
     // Validate input
     if (!token || !isUuid(token)) {
@@ -80,6 +82,12 @@ export async function POST(request: Request) {
     // Qualificação é obrigatória quando a reunião foi realizada.
     if (needsMeetingFields && (!qualificacao_aderente || !VALID_QUALIFICACAO.includes(qualificacao_aderente))) {
       return NextResponse.json({ error: 'Informe se a qualificação bateu com a reunião' }, { status: 400 });
+    }
+
+    // Presença do decisor é obrigatória em meeting_done — fonte da métrica
+    // "Decisor na Call %" do Sales Hub.
+    if (needsMeetingFields && typeof decisor_presente !== 'boolean') {
+      return NextResponse.json({ error: 'Informe se o decisor estava na call' }, { status: 400 });
     }
 
     // Normaliza divergências para um array validado (ou nulo), espelhando os três
@@ -131,8 +139,9 @@ export async function POST(request: Request) {
         qualificacao_aderente: needsMeetingFields ? qualificacao_aderente : null,
         // Só 'divergiu' carrega itens; demais casos ficam nulos (constraints do banco).
         divergencias: divergenciasClean,
-        // decisor_presente foi removido do formulário; a coluna permanece no banco
-        // por compatibilidade e não é mais preenchida por este fluxo.
+        // Presença do decisor na call — só em meeting_done; nula nos demais.
+        // Fonte direta da métrica "Decisor na Call %" do Sales Hub.
+        decisor_presente: needsMeetingFields ? decisor_presente : null,
         responded_at: new Date().toISOString(),
       } as Record<string, unknown>)
       .eq('id', feedbackReq.id)

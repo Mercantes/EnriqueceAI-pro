@@ -10,6 +10,7 @@ export interface CloserFeedbackData {
   rating: number | null;
   qualificacao_aderente: 'bateu' | 'divergiu' | 'nao_validado' | null;
   divergencias: string[] | null;
+  decisor_presente: boolean | null;
   comment: string | null;
   sent_at: string;
   responded_at: string | null;
@@ -26,7 +27,7 @@ export async function fetchCloserFeedback(leadId: string): Promise<ActionResult<
   const { orgId, supabase } = auth.data;
 
   const { data, error } = (await from(supabase, 'closer_feedback_requests')
-    .select('id, result, rating, qualificacao_aderente, divergencias, comment, sent_at, responded_at, closer_id')
+    .select('id, result, rating, qualificacao_aderente, divergencias, decisor_presente, comment, sent_at, responded_at, closer_id')
     .eq('lead_id', leadId)
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })
@@ -38,6 +39,7 @@ export async function fetchCloserFeedback(leadId: string): Promise<ActionResult<
       rating: number | null;
       qualificacao_aderente: 'bateu' | 'divergiu' | 'nao_validado' | null;
       divergencias: string[] | null;
+      decisor_presente: boolean | null;
       comment: string | null;
       sent_at: string;
       responded_at: string | null;
@@ -63,6 +65,7 @@ export async function fetchCloserFeedback(leadId: string): Promise<ActionResult<
       rating: data.rating,
       qualificacao_aderente: data.qualificacao_aderente,
       divergencias: data.divergencias,
+      decisor_presente: data.decisor_presente,
       comment: data.comment,
       sent_at: data.sent_at,
       responded_at: data.responded_at,
