@@ -38,12 +38,18 @@ export async function POST(request: Request) {
     limit?: number;
     offset?: number;
     force?: boolean;
+    leadIds?: string[];
   };
   const orgId = body.orgId;
   const dryRun = body.dryRun === true;
   const force = body.force === true;
   const limit = Math.min(body.limit ?? 100, 500);
   const offset = Math.max(body.offset ?? 0, 0);
+  // Optional: restrict the run to specific leads (validation / one-off fixes).
+  const leadIds = Array.isArray(body.leadIds)
+    ? body.leadIds.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    : null;
+  const targeted = leadIds !== null && leadIds.length > 0;
 
   if (!orgId) {
     return NextResponse.json({ error: 'orgId required' }, { status: 400 });
@@ -51,14 +57,17 @@ export async function POST(request: Request) {
 
   const supabase = createServiceRoleClient();
 
-  // All won leads for the org, stable order so limit+offset paginate cleanly.
-  const { data: wonLeads } = (await from(supabase, 'leads')
+  // Won leads to process: either the explicit leadIds, or a paginated sweep of
+  // all won leads (stable order so limit+offset paginate cleanly).
+  const baseQuery = from(supabase, 'leads')
     .select('id, nome_fantasia, razao_social, won_at')
     .eq('org_id', orgId)
     .eq('status', 'won')
-    .is('deleted_at', null)
-    .order('won_at', { ascending: true })
-    .range(offset, offset + limit - 1)) as {
+    .is('deleted_at', null);
+
+  const { data: wonLeads } = (await (targeted
+    ? baseQuery.in('id', leadIds)
+    : baseQuery.order('won_at', { ascending: true }).range(offset, offset + limit - 1))) as {
     data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null; won_at: string | null }> | null;
   };
 
