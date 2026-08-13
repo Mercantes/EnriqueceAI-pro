@@ -49,6 +49,20 @@ export interface CallConnectionSignals {
    * falso-positivo que sobra no lado "answered" — o SDR confirma e a gente exclui.
    */
   sdr_disposition?: CallDisposition | null;
+  /**
+   * Causa de encerramento crua do provedor (API4COM `hangupCause`). Usada SÓ no
+   * proxy de ramal-sem-webhook: `NORMAL_CLEARING` (encerramento normal de uma
+   * chamada atendida) é o único valor que, combinado com gravação + duração real,
+   * comprova conversa. Fracasso de discagem tem outra causa (NUMBER_CHANGED,
+   * ORIGINATOR_CANCEL, UNALLOCATED_NUMBER...) e por isso NÃO passa.
+   */
+  hangup_cause?: string | null;
+  /**
+   * URL da gravação. No proxy sem-webhook, exigir gravação é a prova de que houve
+   * áudio de conversa (a linha "abriu"). Sozinha não basta — a operadora também
+   * grava o aviso de "número alterado" —, por isso vem casada com `NORMAL_CLEARING`.
+   */
+  recording_url?: string | null;
 }
 
 /**
@@ -63,17 +77,33 @@ export interface CallConnectionSignals {
  *     `answered_at` (REST/legado); mantida para garantir a invariante
  *     `significant ⊆ conectadas`. NÃO é atingida pelo bug de escrita — esse bug
  *     produz `not_significant` em não-atendimentos, nunca `significant`.
- *  3. duração >= 30s — proxy para ramais SEM webhook (ex. 1042), cujo
- *     `answered_at` nunca chega mas cuja duração real prova a conversa
- *     (685 ligações de ~61s/mês só nesse ramal, jul/2026). É a rede que impede
- *     um ramal sem webhook de aparecer com 0% de conexão apesar de conversar.
+ *  3. proxy de ramal-sem-webhook — `NORMAL_CLEARING` + gravação + duração >= 30s.
+ *     Para ramais cujo `answered_at` nunca chega (ex. 1042/1045, defeito da
+ *     API4COM que não emite channel-answer), esta é a ÚNICA evidência de conversa
+ *     — mas EXIGE prova positiva: encerramento normal de chamada atendida
+ *     (`NORMAL_CLEARING`) + gravação de áudio + duração real. Assim resgata a
+ *     conversa genuína sem readmitir o fracasso de discagem.
+ *
+ * POR QUE A DURAÇÃO CRUA (>= 30s) SOZINHA FOI REMOVIDA (ago/2026)
+ *
+ * A regra anterior contava QUALQUER ligação com duração >= 30s como conectada.
+ * Os dados de produção provaram que isso inflava a conexão de TODOS os SDRs: a
+ * operadora deixa "tocando" 30-500s a gravação de aviso em não-atendimentos
+ * (NUMBER_CHANGED, ORIGINATOR_CANCEL, UNALLOCATED_NUMBER, ...), todos com
+ * `answered_at` nulo, `status='not_connected'` e duração alta. Em agosto isso
+ * somava ~570 falsas conexões na org — e nem "salvava" o ramal sem webhook
+ * (Giovanni/1042 tinha 197 dessas, `not_connected`, só 7 com gravação). O
+ * separador confiável é a CAUSA de encerramento: conversa real termina em
+ * `NORMAL_CLEARING`; discagem falha, não.
  *
  * `not_significant` continua deliberadamente FORA: de não-atendimento tem
- * `answered_at` nulo e duração ~0, então nunca dispara nenhum dos três sinais.
+ * `answered_at` nulo, causa != NORMAL_CLEARING e/ou sem gravação, então nunca
+ * dispara nenhum dos três sinais.
  *
  * NOTA: os sinais 2 e 3 são salvaguardas para dados sem `answered_at`. Quando o
- * webhook cobrir todos os ramais (resolvido o vínculo do 1042), a regra pode
- * colapsar em `answered_at` puro — hoje isso cegaria os ramais sem webhook.
+ * webhook cobrir todos os ramais (resolvido o channel-answer do 1042/1045), a
+ * regra pode colapsar em `answered_at` puro — hoje isso cegaria os ramais sem
+ * webhook.
  */
 export function isConnectedCall(call: CallConnectionSignals): boolean {
   // Override do SDR (fase 2 da taxa de conexão): caixa postal/secretária. A
@@ -83,7 +113,12 @@ export function isConnectedCall(call: CallConnectionSignals): boolean {
   if (call.sdr_disposition === 'voicemail') return false;
   if (call.answered_at) return true;
   if (call.status === 'significant') return true;
-  return call.duration_seconds >= CONNECTED_MIN_DURATION_SECONDS;
+  // Proxy sem-webhook: prova positiva de conversa, não duração crua (ver acima).
+  return (
+    call.hangup_cause === 'NORMAL_CLEARING' &&
+    Boolean(call.recording_url) &&
+    call.duration_seconds >= CONNECTED_MIN_DURATION_SECONDS
+  );
 }
 
 /**
@@ -99,4 +134,5 @@ export function isSignificantCall(call: Pick<CallConnectionSignals, 'status'>): 
 }
 
 /** Colunas mínimas que uma query precisa trazer para alimentar os helpers. */
-export const CALL_CONNECTION_COLUMNS = 'status, duration_seconds, answered_at, sdr_disposition' as const;
+export const CALL_CONNECTION_COLUMNS =
+  'status, duration_seconds, answered_at, sdr_disposition, hangup_cause, recording_url' as const;
