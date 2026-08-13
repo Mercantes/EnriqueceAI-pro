@@ -259,12 +259,6 @@ export function LeadDetailHeader({
               <Calendar className="mr-2 h-3.5 w-3.5" />
               Agendar Reunião
             </DropdownMenuItem>
-            {lead.meeting_scheduled_at && lead.status !== 'unqualified' && (
-              <DropdownMenuItem onClick={handleNoShow} disabled={isPending}>
-                <CalendarX className="mr-2 h-3.5 w-3.5" />
-                Reunião não aconteceu
-              </DropdownMenuItem>
-            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onEnrich} disabled={isEnriching || !canEnrich}>
               {isEnriching ? (
