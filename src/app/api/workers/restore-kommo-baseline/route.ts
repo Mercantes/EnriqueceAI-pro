@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     manifest?: Record<string, TargetEntry>;
     recreatedIds?: number[];
     recoverClosedAtIds?: number[];
+    forceMoveIds?: number[];
     dryRun?: boolean;
   };
   const orgId = body.orgId;
@@ -60,10 +61,13 @@ export async function POST(request: Request) {
   // Deals cuja data de perda (closed_at) foi carimbada com hoje pelo revert e
   // deve ser recuperada do log de eventos (timestamp do move-para-143 pré-backfill).
   const recoverClosedAt = (body.recoverClosedAtIds ?? []).map(String);
+  // Deals que o revert parcial mis-moveu para o status errado: move ao alvo dos
+  // eventos (value_before) INCONDICIONALMENTE, mesmo não estando em 142.
+  const forceMove = (body.forceMoveIds ?? []).map(String);
 
   if (!orgId) return NextResponse.json({ error: 'orgId required' }, { status: 400 });
-  if (dealIds.length === 0 && recreated.size === 0 && recoverClosedAt.length === 0) {
-    return NextResponse.json({ error: 'dealIds, recreatedIds or recoverClosedAtIds required' }, { status: 400 });
+  if (dealIds.length === 0 && recreated.size === 0 && recoverClosedAt.length === 0 && forceMove.length === 0) {
+    return NextResponse.json({ error: 'dealIds, recreatedIds, recoverClosedAtIds or forceMoveIds required' }, { status: 400 });
   }
 
   const supabase = createServiceRoleClient();
@@ -201,13 +205,49 @@ export async function POST(request: Request) {
     await new Promise((r) => setTimeout(r, 200));
   }
 
+  // 4) Force-move: deals mis-movidos pelo revert parcial → alvo dos eventos, incondicional.
+  let forceMoved = 0;
+  for (const id of forceMove) {
+    try {
+      const creds = await freshCreds();
+      const events = await adapter.getStatusChangeEvents(creds, id);
+      const myMove = events.find(
+        (e) => e.after === KOMMO_WON_STATUS_ID && e.createdAt >= BACKFILL_START && e.createdAt <= BACKFILL_END,
+      );
+      if (!myMove || myMove.before == null) {
+        skipped++;
+        results.push({ dealId: id, action: 'skipped', reason: 'sem alvo (evento de move)' });
+        continue;
+      }
+      const target = myMove.before;
+      // Se o alvo é "perdido" (143), recupera também a data original de perda.
+      let closedAt: number | null = null;
+      if (target === 143) {
+        const loss = events
+          .filter((e) => e.after === 143 && e.createdAt < BACKFILL_START)
+          .sort((a, b) => b.createdAt - a.createdAt)[0];
+        closedAt = loss?.createdAt ?? null;
+      }
+      if (!dryRun) {
+        await adapter.updateDealFull(creds, id, { pipelineId, statusId: target, closedAt });
+      }
+      forceMoved++;
+      results.push({ dealId: id, action: 'force_moved', to: target, closedAt });
+    } catch (err) {
+      failed++;
+      results.push({ dealId: id, action: 'failed', error: err instanceof Error ? err.message.slice(0, 180) : String(err) });
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
   return NextResponse.json({
     orgId,
     dryRun,
-    processed: dealIds.length + recreated.size + recoverClosedAt.length,
+    processed: dealIds.length + recreated.size + recoverClosedAt.length + forceMove.length,
     restored,
     deleted,
     closedAtFixed,
+    forceMoved,
     skipped,
     failed,
     results,
