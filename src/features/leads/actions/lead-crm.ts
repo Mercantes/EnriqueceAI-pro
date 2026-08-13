@@ -10,7 +10,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
-import { markDealWonInCrm } from '../services/crm-push.service';
+import { pushLeadToCrm, pushLeadToCrmWithDefaults } from '../services/crm-push.service';
 import { resyncCrmDealFields } from '../services/crm-resync.service';
 import { sendCloserFeedbackEmail } from './send-closer-feedback';
 import type {
@@ -417,18 +417,24 @@ export async function markLeadAsWon(
         metadata: { system_event: 'lead_won' },
       } as Record<string, unknown>);
 
-    // 3. Reflect the win in the org's CRM: ensure the deal exists AND move it to
-    // the CRM's "won" column. Runs on EVERY win regardless of crmOptions — when
-    // the SDR marks "Ganho" from the activity queue (no CRM form) we fall back to
-    // the connection defaults, so the win reaches the CRM from anywhere. The move
-    // is idempotent, so re-marking a won lead also force-resyncs it. Best-effort:
-    // markDealWonInCrm never throws, but we guard anyway so CRM never blocks the win.
+    // 3. Ensure the deal EXISTS in the org's CRM — but do NOT move it to the
+    // CRM's "won" column. In this Meetime-style flow "Ganho" means "SDR made the
+    // meeting happen" (a SAL), NOT a closed sale. Mapping it 1:1 to Kommo's
+    // "Venda ganha" (status_id 142) inflated the won column with every held
+    // meeting (regression from #279). The closer moves the deal to won in the
+    // CRM when the sale actually closes. We only guarantee the deal is on the
+    // board so it never gets lost: with a CRM form we use its pipeline/stage,
+    // otherwise we fall back to the connection defaults (activity-queue "Ganho").
+    // Best-effort: neither call throws to the caller, but we guard so the CRM
+    // never blocks the win.
     let dealCreated = false;
     try {
-      const pushResult = await markDealWonInCrm(orgId, leadId, crmOptions);
+      const pushResult = crmOptions
+        ? await pushLeadToCrm(orgId, leadId, crmOptions)
+        : await pushLeadToCrmWithDefaults(orgId, leadId);
       dealCreated = pushResult.dealCreated;
     } catch (err) {
-      console.error('[markLeadAsWon] CRM won-sync error:', err);
+      console.error('[markLeadAsWon] CRM deal-ensure error:', err);
     }
 
     // 4. Send closer feedback email (fire-and-forget)

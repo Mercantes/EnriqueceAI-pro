@@ -1,154 +1,29 @@
 import { NextResponse } from 'next/server';
 
-import { verifyServiceRole } from '@/lib/auth/verify-service-role';
-import { from } from '@/lib/supabase/from';
-import { createServiceRoleClient } from '@/lib/supabase/service';
-import { markDealWonInCrm } from '@/features/leads/services/crm-push.service';
-
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 /**
- * One-shot worker that regularizes the CRM for leads already marked "won" in the
- * app: it ensures each won lead's deal exists AND moves it into the CRM's "won"
- * column (Kommo status 142). This backfills the historical gap where marking a
- * lead won never propagated the stage change to Kommo.
+ * DISABLED (13/ago/2026) — stub inerte, mantido só para a rota não 404.
  *
- * markDealWonInCrm is idempotent on the CRM side (re-PATCHing the same status is
- * a no-op), and this route skips leads that already carry a `deal_won` sync
- * marker so re-running only touches what's left.
+ * Este worker one-shot movia o deal de TODO lead "won" para a coluna "Venda
+ * ganha" do Kommo (status 142). O mapeamento estava ERRADO: no fluxo do app
+ * "Ganho" = o SDR fez a reunião acontecer (um SAL), NÃO uma venda fechada. Ver a
+ * reversão em `markLeadAsWon` (voltou a create-only) e o incidente de
+ * backfill-overreach de 13/ago que essa varredura causou (303 deals movidos
+ * indevidamente, inclusive perdidos, restaurados depois).
  *
- * Because the move-to-won PATCH also tells us whether a deal still exists in
- * Kommo (200 = moved, 404 = deal deleted CRM-side), the per-lead `result` here
- * doubles as confirmation for specific leads (e.g. Safra Bag / Tevali).
- *
- * Process in chunks via limit+offset to stay under proxy request timeouts.
- *
- * POST /api/workers/backfill-kommo-won
- * Body: { orgId: string, dryRun?: boolean, limit?: number, offset?: number, force?: boolean }
- * Auth: Bearer SUPABASE_SERVICE_ROLE_KEY
+ * Fica desativado para não poder ser re-disparado e repetir o estrago. NÃO
+ * reabilitar um worker de won-mapping em massa. Se algum dia for preciso um
+ * ajuste pontual de CRM, escreva um script estreito, mirado por deal-id e
+ * revisado antes de rodar.
  */
-export async function POST(request: Request) {
-  if (!verifyServiceRole(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const body = (await request.json()) as {
-    orgId?: string;
-    dryRun?: boolean;
-    limit?: number;
-    offset?: number;
-    force?: boolean;
-    leadIds?: string[];
-  };
-  const orgId = body.orgId;
-  const dryRun = body.dryRun === true;
-  const force = body.force === true;
-  const limit = Math.min(body.limit ?? 100, 500);
-  const offset = Math.max(body.offset ?? 0, 0);
-  // Optional: restrict the run to specific leads (validation / one-off fixes).
-  const leadIds = Array.isArray(body.leadIds)
-    ? body.leadIds.filter((x): x is string => typeof x === 'string' && x.length > 0)
-    : null;
-  const targeted = leadIds !== null && leadIds.length > 0;
-
-  if (!orgId) {
-    return NextResponse.json({ error: 'orgId required' }, { status: 400 });
-  }
-
-  const supabase = createServiceRoleClient();
-
-  // Won leads to process: either the explicit leadIds, or a paginated sweep of
-  // all won leads (stable order so limit+offset paginate cleanly).
-  const baseQuery = from(supabase, 'leads')
-    .select('id, nome_fantasia, razao_social, won_at')
-    .eq('org_id', orgId)
-    .eq('status', 'won')
-    .is('deleted_at', null);
-
-  const { data: wonLeads } = (await (targeted
-    ? baseQuery.in('id', leadIds)
-    : baseQuery.order('won_at', { ascending: true }).range(offset, offset + limit - 1))) as {
-    data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null; won_at: string | null }> | null;
-  };
-
-  if (!wonLeads || wonLeads.length === 0) {
-    return NextResponse.json({ orgId, offset, limit, found: 0, message: 'No won leads in range' });
-  }
-
-  // Skip leads already carrying a deal_won marker (unless force), so re-runs are cheap.
-  const pending: typeof wonLeads = [];
-  let alreadyWon = 0;
-  for (const lead of wonLeads) {
-    if (force) {
-      pending.push(lead);
-      continue;
-    }
-    const { data: doneMarker } = (await from(supabase, 'interactions')
-      .select('id')
-      .eq('lead_id', lead.id)
-      .eq('type', 'crm_synced')
-      .eq('metadata->>event', 'deal_won')
-      .limit(1)
-      .maybeSingle()) as { data: { id: string } | null };
-    if (doneMarker) alreadyWon++;
-    else pending.push(lead);
-  }
-
-  const labelOf = (l: { nome_fantasia: string | null; razao_social: string | null }) =>
-    l.nome_fantasia ?? l.razao_social ?? '(sem nome)';
-
-  if (dryRun) {
-    return NextResponse.json({
-      dryRun: true,
-      orgId,
-      offset,
-      limit,
-      rangeCount: wonLeads.length,
-      alreadyWon,
-      pending: pending.length,
-      leads: pending.map((l) => ({ id: l.id, name: labelOf(l), won_at: l.won_at })),
-    });
-  }
-
-  const results: Array<{ id: string; name: string; movedToWon: boolean; dealExternalId?: string; skippedReason?: string; error?: string }> = [];
-  let movedToWon = 0;
-  let dealCreated = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  for (const lead of pending) {
-    try {
-      const r = await markDealWonInCrm(orgId, lead.id);
-      if (r.movedToWon) movedToWon++;
-      if (r.dealCreated) dealCreated++;
-      if (!r.movedToWon && r.skippedReason) skipped++;
-      results.push({
-        id: lead.id,
-        name: labelOf(lead),
-        movedToWon: r.movedToWon === true,
-        dealExternalId: r.dealExternalId,
-        skippedReason: r.skippedReason,
-      });
-    } catch (err) {
-      failed++;
-      const msg = err instanceof Error ? err.message : 'unknown';
-      results.push({ id: lead.id, name: labelOf(lead), movedToWon: false, error: msg });
-    }
-    // Gentle pacing to respect Kommo API rate limits.
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-
-  return NextResponse.json({
-    orgId,
-    offset,
-    limit,
-    rangeCount: wonLeads.length,
-    alreadyWonSkipped: alreadyWon,
-    processed: pending.length,
-    movedToWon,
-    dealCreated,
-    skipped,
-    failed,
-    results,
-  });
+export function POST() {
+  return NextResponse.json(
+    {
+      error: 'disabled',
+      reason:
+        'backfill-kommo-won foi desativado: mapear "Ganho" (reunião realizada) para "Venda ganha" no Kommo foi revertido para create-only. Ver markLeadAsWon.',
+    },
+    { status: 410 },
+  );
 }
