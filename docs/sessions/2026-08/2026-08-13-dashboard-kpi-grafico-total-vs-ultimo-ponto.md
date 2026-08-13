@@ -5,6 +5,7 @@
 <!-- Branch: fix/dashboard-kpi-chart-total-mismatch — commit 51305fb3 -->
 <!-- PR #304: alinha série ao total (mergeado 17:59 BRT — squash; NO AR 7c4ef450) -->
 <!-- PR #308: rótulo "esperado até ontem" (mergeado 18:34 — squash; NO AR 47c073ff, 15:41) -->
+<!-- PR #310: DECISÃO FINAL — TODO o dashboard conta até ONTEM (mergeado 20:45 — squash; NO AR 50b50cce, 17:48) -->
 
 ## Sintoma relatado
 
@@ -109,28 +110,57 @@ preservar os números/percentuais e só tornar o rótulo honesto.
 - Número grande, série verde, `%` do ritmo e linha de Meta **inalterados**.
 - Verificado: `pnpm typecheck` ✅; render no `/demo` (mês fechado → "esperado no mês").
 
+## Resolução final: TODO o dashboard conta até ONTEM (PR #310)
+
+O usuário reparou que o gráfico ainda mostrava **56/44** (Meta do dia corrente) — o #308
+só arrumou o rótulo, não o gráfico. Ao confrontar as opções, ficou claro que **não dá para
+ter "47 no número" e "50 na meta" no mesmo ponto** do gráfico: no dia em que se chegou a 47
+(hoje), a meta é 56; para a meta ser 50, o ponto tem que ser ontem — e ontem eram 43 marcadas.
+
+**Decisão do usuário** (AskUserQuestion, ciente de que reverte o "47→43" e que reunião de
+hoje só aparece amanhã): **contar TUDO até o último dia fechado (ontem)** — número grande,
+série, `%`, ranking por SDR e cards de taxa. Efeito em produção (hoje d13 → conta até d12):
+marcadas 47→**43**, realizadas 38→**32**; some o 56/44 do tooltip; card e gráfico param no
+mesmo dia.
+
+**Correção (`81294d21`, PR #310 — só backend):**
+- **`getMonthRange`** (`ranking-metrics.service.ts` + `dashboard-metrics.service.ts`): no mês
+  corrente o `end` recua p/ **fim de ONTEM** (`currentDayOfMonthBrt`); mês passado = mês inteiro;
+  dia 1 → janela vazia. Propaga sozinho p/ `total`, `percentOfTarget`, `averagePerSdr`,
+  `sdrBreakdown` e os cards de taxa (derivados).
+- **`maxDay`** das séries (3 pontos) alinhado ao mesmo dia fechado.
+- **Frontend revertido** ao estado #304+#308 — o backend é a fonte única; sem lógica duplicada.
+- **Não muda:** snapshots "Leads a abrir" / "Atividades atrasadas" (estado *agora*, sem janela).
+- **Fora do escopo:** gráficos de Insights ("Conversão por Origem", "Motivos de Perda",
+  `insights-metrics.service.ts`) ainda contam o mês inteiro.
+- Verificado: `pnpm typecheck` ✅, **142 testes** ✅ (inclui teste determinístico com data
+  mockada: janela termina em `2026-08-12T23:59:59-03:00`, `currentDay=12`, série `null` do d13).
+  ⚠️ `/demo` NÃO valida (dados mockados não passam pelos services) → validar por unitário.
+
 ## Estado / próximos passos
 
-- **PR #304 mergeado** (squash) 17:59 BRT — **NO AR** (`7c4ef450`, confirmado via
-  `/api/version`).
-- **PR #308 mergeado** (squash) 18:34 BRT — **NO AR** (`47c073ff`, publicado 15:41
-  após ~6 min de build; `/api/version` == `origin/main`).
-- Nenhuma migration; ambas as mudanças puramente frontend/serviço (sem schema).
-- **Em aberto (opcional):** se o gestor quiser que card e gráfico comparem no MESMO dia
-  (eliminar a assimetria realizado-hoje × esperado-ontem), seria mudar a régua do pacing
-  para HOJE — decisão de produto que endurece o `%` e afeta todos os cards + ideal/SDR.
+- **PR #304** (série=`null` na fonte) — NO AR `7c4ef450`.
+- **PR #308** (rótulo "esperado até ontem") — NO AR `47c073ff`.
+- **PR #310** (TODO conta até ontem) — mergeado 20:45 BRT, **NO AR** `50b50cce` (publicado 17:48).
+- Nenhuma migration; tudo frontend/serviço (sem schema).
+- **Em aberto (opcional):** alinhar os gráficos de Insights à mesma régua (edição trivial em
+  `insights-metrics.service.ts`, mesmo `getMonthRange`).
 
 ## ⭐ Lições
 
-- **`currentDayOfMonthBrt` (= ontem) é régua de PACING, não de exibição de série.**
-  O total de um card conta até hoje; a série do gráfico deve terminar em hoje para
-  bater com ele. Separe as duas semânticas — não corte a série pelo dia do pacing.
-- **Dia futuro numa série acumulada = `null`, não `0`.** `0` é ambíguo (confunde-se
-  com "começo do mês sem eventos") e obriga o consumidor a adivinhar o corte; `null`
-  é explícito e o recharts (`connectNulls={false}`) já não plota.
-- **Um número e a série que o acompanha devem sair da MESMA janela de dias.** Sempre
-  que os dois forem calculados em pontos diferentes do código, confira se a régua
-  (intervalo de dias / timezone) é idêntica.
+- **A régua de dia de um dashboard é decisão de PRODUTO, não de código.** O ponto de controle
+  certo é a **janela de contagem** (`getMonthRange.end`), não recortes espalhados no componente:
+  mude lá e `total`/`%`/`sdrBreakdown`/séries/cards-de-taxa se alinham sozinhos. Backend = fonte
+  única — não duplicar a régua no front (foi o que o #310 desfez do paliativo).
+- **`currentDayOfMonthBrt` (= ontem, último dia CONCLUÍDO) é a régua canônica** de pacing E de
+  contagem. Número, série e "esperado" têm de parar TODOS no mesmo dia, senão colidem (origem do
+  47×43 e do 50×56).
+- **Dia futuro/em-andamento numa série acumulada = `null`, não `0`** (`0` é ambíguo com começo de
+  mês sem eventos; recharts `connectNulls={false}` já não plota null).
+- **Contar até "ontem" esconde o dia corrente do card até fechar** — comunicar o trade-off (uma
+  reunião marcada hoje só aparece amanhã) ANTES de aplicar.
+- **`/demo` usa dados mockados que não passam pelos services** — mudanças de backend de métrica
+  se validam por teste unitário (com data mockada), não pela rota de demonstração.
 - **Rótulo tem que bater com a régua do cálculo.** "esperado até hoje" enquanto o valor
   é paceado por `currentDay` = ontem = mentira sutil que só apareceu quando a série do
   gráfico passou a ir até hoje. Ao mudar o corte de uma métrica, revise os textos que a
