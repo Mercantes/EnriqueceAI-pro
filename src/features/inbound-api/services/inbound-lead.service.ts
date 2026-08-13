@@ -174,14 +174,10 @@ async function ingestSingleLead(
   if (emailKey) seen.emails.set(emailKey, leadId);
   if (cnpjKey) seen.cnpjs.set(cnpjKey, leadId);
 
-  // Create the primary contact in lead_contacts. The mirror trigger only syncs
-  // lead_contacts -> leads (never the reverse), so a lead inserted straight into
-  // `leads` would show an empty Contacts panel. Populate it from the same data
-  // we just wrote so the SDR sees the person (name, role, e-mail, phone) instead
-  // of a blank form. Awaited but non-fatal: the lead already exists.
-  await createPrimaryContact(supabase, orgId, leadId, data).catch((err) =>
-    console.error('[inbound] primary contact creation failed:', err),
-  );
+  // The primary contact in lead_contacts is created by the DB trigger
+  // `trg_create_primary_contact` (AFTER INSERT ON leads), which covers every
+  // lead-creation channel (manual, CSV, Apollo, inbound) from a single point.
+  // No app-level insert here — a second is_primary would violate the unique index.
 
   // Log API creation to timeline
   logLeadEvent(supabase as Awaited<ReturnType<typeof import('@/lib/supabase/server').createServerSupabaseClient>>, {
@@ -389,62 +385,6 @@ async function resolveCustomFieldKeys(
   }
 
   return resolved;
-}
-
-/**
- * Create the primary contact (lead_contacts) for a freshly-inserted inbound lead.
- *
- * The inbound flow writes person data (name/role/e-mail/phone) straight onto the
- * `leads` columns, but the Contacts panel reads from `lead_contacts`. Since the
- * mirror trigger only syncs lead_contacts -> leads, a new inbound lead would show
- * an empty Contacts form. We build the same jsonb shapes the panel uses so the
- * SDR sees the contact immediately.
- */
-async function createPrimaryContact(
-  supabase: SupabaseClient,
-  orgId: string,
-  leadId: string,
-  data: {
-    first_name?: string;
-    last_name?: string;
-    job_title?: string;
-    email?: string;
-    emails?: { tipo: 'corporativo' | 'pessoal'; email: string }[];
-    telefone?: string;
-  },
-): Promise<void> {
-  // e-mails: prefer the structured array, fall back to the single email string.
-  const emails =
-    data.emails && data.emails.length > 0
-      ? data.emails.filter((e) => (e.email ?? '').trim() !== '')
-      : data.email && data.email.trim() !== ''
-        ? [{ tipo: 'corporativo' as const, email: data.email.trim() }]
-        : [];
-
-  // phone: inbound only carries a single `telefone` — default to celular, the
-  // panel's default type for a mobile-first audience.
-  const phones =
-    data.telefone && data.telefone.trim() !== ''
-      ? [{ tipo: 'celular' as const, numero: data.telefone.trim() }]
-      : [];
-
-  const first = (data.first_name ?? '').trim() || null;
-  const last = (data.last_name ?? '').trim() || null;
-  const role = (data.job_title ?? '').trim() || null;
-
-  // Nothing meaningful to store — skip (shouldn't happen: inbound requires these).
-  if (!first && !last && !role && emails.length === 0 && phones.length === 0) return;
-
-  await from(supabase, 'lead_contacts').insert({
-    org_id: orgId,
-    lead_id: leadId,
-    first_name: first,
-    last_name: last,
-    job_title: role,
-    emails,
-    phones,
-    is_primary: true,
-  } as Record<string, unknown>);
 }
 
 /** Convert a value from reais (e.g. 676 or "676.00") to centavos string ("67600") */
