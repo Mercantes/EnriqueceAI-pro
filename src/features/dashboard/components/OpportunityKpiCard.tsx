@@ -171,14 +171,18 @@ export function OpportunityKpiCard({
   const [kpiYear, kpiMonth] = month.split('-').map(Number) as [number, number];
   const expectedByNow = Math.round(expectedByBusinessDay(kpi.monthTarget, kpiYear, kpiMonth, kpi.currentDay));
 
+  // A série já vem cortada na fonte: `actual` é o acumulado até hoje e `null` nos
+  // dias que ainda não aconteceram. Plotamos direto — o último ponto (hoje) bate
+  // com o número grande. Não recortar por `currentDay` (que é ONTEM, só p/ pacing),
+  // senão o gráfico ficaria um dia atrás do total.
   const chartData = kpi.dailyData.map((point: DailyDataPoint) => ({
     day: point.day,
     target: point.target,
-    actual: point.day <= kpi.currentDay ? point.actual : null,
+    actual: point.actual,
   }));
 
   const maxTarget = kpi.monthTarget > 0 ? kpi.monthTarget : 5;
-  const maxActual = Math.max(...kpi.dailyData.map((d) => d.actual));
+  const maxActual = Math.max(...kpi.dailyData.map((d) => d.actual ?? 0));
   const rawMax = Math.max(maxTarget, maxActual);
   // Round up to next multiple of 25, minimum 125
   const yMax = Math.max(125, Math.ceil(rawMax / 25) * 25);

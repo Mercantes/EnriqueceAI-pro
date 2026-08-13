@@ -493,7 +493,7 @@ async function fetchLeadsOpenedDaily(
     result.push({
       date: `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
       day,
-      actual: day <= maxDay ? cumulative : 0,
+      actual: day <= maxDay ? cumulative : null,
       target: Math.round(expectedByBusinessDay(target, year, mon, day)),
     });
   }
@@ -577,14 +577,14 @@ export async function fetchMeetingsScheduledRanking(
   const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const isCurrent = nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
   const maxDay = isCurrent ? nowBrt.getUTCDate() : days;
-  const dailyData = [] as Array<{ date: string; day: number; actual: number; target: number }>;
+  const dailyData = [] as Array<{ date: string; day: number; actual: number | null; target: number }>;
   let cumulative = 0;
   for (let d = 1; d <= days; d++) {
     cumulative += countByDay.get(d) ?? 0;
     dailyData.push({
       date: `${year}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
       day: d,
-      actual: d <= maxDay ? cumulative : 0,
+      actual: d <= maxDay ? cumulative : null,
       target: Math.round(expectedByBusinessDay(monthTarget, year, mon, d)),
     });
   }

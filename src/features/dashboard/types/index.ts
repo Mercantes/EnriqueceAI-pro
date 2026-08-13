@@ -12,7 +12,7 @@ export interface DashboardFilters {
 export interface DailyDataPoint {
   date: string; // YYYY-MM-DD
   day: number;
-  actual: number; // cumulative
+  actual: number | null; // cumulative até hoje; null nos dias que ainda não aconteceram (não plotados)
   target: number; // linear projection
 }
 
