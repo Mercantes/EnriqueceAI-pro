@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
+import { currentDayOfMonthBrt } from '../utils/brt-now';
 import type {
   ConversionByOriginEntry,
   DashboardFilters,
@@ -13,9 +14,16 @@ import type {
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate();
+  const start = `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`;
+  // Régua "último dia fechado": no mês corrente a janela vai só até o fim de ONTEM
+  // (mesma régua dos cards KPI e de ranking). Mês passado = mês inteiro; dia 1 do
+  // mês corrente → 0 → janela vazia (nada fechado ainda).
+  const throughDay = currentDayOfMonthBrt(month);
+  if (throughDay < 1) return { start, end: start };
+  const endDay = Math.min(throughDay, lastDay);
   return {
-    start: `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`,
-    end: `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59-03:00`,
+    start,
+    end: `${year}-${String(mon).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T23:59:59-03:00`,
   };
 }
 
