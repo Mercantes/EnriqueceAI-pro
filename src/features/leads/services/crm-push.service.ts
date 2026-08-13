@@ -613,7 +613,14 @@ export async function markDealWonInCrm(
 
     return { ...pushResult, dealExternalId, movedToWon: true };
   } catch (moveErr) {
+    // Surface the underlying CRM error (status + body) so it's diagnosable from
+    // the caller/backfill response instead of vanishing into the runtime log.
+    const detail = moveErr instanceof Error ? moveErr.message : String(moveErr);
     console.error('[crm-push] Failed to move Kommo deal to won:', moveErr);
-    return { ...pushResult, dealExternalId, skippedReason: 'move_failed' };
+    return {
+      ...pushResult,
+      dealExternalId,
+      skippedReason: `move_failed: ${detail}`.slice(0, 400),
+    };
   }
 }
