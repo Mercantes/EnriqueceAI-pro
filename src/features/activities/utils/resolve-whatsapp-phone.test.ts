@@ -71,6 +71,37 @@ describe('getAllLeadPhones', () => {
     expect(phones[0]?.raw).toBe('5521988887777');
   });
 
+  it('resolves lead.phones stored as plain strings (external Recovery/CRM load)', () => {
+    // Cargas externas gravaram phones como ["1991488456"] em vez de
+    // [{ tipo, numero }]. O número precisa continuar discável, não sumir.
+    const lead = makeLead({
+      phones: ['1991488456'] as unknown as ActivityLead['phones'],
+    });
+    const phones = getAllLeadPhones(lead);
+    expect(phones).toHaveLength(1);
+    expect(phones[0]?.raw).toBe('1991488456');
+    expect(phones[0]?.formatted).toBe('1991488456');
+  });
+
+  it('resolves a mixed phones array (string + object) without dropping either', () => {
+    const lead = makeLead({
+      phones: [
+        '1991488456',
+        { tipo: 'celular', numero: '11988887777' },
+      ] as unknown as ActivityLead['phones'],
+    });
+    const phones = getAllLeadPhones(lead);
+    expect(phones.map((p) => p.raw).sort()).toEqual(['11988887777', '1991488456']);
+  });
+
+  it('classifies an 11-digit string phone as celular', () => {
+    const lead = makeLead({
+      phones: ['11954958486'] as unknown as ActivityLead['phones'],
+    });
+    const phones = getAllLeadPhones(lead);
+    expect(phones[0]?.label).toContain('(Celular)');
+  });
+
   it('falls back to lead.telefone when no sócio numbers exist', () => {
     const lead = makeLead({ telefone: '(11) 3333-2222' });
     const phones = getAllLeadPhones(lead);
