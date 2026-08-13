@@ -14,6 +14,7 @@ Reformulação do **formulário público de feedback do closer** (acessado por t
 | #254 | `1bb755c` | re-fonteia "Decisor na Call %" a partir das divergências do closer (RPC `get_leads_for_v4sales`) |
 | #266 | `22aa2d1` | alinha o output do feedback (e-mails/alerta + dashboards) à nova semântica |
 | #275 | `9698d09` | gestor volta a receber TODO feedback do closer (alerta × informativo) |
+| #292 | `705e579` | pergunta dedicada "O decisor estava na call?" de volta + métrica prioriza campo explícito |
 
 ---
 
@@ -105,6 +106,16 @@ Um e-mail real de alerta ao gestor revelou que a **camada de output** ficou com 
 Dias depois, o gestor reportou não estar recebendo os feedbacks dos closers novos. **Não era bug** — diagnóstico via dados: desde o form novo, as 11 respostas foram **todas "Bateu"**, e o #266 (correto na época) silenciava os casos saudáveis para o gestor. O pipeline estava intacto (o `rescheduled` de 11/ago notificou normalmente; os alertas de `meeting_done` até 11/ago 16:18 eram do **código antigo** ainda no ar, que alertava por nota baixa). ⭐ **Lição:** silenciar "casos saudáveis" pode virar "o gestor não recebe nada" quando o caso saudável é a maioria.
 
 **Decisão do gestor (via AskUserQuestion):** receber **todo** feedback respondido. Fix (`route.ts`): `notifyManagers` é **sempre** chamado (removido o gate `isActionable` no POST); `isActionable` vira parâmetro e só muda a **moldura** — **alerta** (⚠️ assunto + caixa "Motivo do alerta") para no-show/remarcada/divergiu; **informativo** ("Feedback do closer", sem caixa) para bateu/não validado. `metadata.actionable` reflete o caso real. Afeta só feedbacks futuros (os "Bateu" já respondidos ficam visíveis em Estatísticas → Feedbacks). typecheck/lint verdes.
+
+## Pergunta do decisor de volta (#292 — `705e579`)
+
+Um gestor apontou que o form reformulado **perdeu a pergunta sobre o decisor na call**. Na reforma, "decisor" tinha virado só um item de divergência da qualificação — o que **mistura presença física do decisor com aderência da informação** do pré-vendas. ⭐ **Lição:** ao "consolidar" um campo dentro de outro conceito, confira se os dois medem a mesma coisa; presença ≠ aderência. Decisão do gestor (AskUserQuestion): pergunta dedicada de volta.
+
+- **`FeedbackForm.tsx`**: nova pergunta **"O decisor estava na call? Sim/Não"** (só Realizada, obrigatória) → grava `decisor_presente`; **"Decisor" sai das divergências** (não capta em dois lugares).
+- **`route.ts`**: aceita/valida `decisor_presente` (obrigatório em meeting_done); "decisor" sai dos `VALID_DIVERGENCIAS` (constraint do banco mantém p/ histórico).
+- **Métrica** (`get_leads_for_v4sales`, migration `20260813130000`, aplicada em prod): passa a **priorizar o campo explícito** — `COALESCE(decisor_presente, derivação)`. ⭐ **Corrige bug latente:** sem isso, um "Bateu" com decisor **ausente** era contado como **presente** (a derivação dava TRUE). Validado: gravou `decisor_presente=false` num "Bateu" → métrica retornou FALSE.
+- **`LeadDetailLayout` + `fetch-closer-feedback`**: card exibe "Decisor na call: Sim/Não".
+- ⚠️ Histórico: as ~13 respostas "Bateu" anteriores não têm `decisor_presente` (campo estava fora do form) → seguem pela derivação. Dado explícito vale a partir deste deploy.
 
 ## Fora de escopo (intactos)
 
