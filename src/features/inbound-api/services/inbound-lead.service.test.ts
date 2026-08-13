@@ -55,18 +55,16 @@ describe('ingestInboundLeads — intra-batch dedup', () => {
       // lead 0: findExistingLeadId (email) → not found
       .mockReturnValueOnce(makeBuilder({ data: null }) as never)
       // lead 0: insert → created
-      .mockReturnValueOnce(makeBuilder({ data: { id: 'lead-1' }, error: null }) as never)
-      // lead 0: primary contact insert into lead_contacts
-      .mockReturnValueOnce(makeBuilder({ data: null, error: null }) as never);
+      .mockReturnValueOnce(makeBuilder({ data: { id: 'lead-1' }, error: null }) as never);
 
     const result = await ingestInboundLeads([{ ...baseLead }, { ...baseLead }], options);
 
     expect(result.created).toBe(1);
     expect(result.duplicates).toBe(1);
     expect(result.results[1]).toMatchObject({ status: 'duplicate', existing_lead_id: 'lead-1' });
-    // 4 queries only: limit check + 1 find + 1 lead insert + 1 primary contact
-    // insert. The 2nd lead dedups in-memory, so it triggers NO further queries.
-    expect(fromMock).toHaveBeenCalledTimes(4);
+    // 3 queries only: limit check + 1 find + 1 insert. The primary contact is
+    // created by a DB trigger (not app code), and the 2nd lead dedups in-memory.
+    expect(fromMock).toHaveBeenCalledTimes(3);
   });
 });
 
