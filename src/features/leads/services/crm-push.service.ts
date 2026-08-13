@@ -4,7 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { CRMRegistry } from '@/features/integrations/services/crm-registry';
 import { ensureFreshCredentials } from '@/features/integrations/services/crm-token';
 import { HubSpotAdapter } from '@/features/integrations/services/hubspot.adapter';
-import { KommoAdapter } from '@/features/integrations/services/kommo.adapter';
+import { KommoAdapter, KOMMO_WON_STATUS_ID } from '@/features/integrations/services/kommo.adapter';
 import { PipedriveAdapter } from '@/features/integrations/services/pipedrive.adapter';
 import { RDStationAdapter } from '@/features/integrations/services/rdstation.adapter';
 import type { CrmConnectionRow, CrmProvider } from '@/features/integrations/types/crm';
@@ -22,6 +22,8 @@ export interface CrmPushResult {
   dealCreated: boolean;
   dealExternalId?: string;
   contactExternalId?: string;
+  /** True when the deal was moved to the CRM's "won" stage/status. */
+  movedToWon?: boolean;
   /** Set when push was skipped: 'already_synced' | 'no_connection' | 'unsupported_provider' | error string */
   skippedReason?: string;
 }
@@ -472,4 +474,146 @@ export async function pushLeadToCrmWithDefaults(
     stageId: connection.default_stage_id,
     responsibleUserId: connection.default_responsible_user_id ?? undefined,
   });
+}
+
+/**
+ * Reflect the "Ganho" (won) event in the org's CRM:
+ *   1. Ensure a deal exists (create it if the lead never got one — e.g. "Ganho"
+ *      marked straight from the activity queue, which has no CRM form).
+ *   2. Move that deal into the CRM's "won" column.
+ *
+ * The stage-move is implemented for Kommo (status_id=142). For other providers
+ * we still ensure the deal exists (previous create-only behavior) — moving them
+ * to their own won stage can be added the same way when needed.
+ *
+ * crmOptions is optional: when the lead modal provides pipeline/stage/responsible
+ * we use it; otherwise we fall back to the connection defaults so that "Ganho"
+ * from anywhere (modal, activity queue, closer feedback) syncs the win.
+ *
+ * Best-effort and self-contained: never throws — failures are logged and
+ * returned via skippedReason so marking the lead won is never blocked.
+ */
+export async function markDealWonInCrm(
+  orgId: string,
+  leadId: string,
+  crmOptions?: CrmPushOptions,
+): Promise<CrmPushResult> {
+  const supabase = createServiceRoleClient();
+
+  // Resolve the org's connected CRM (one connection per org).
+  const { data: connection } = (await from(supabase, 'crm_connections')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('status', 'connected')
+    .maybeSingle()) as { data: CrmConnectionRow | null };
+
+  if (!connection) {
+    return { dealCreated: false, skippedReason: 'no_connection' };
+  }
+
+  const provider = crmOptions?.provider ?? connection.crm_provider;
+  const pipelineId = crmOptions?.pipelineId ?? connection.default_pipeline_id ?? undefined;
+  const stageId = crmOptions?.stageId ?? connection.default_stage_id ?? undefined;
+  const responsibleUserId =
+    crmOptions?.responsibleUserId ?? connection.default_responsible_user_id ?? undefined;
+
+  // 1. Ensure the deal exists. pushLeadToCrm dedups if it's already there;
+  // it needs a pipeline+stage only to CREATE a missing deal.
+  let pushResult: CrmPushResult = { dealCreated: false };
+  if (pipelineId && stageId) {
+    pushResult = await pushLeadToCrm(orgId, leadId, { provider, pipelineId, stageId, responsibleUserId });
+  }
+
+  // 2. Resolve the deal external id (freshly created OR pre-existing).
+  let dealExternalId = pushResult.dealExternalId;
+  if (!dealExternalId) {
+    const { data: existingDeal } = (await from(supabase, 'interactions')
+      .select('external_id')
+      .eq('lead_id', leadId)
+      .eq('type', 'crm_deal_created')
+      .maybeSingle()) as { data: { external_id: string } | null };
+    dealExternalId = existingDeal?.external_id ?? undefined;
+  }
+
+  if (!dealExternalId) {
+    return { ...pushResult, skippedReason: pushResult.skippedReason ?? 'no_deal' };
+  }
+
+  // 3. Move the deal to the CRM's "won" status. Kommo only, for now.
+  if (provider !== 'kommo' || !pipelineId) {
+    return { ...pushResult, dealExternalId };
+  }
+
+  // Re-fetch the connection before each credential use so we pick up any token
+  // rotated by an earlier call (Kommo refresh tokens are single-use — decrypting
+  // a stale row and refreshing again would fail).
+  const moveDealToWon = async (dealId: string): Promise<void> => {
+    const { data: freshConnection } = (await from(supabase, 'crm_connections')
+      .select('*')
+      .eq('id', connection.id)
+      .single()) as { data: CrmConnectionRow | null };
+    const adapter = CRMRegistry.getAdapter('kommo') as KommoAdapter;
+    const credentials = await ensureFreshCredentials(freshConnection ?? connection, adapter, supabase);
+    await adapter.updateDealStatus(credentials, dealId, parseInt(pipelineId, 10), KOMMO_WON_STATUS_ID);
+  };
+
+  try {
+    try {
+      await moveDealToWon(dealExternalId);
+    } catch (moveErr) {
+      // Deal no longer exists in Kommo (deleted CRM-side — e.g. cleaned up as a
+      // duplicate): our crm_deal_created marker is stale and points at a ghost.
+      // Drop the stale deal marker and recreate a fresh deal, then move THAT one
+      // to won. We keep the crm_synced (contact) marker so the existing Kommo
+      // contact is reused instead of duplicated.
+      const notFound = moveErr instanceof Error && /\(404\)/.test(moveErr.message);
+      if (!notFound || !stageId) throw moveErr;
+
+      await from(supabase, 'interactions')
+        .delete()
+        .eq('lead_id', leadId)
+        .eq('type', 'crm_deal_created');
+
+      const recreated = await pushLeadToCrm(orgId, leadId, {
+        provider,
+        pipelineId,
+        stageId,
+        responsibleUserId,
+      });
+      if (!recreated.dealExternalId) {
+        return { ...recreated, skippedReason: recreated.skippedReason ?? 'recreate_failed' };
+      }
+      pushResult = recreated;
+      dealExternalId = recreated.dealExternalId;
+      await moveDealToWon(dealExternalId);
+    }
+
+    // Timeline visibility + let webhook subscribers react to the win.
+    await from(supabase, 'interactions').insert({
+      org_id: orgId,
+      lead_id: leadId,
+      channel: 'crm',
+      type: 'crm_synced',
+      external_id: dealExternalId,
+      metadata: {
+        crm_provider: 'kommo',
+        event: 'deal_won',
+        pipeline_id: pipelineId,
+        status_id: KOMMO_WON_STATUS_ID,
+      },
+    } as Record<string, unknown>);
+
+    dispatchWebhookEvent(supabase, orgId, 'crm.deal_won', {
+      lead_id: leadId,
+      crm_provider: 'kommo',
+      deal_external_id: dealExternalId,
+      pipeline_id: pipelineId,
+      status_id: KOMMO_WON_STATUS_ID,
+    }).catch((err) => console.error('[webhook] crm.deal_won dispatch failed:', err));
+
+    return { ...pushResult, dealExternalId, movedToWon: true };
+  } catch (moveErr) {
+    console.error('[crm-push] Failed to move Kommo deal to won:', moveErr);
+    return { ...pushResult, dealExternalId, skippedReason: 'move_failed' };
+  }
 }
