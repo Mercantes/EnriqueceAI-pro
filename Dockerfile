@@ -19,6 +19,12 @@ RUN apk add --no-cache curl
 # ----------------------------------------------
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Commit do build, para /api/version confirmar qual código está no ar ("CI verde
+# != deploy no ar"). O Coolify injeta SOURCE_COMMIT como build-arg
+# automaticamente; capturamos como env de runtime (default 'unknown' em builds
+# locais que não passam o arg).
+ARG SOURCE_COMMIT=unknown
+ENV APP_COMMIT=$SOURCE_COMMIT
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
