@@ -129,8 +129,9 @@ describe('fetchLossReasons', () => {
     expect(result[0]?.reason).toBe('Desconhecido');
   });
 
-  it('recua a janela para o último dia fechado (ontem) no mês corrente', async () => {
-    // Régua "último dia fechado": hoje = 13/ago (BRT) → conta até o fim do dia 12.
+  it('conta o mês inteiro (até hoje), sem recuar para ontem', async () => {
+    // Contagem = mês inteiro (== até hoje, pois lost_at nunca é futura). NÃO recua
+    // para ontem — a régua do dia fechado é só do pacing. Alinhado aos cards / Sales Hub.
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-13T12:00:00Z')); // 09:00 BRT do dia 13
     try {
@@ -148,7 +149,8 @@ describe('fetchLossReasons', () => {
 
       const ltCalls = (leadsChain.lt as ReturnType<typeof vi.fn>).mock.calls;
       const lostAtLt = ltCalls.find((c: unknown[]) => c[0] === 'lost_at');
-      expect(lostAtLt?.[1]).toBe('2026-08-12T23:59:59-03:00');
+      // Fim do MÊS (dia 31), não o dia 12 — a janela não recua para ontem.
+      expect(lostAtLt?.[1]).toBe('2026-08-31T23:59:59-03:00');
     } finally {
       vi.useRealTimers();
     }

@@ -3,7 +3,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
-import { currentDayOfMonthBrt } from '../utils/brt-now';
 import type {
   ConversionByOriginEntry,
   DashboardFilters,
@@ -14,16 +13,15 @@ import type {
 function getMonthRange(month: string): { start: string; end: string } {
   const [year, mon] = month.split('-').map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate();
-  const start = `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`;
-  // Régua "último dia fechado": no mês corrente a janela vai só até o fim de ONTEM
-  // (mesma régua dos cards KPI e de ranking). Mês passado = mês inteiro; dia 1 do
-  // mês corrente → 0 → janela vazia (nada fechado ainda).
-  const throughDay = currentDayOfMonthBrt(month);
-  if (throughDay < 1) return { start, end: start };
-  const endDay = Math.min(throughDay, lastDay);
+  // Janela de CONTAGEM = mês inteiro → conta até HOJE (as datas de evento — won_at,
+  // lost_at — são sempre <= agora, nunca futuras, então "mês inteiro" == "até hoje").
+  // Mesma régua dos cards KPI e de ranking, alinhada ao Sales Hub.
+  // ⚠️ NÃO recuar esta janela para "ontem": o PACING ("esperado até…"/%) é que usa a
+  // régua do dia fechado (`currentDayOfMonthBrt` = ontem) — contagem (hoje) e pacing
+  // (ontem) são réguas DIFERENTES de propósito, espelhando o Sales Hub.
   return {
-    start,
-    end: `${year}-${String(mon).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T23:59:59-03:00`,
+    start: `${year}-${String(mon).padStart(2, '0')}-01T03:00:00Z`,
+    end: `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59-03:00`,
   };
 }
 
