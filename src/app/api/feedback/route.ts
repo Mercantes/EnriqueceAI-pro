@@ -240,23 +240,20 @@ export async function POST(request: Request) {
       ),
     );
 
-    // Notify managers only when there's an actionable signal — keeps their inbox
-    // clean on healthy feedbacks (bateu / não validado) while ensuring they hear
-    // about: no-show, reschedule, or a qualification that diverged in the
-    // meeting. Rating ("chance de fechar") is a subjective closer read and does
-    // NOT trigger alerts.
+    // O gestor é notificado em TODO feedback respondido (in-app + e-mail).
+    // `isActionable` (no-show / remarcada / qualificação divergida) só muda a
+    // moldura: alerta destacado vs informativo. Rating ("chance de fechar") é
+    // leitura subjetiva do closer e não influencia.
     const isActionable =
       result === 'no_show'
       || result === 'rescheduled'
       || (needsMeetingFields && qualificacao_aderente === 'divergiu');
 
-    if (isActionable) {
-      after(() =>
-        notifyManagers(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean).catch((err) =>
-          console.error('[api/feedback] Manager notification error:', err),
-        ),
-      );
-    }
+    after(() =>
+      notifyManagers(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean, isActionable).catch((err) =>
+        console.error('[api/feedback] Manager notification error:', err),
+      ),
+    );
 
     return NextResponse.json({ success: true });
   } catch (err) {
@@ -503,11 +500,11 @@ async function notifySdr(
 }
 
 /**
- * Notify managers when a feedback signals something actionable:
- * no_show, rescheduled, or a qualification that diverged in the meeting
- * (qualificacao_aderente = 'divergiu'). Healthy feedbacks (bateu / não
- * validado) are intentionally silent for managers to avoid inbox noise.
- * Rating ("chance de fechar") is subjective and never triggers an alert.
+ * Notify managers for EVERY responded feedback (in-app + e-mail).
+ * `isActionable` (no_show / rescheduled / qualificacao_aderente = 'divergiu')
+ * only changes the framing: an alert ("⚠️ exige atenção", with a reason box)
+ * vs an informational notice for healthy feedbacks (bateu / não validado).
+ * Rating ("chance de fechar") is subjective and never affects the framing.
  */
 async function notifyManagers(
   supabase: ReturnType<typeof createServiceRoleClient>,
@@ -517,6 +514,7 @@ async function notifyManagers(
   comment: string | null,
   qualificacaoAderente: string | null,
   divergencias: string[] | null,
+  isActionable: boolean,
 ) {
   // Pull lead, closer, sdr names for context
   const { data: lead } = (await from(supabase, 'leads')
@@ -567,20 +565,31 @@ async function notifyManagers(
 
   if (!managers?.length) return;
 
+  const qualLabelHtml = qualificacaoAderente ? (QUALIFICACAO_LABELS[qualificacaoAderente] ?? qualificacaoAderente) : '—';
+
+  // Framing: alerta (acionável) vs informativo (bateu / não validado).
+  const inAppTitle = isActionable
+    ? `⚠️ Feedback exige atenção — ${leadName}`
+    : `Feedback do closer — ${leadName}`;
+  const qualSummary = result === 'meeting_done' && qualificacaoAderente
+    ? `qualificação ${qualLabelHtml.toLowerCase()}`
+    : '';
+  const inAppInfo = isActionable ? reasonLine : qualSummary;
+  const inAppBody = `${closerName} → ${resultLabel}${inAppInfo ? `. ${inAppInfo}` : ''}${comment ? `. "${comment}"` : ''}`;
+
   // In-app notification (Realtime) for each manager
   await createNotificationsForOrgMembers({
     orgId: feedbackReq.org_id,
     type: 'closer_feedback',
-    title: `⚠️ Feedback exige atenção — ${leadName}`,
-    body: `${closerName} → ${resultLabel}. ${reasonLine}${comment ? `. "${comment}"` : ''}`,
+    title: inAppTitle,
+    body: inAppBody,
     resourceType: 'lead',
     resourceId: feedbackReq.lead_id,
-    metadata: { closer_name: closerName, result, qualificacao_aderente: qualificacaoAderente, divergencias, rating, comment, actionable: true },
+    metadata: { closer_name: closerName, result, qualificacao_aderente: qualificacaoAderente, divergencias, rating, comment, actionable: isActionable },
     roleFilter: 'manager',
   }).catch((err) => console.error('[api/feedback/notifyManagers] in-app failed:', err));
 
   // Email each manager — same template style as the SDR mail
-  const qualLabelHtml = qualificacaoAderente ? (QUALIFICACAO_LABELS[qualificacaoAderente] ?? qualificacaoAderente) : '—';
 
   const htmlBody = `
 <!DOCTYPE html>
@@ -592,16 +601,18 @@ async function notifyManagers(
       <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
         <tr><td style="background: #1a1a1a; padding: 24px 32px;">
           <h1 style="color: white; margin: 0; font-size: 20px; font-weight: 600;">EnriqueceAI</h1>
-          <p style="color: #9ca3af; margin: 4px 0 0; font-size: 13px;">Alerta para o gestor</p>
+          <p style="color: #9ca3af; margin: 4px 0 0; font-size: 13px;">${isActionable ? 'Alerta para o gestor' : 'Feedback recebido'}</p>
         </td></tr>
         <tr><td style="padding: 32px;">
-          <h2 style="margin: 0 0 16px; font-size: 18px; color: #1a1a1a;">Feedback que exige atenção</h2>
+          <h2 style="margin: 0 0 16px; font-size: 18px; color: #1a1a1a;">${isActionable ? 'Feedback que exige atenção' : 'Feedback do closer'}</h2>
           <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 16px;">
             <strong>${closerName}</strong> respondeu o feedback da reunião com <strong>${leadName}</strong> (Pré-vendedor: ${sdrName}).
           </p>
+          ${isActionable && reasonLine ? `
           <p style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 18px;margin:0 0 20px;color:#78350f;font-size:14px;line-height:1.5;">
             <strong>Motivo do alerta:</strong> ${reasonLine}
           </p>
+          ` : ''}
           <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
             <tr><td style="padding: 8px 0;">
               <span style="color: #6b7280; font-size: 13px;">Resultado da reunião</span><br>
@@ -627,7 +638,7 @@ async function notifyManagers(
         </td></tr>
         <tr><td style="background: #f9fafb; padding: 16px 32px; border-top: 1px solid #e5e7eb;">
           <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-            Você recebe este email porque é manager da organização. Gestores são notificados apenas em casos acionáveis (no-show, reagendamento ou qualificação divergente).
+            Você recebe este email porque é manager da organização — todos os feedbacks respondidos dos closers. Casos que exigem atenção (no-show, reagendamento ou qualificação divergente) vêm destacados.
           </p>
         </td></tr>
       </table>
@@ -645,7 +656,7 @@ async function notifyManagers(
       try {
         await sendPlatformEmail({
           to: email,
-          subject: `[Gestor] ${leadName} — ${resultLabel}`,
+          subject: `[Gestor]${isActionable ? ' ⚠️' : ''} ${leadName} — ${resultLabel}`,
           html: htmlBody,
         });
       } catch (err) {
