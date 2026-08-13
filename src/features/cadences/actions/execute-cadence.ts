@@ -772,6 +772,17 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         console.error(`[cadence-engine] Failed to advance enrollment=${enrollment.id}:`, advanceErr.message);
       } else if (advanceData?.[0]?.completed) {
         result.completed++;
+        // Rastro na timeline: fim natural da cadência (rodou todos os passos).
+        // Antes só havia webhook/notificação — o motivo "cadência concluída"
+        // ficava invisível no histórico do lead. performed_by=null (motor).
+        await logLeadEvent(supabase, {
+          orgId: enrollment.lead.org_id,
+          leadId: enrollment.lead_id,
+          userId: null,
+          event: 'cadence_completed',
+          message: 'Cadência concluída — todos os passos foram executados',
+          metadata: { cadence_id: enrollment.cadence_id, enrollment_id: enrollment.id },
+        });
         dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'enrollment.completed', {
           lead_id: enrollment.lead_id,
           cadence_id: enrollment.cadence_id,
