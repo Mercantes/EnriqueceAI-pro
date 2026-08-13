@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     dealIds?: number[];
     manifest?: Record<string, TargetEntry>;
     recreatedIds?: number[];
+    recoverClosedAtIds?: number[];
     dryRun?: boolean;
   };
   const orgId = body.orgId;
@@ -56,10 +57,13 @@ export async function POST(request: Request) {
   const manifest = body.manifest ?? {};
   const recreated = new Set((body.recreatedIds ?? []).map(String));
   const dealIds = (body.dealIds ?? []).map(String);
+  // Deals cuja data de perda (closed_at) foi carimbada com hoje pelo revert e
+  // deve ser recuperada do log de eventos (timestamp do move-para-143 pré-backfill).
+  const recoverClosedAt = (body.recoverClosedAtIds ?? []).map(String);
 
   if (!orgId) return NextResponse.json({ error: 'orgId required' }, { status: 400 });
-  if (dealIds.length === 0 && recreated.size === 0) {
-    return NextResponse.json({ error: 'dealIds or recreatedIds required' }, { status: 400 });
+  if (dealIds.length === 0 && recreated.size === 0 && recoverClosedAt.length === 0) {
+    return NextResponse.json({ error: 'dealIds, recreatedIds or recoverClosedAtIds required' }, { status: 400 });
   }
 
   const supabase = createServiceRoleClient();
@@ -169,5 +173,43 @@ export async function POST(request: Request) {
     await new Promise((r) => setTimeout(r, 200));
   }
 
-  return NextResponse.json({ orgId, dryRun, processed: dealIds.length + recreated.size, restored, deleted, skipped, failed, results });
+  // 3) Recuperar a data de perda (closed_at) dos deals cujo revert carimbou hoje:
+  //    usa o timestamp do move-para-143 PRÉ-backfill no log de eventos do Kommo.
+  let closedAtFixed = 0;
+  for (const id of recoverClosedAt) {
+    try {
+      const creds = await freshCreds();
+      const events = await adapter.getStatusChangeEvents(creds, id);
+      // move-para-perdido (143) mais recente ANTES do backfill = perda original.
+      const originalLoss = events
+        .filter((e) => e.after === 143 && e.createdAt < BACKFILL_START)
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+      if (!originalLoss) {
+        skipped++;
+        results.push({ dealId: id, action: 'skipped', reason: 'sem evento de perda pré-backfill' });
+        continue;
+      }
+      if (!dryRun) {
+        await adapter.updateDealFull(creds, id, { pipelineId, statusId: 143, closedAt: originalLoss.createdAt });
+      }
+      closedAtFixed++;
+      results.push({ dealId: id, action: 'closed_at_fixed', closedAt: originalLoss.createdAt });
+    } catch (err) {
+      failed++;
+      results.push({ dealId: id, action: 'failed', error: err instanceof Error ? err.message.slice(0, 180) : String(err) });
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  return NextResponse.json({
+    orgId,
+    dryRun,
+    processed: dealIds.length + recreated.size + recoverClosedAt.length,
+    restored,
+    deleted,
+    closedAtFixed,
+    skipped,
+    failed,
+    results,
+  });
 }
