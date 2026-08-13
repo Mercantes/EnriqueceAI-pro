@@ -566,7 +566,11 @@ export async function markDealWonInCrm(
       // Drop the stale deal marker and recreate a fresh deal, then move THAT one
       // to won. We keep the crm_synced (contact) marker so the existing Kommo
       // contact is reused instead of duplicated.
-      const notFound = moveErr instanceof Error && /\(404\)/.test(moveErr.message);
+      // Kommo signals a non-existent deal with HTTP 400 + body {"errors":{"<id>":
+      // "Lead not found"}} (NOT a 404), so match both the status and that message.
+      const notFound =
+        moveErr instanceof Error &&
+        (/\(404\)/.test(moveErr.message) || /lead not found/i.test(moveErr.message));
       if (!notFound || !stageId) throw moveErr;
 
       await from(supabase, 'interactions')
