@@ -64,7 +64,7 @@ function computeDailyData(
     result.push({
       date: `${year}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
       day,
-      actual: day <= maxDay ? cumulative : 0,
+      actual: day <= maxDay ? cumulative : null,
       target: Math.round(expectedByBusinessDay(target, year, mon, day)),
     });
   }
