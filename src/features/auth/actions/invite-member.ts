@@ -77,7 +77,47 @@ export async function inviteMember(
     }
 
     if (existingUser) {
-      // User already exists — just add to org with active status
+      // The auth guards (getAuthOrgId/requireManager) select the user's active
+      // membership with `.single()`, so a SECOND active membership locks the
+      // user out of the app entirely. Resolve the user's existing membership(s)
+      // before adding this one, so the single-active-membership invariant holds.
+      const { data: activeMemberships } = (await from(admin, 'organization_members')
+        .select('org_id')
+        .eq('user_id', existingUser.id)
+        .eq('status', 'active')) as { data: Array<{ org_id: string }> | null };
+
+      const otherOrgIds = (activeMemberships ?? [])
+        .map((m) => m.org_id)
+        .filter((id) => id !== currentMember.org_id);
+
+      for (const otherOrgId of otherOrgIds) {
+        // Only auto-remove the user's SOLO auto-org (they own it and are its
+        // only active member) — mirroring the new-user branch below. Deleting a
+        // real org with teammates would be destructive, so block instead.
+        const { data: org } = (await from(admin, 'organizations')
+          .select('owner_id')
+          .eq('id', otherOrgId)
+          .maybeSingle()) as { data: { owner_id: string } | null };
+        const { count: activeMemberCount } = (await from(admin, 'organization_members')
+          .select('id', { count: 'exact', head: true })
+          .eq('org_id', otherOrgId)
+          .eq('status', 'active')) as { count: number | null };
+
+        const isSoloAutoOrg = org?.owner_id === existingUser.id && (activeMemberCount ?? 0) <= 1;
+        if (isSoloAutoOrg) {
+          // CASCADE removes the auto-membership + subscription.
+          await from(admin, 'organizations').delete().eq('id', otherOrgId);
+        } else {
+          return {
+            success: false,
+            error:
+              'Este e-mail já pertence a outra organização ativa. Peça para a pessoa sair dessa organização antes de convidá-la.',
+          };
+        }
+      }
+
+      // User already exists — add to org with active status (idempotent per
+      // (org_id, user_id): re-invites just reactivate/update the role).
       await from(admin, 'organization_members').upsert(
         {
           org_id: currentMember.org_id,

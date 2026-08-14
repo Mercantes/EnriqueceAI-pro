@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 import { NextResponse, after } from 'next/server';
 
 import { from } from '@/lib/supabase/from';
@@ -56,7 +58,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
   }
 
-  if (mode === 'subscribe' && token === verifyToken && challenge) {
+  // Timing-safe token comparison (length-guarded — timingSafeEqual throws on
+  // mismatched lengths), consistent with the other webhook secret checks.
+  const tokenBuf = Buffer.from(token ?? '');
+  const verifyBuf = Buffer.from(verifyToken);
+  const tokenValid = tokenBuf.length === verifyBuf.length && crypto.timingSafeEqual(tokenBuf, verifyBuf);
+
+  if (mode === 'subscribe' && tokenValid && challenge) {
     return new Response(challenge, { status: 200 });
   }
 
@@ -117,7 +125,11 @@ export async function POST(request: Request) {
             await from(sb, 'interactions')
               .update({
                 type: interactionType,
-                metadata: status.errors ? { errors: status.errors } : null,
+                // Only touch metadata when this status carries errors. The old
+                // `: null` branch wiped the row's original send context
+                // (recipient/template) on the first no-error status callback
+                // (sent→delivered→read). Leaving metadata untouched preserves it.
+                ...(status.errors ? { metadata: { errors: status.errors } } : {}),
               } as Record<string, unknown>)
               .eq('external_id', status.id);
 

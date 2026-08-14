@@ -47,6 +47,19 @@ export async function processStripeEvent(
       const orgId = session.metadata?.org_id;
       const planId = session.metadata?.plan_id;
       const stripeSubscriptionId = session.subscription as string;
+      const customerId = session.customer as string | null;
+
+      // Persist the Stripe customer on the org as soon as we know the org —
+      // independent of plan_id. Later lifecycle events (renewal, cancellation,
+      // payment_failed) resolve the org by stripe_customer_id, so a Payment Link
+      // checkout missing plan_id metadata must still link the customer, or those
+      // events silently no-op forever. Only set when absent (no clobber).
+      if (orgId && customerId) {
+        await from(supabase, 'organizations')
+          .update({ stripe_customer_id: customerId } as Record<string, unknown>)
+          .eq('id', orgId)
+          .is('stripe_customer_id', null);
+      }
 
       if (orgId && planId && stripeSubscriptionId) {
         const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
@@ -61,20 +74,6 @@ export async function processStripeEvent(
             current_period_end: period.end,
           } as Record<string, unknown>)
           .eq('org_id', orgId);
-
-        // Persist the Stripe customer on the org so later subscription lifecycle
-        // events (renewal, cancellation, payment_failed) — which resolve the org
-        // by stripe_customer_id — can find it. This matters for standalone Payment
-        // Links, where the customer is created at payment time (not at checkout
-        // creation as in the in-app flow). Only set when absent to avoid
-        // clobbering an existing linkage.
-        const customerId = session.customer as string | null;
-        if (customerId) {
-          await from(supabase, 'organizations')
-            .update({ stripe_customer_id: customerId } as Record<string, unknown>)
-            .eq('id', orgId)
-            .is('stripe_customer_id', null);
-        }
       }
       break;
     }
@@ -83,11 +82,17 @@ export async function processStripeEvent(
       const sub = event.data.object as Stripe.Subscription;
       const customerId = sub.customer as string;
 
+      // maybeSingle: never throw on 0/>1 rows. A missing linkage would otherwise
+      // turn a real lifecycle update into a silent error (org stuck on a stale
+      // status). Log the miss so it's visible instead of vanishing.
       const { data: org } = (await from(supabase, 'organizations')
         .select('id')
         .eq('stripe_customer_id', customerId)
-        .single()) as { data: { id: string } | null };
+        .maybeSingle()) as { data: { id: string } | null };
 
+      if (!org) {
+        logger.warn('No org for stripe customer', { customer_id: customerId, event_type: event.type });
+      }
       if (org) {
         const statusMap: Record<string, string> = {
           active: 'active',
@@ -120,8 +125,11 @@ export async function processStripeEvent(
       const { data: org } = (await from(supabase, 'organizations')
         .select('id')
         .eq('stripe_customer_id', customerId)
-        .single()) as { data: { id: string } | null };
+        .maybeSingle()) as { data: { id: string } | null };
 
+      if (!org) {
+        logger.warn('No org for stripe customer', { customer_id: customerId, event_type: event.type });
+      }
       if (org) {
         await from(supabase, 'subscriptions')
           .update({
@@ -140,8 +148,11 @@ export async function processStripeEvent(
       const { data: org } = (await from(supabase, 'organizations')
         .select('id')
         .eq('stripe_customer_id', customerId)
-        .single()) as { data: { id: string } | null };
+        .maybeSingle()) as { data: { id: string } | null };
 
+      if (!org) {
+        logger.warn('No org for stripe customer', { customer_id: customerId, event_type: event.type });
+      }
       if (org) {
         await from(supabase, 'subscriptions')
           .update({ status: 'past_due' } as Record<string, unknown>)

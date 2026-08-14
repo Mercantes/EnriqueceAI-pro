@@ -224,7 +224,10 @@ export async function fetchConversionByOrigin(
       ? (lead.canal || 'Sem sub-origem')
       : (lead.lead_source || 'unknown');
 
-    if (lead.status === 'qualified' || lead.status === 'won') {
+    // "Convertido" aqui = won (SAL/venda), coerente com o recorte por won_at/lost_at
+    // desta query. O ramo 'qualified' anterior era morto: só leads won/unqualified
+    // são buscados acima, então nenhum 'qualified' chegava a este loop.
+    if (lead.status === 'won') {
       const stats = sourceStats.get(groupKey) ?? { converted: 0, lost: 0 };
       stats.converted++;
       sourceStats.set(groupKey, stats);

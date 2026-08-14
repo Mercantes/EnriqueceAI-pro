@@ -240,8 +240,9 @@ describe('fetchConversionByOrigin', () => {
     });
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', status: 'qualified', lead_source: 'indicacao' },
-        { id: 'l2', status: 'qualified', lead_source: 'outbound' },
+        // "Convertido" = won (a wonQuery real filtra status='won' no servidor).
+        { id: 'l1', status: 'won', lead_source: 'indicacao' },
+        { id: 'l2', status: 'won', lead_source: 'outbound' },
         { id: 'l3', status: 'unqualified', lead_source: 'outbound' },
         { id: 'l4', status: 'archived', lead_source: 'outbound' },
       ],
@@ -255,8 +256,8 @@ describe('fetchConversionByOrigin', () => {
 
     const result = await fetchConversionByOrigin(supabase as never, ORG, baseFilters);
 
-    expect(result[0]?.origin).toBe('Outbound'); // 3 total
-    expect(result[1]?.origin).toBe('Indicação'); // 1 total
+    expect(result[0]?.origin).toBe('Outbound'); // won + lost
+    expect(result[1]?.origin).toBe('Indicação'); // won only
   });
 
   it('should fallback to "unknown" for leads without lead_source', async () => {
@@ -264,7 +265,7 @@ describe('fetchConversionByOrigin', () => {
       data: [{ lead_id: 'l1', cadence_id: 'c1' }],
     });
     const leadsChain = createChainMock({
-      data: [{ id: 'l1', status: 'qualified', lead_source: null }],
+      data: [{ id: 'l1', status: 'won', lead_source: null }],
     });
 
     const supabase = createMockSupabase((table) => {

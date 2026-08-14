@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getManagerOrgId } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { parseBrtDateTime } from '@/lib/utils/brt-date';
 
 import { updateLead } from './update-lead';
 
@@ -144,8 +145,12 @@ export async function reassignCloser(
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()) as { data: { metadata: Record<string, unknown> | null } | null };
+  // `metadata.start_time` is BRT-naive (no offset). `new Date()` on a UTC-clock
+  // server reads it ~3h ahead, so a meeting booked <3h out was misclassified as
+  // past. Anchor to BRT via parseBrtDateTime.
   const startTimeRaw = meeting?.metadata?.start_time as string | undefined;
-  const meetingInFuture = startTimeRaw ? new Date(startTimeRaw).getTime() > Date.now() : false;
+  const parsedStart = startTimeRaw ? parseBrtDateTime(startTimeRaw) : null;
+  const meetingInFuture = parsedStart ? parsedStart.getTime() > Date.now() : false;
 
   return {
     success: true,

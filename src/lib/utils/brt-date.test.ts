@@ -1,6 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { brtDayEndIso, brtDayStartIso, parseBrtDateTime } from './brt-date';
+import { brtDayEndIso, brtDayStartIso, brtTodayIso, parseBrtDateTime } from './brt-date';
+
+describe('brtTodayIso', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('usa o dia BRT, não o UTC, perto da meia-noite', () => {
+    vi.useFakeTimers();
+    // 2026-08-14 01:00 UTC = 2026-08-13 22:00 BRT → o "hoje" BRT ainda é dia 13.
+    vi.setSystemTime(new Date('2026-08-14T01:00:00.000Z'));
+    expect(brtTodayIso()).toBe('2026-08-13');
+  });
+
+  it('coincide com o dia UTC quando já passou das 03:00 UTC', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-14T12:00:00.000Z')); // 09:00 BRT
+    expect(brtTodayIso()).toBe('2026-08-14');
+  });
+});
 
 describe('brtDayStartIso / brtDayEndIso', () => {
   it('início do dia BRT = 03:00 UTC', () => {

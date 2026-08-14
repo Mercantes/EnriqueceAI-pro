@@ -239,10 +239,16 @@ async function findExistingLeadId(
   cnpj: string | null,
 ): Promise<string | null> {
   if (email) {
+    // Escape LIKE metacharacters so ilike behaves as case-insensitive EQUALITY,
+    // matching the unique index on (org_id, lower(email)). Un-escaped, `_` and
+    // `%` are wildcards — `ana_paula@x.com` would match `anaXpaula@x.com` (wrong
+    // lead flagged as duplicate) and a multi-row match would even throw on
+    // .maybeSingle(). `_` is common in real e-mail local parts.
+    const escaped = email.replace(/[\\%_]/g, '\\$&');
     const { data } = await from(supabase, 'leads')
       .select('id')
       .eq('org_id', orgId)
-      .ilike('email', email)
+      .ilike('email', escaped)
       .is('deleted_at', null)
       .maybeSingle() as { data: { id: string } | null };
     if (data) return data.id;

@@ -78,19 +78,21 @@ export async function fetchPerformanceAnalyticsData(
   // Filter leads belonging to filtered SDRs (by assigned_to)
   const filteredLeads = leads.filter((l) => l.assigned_to && filteredIds.includes(l.assigned_to));
   const totalLeadsCreated = filteredLeads.length;
-  // Qualified: attributed to who marked as won (won_by), fallback to assigned_to.
+  // Qualified counts the SAME population as the denominator (leads assigned to
+  // the filtered SDRs) so the rate can never exceed 100%. Previously the
+  // numerator attributed by `won_by ?? assigned_to` while the denominator used
+  // `assigned_to` — a lead assigned outside the filter but won inside it
+  // inflated the numerator only, pushing qualificationRate past 100%.
   // 'won' is a downstream stage of 'qualified', so both count here.
-  const totalQualified = leads.filter((l) => {
-    if (l.status !== 'qualified' && l.status !== 'won') return false;
-    const responsible = l.won_by ?? l.assigned_to;
-    return responsible && filteredIds.includes(responsible);
-  }).length;
+  const totalQualified = filteredLeads.filter(
+    (l) => l.status === 'qualified' || l.status === 'won',
+  ).length;
 
   // Build lookup maps once — O(n) instead of O(n×m) per member
   const interactionsByUser = groupBy(interactions, (i) => i.performed_by ?? '');
   const leadsByAssignee = groupBy(leads, (l) => l.assigned_to ?? '');
 
-  const sdrTable = buildSdrTable(filteredIds, memberLookup, interactionsByUser, leadsByAssignee, leads);
+  const sdrTable = buildSdrTable(filteredIds, memberLookup, interactionsByUser, leadsByAssignee);
   const sdrComparison = buildSdrComparison(sdrTable);
   const { dailySdrTrend, dailySdrKeys } = buildDailySdrTrend(interactions, memberLookup);
 
@@ -114,20 +116,20 @@ function buildSdrTable(
   memberLookup: Map<string, string>,
   interactionsByUser: Map<string, InteractionQueryRow[]>,
   leadsByAssignee: Map<string, LeadQueryRow[]>,
-  allLeads: LeadQueryRow[],
 ): SdrPerformanceRow[] {
   return memberIds
     .map((userId) => {
       const userEmail = memberLookup.get(userId) ?? userId.slice(0, 8);
       const userInteractions = interactionsByUser.get(userId) ?? [];
       const userLeads = leadsByAssignee.get(userId) ?? [];
-      // Qualified: count leads where this user is won_by (or assigned_to if won_by is null).
-      // Includes both 'qualified' and 'won' (won is a downstream stage of qualified).
-      const qualified = allLeads.filter((l) => {
-        if (l.status !== 'qualified' && l.status !== 'won') return false;
-        const responsible = l.won_by ?? l.assigned_to;
-        return responsible === userId;
-      }).length;
+      // Qualified counts the user's OWN leads (assigned_to === userId, i.e.
+      // userLeads) that reached qualified/won — same population as the
+      // denominator (userLeads.length), so the per-SDR rate stays ≤100%.
+      // (Was attributing by `won_by ?? assigned_to` against an assigned_to
+      // denominator, which could exceed 100%.)
+      const qualified = userLeads.filter(
+        (l) => l.status === 'qualified' || l.status === 'won',
+      ).length;
       const meetings = userInteractions.filter((i) => i.type === 'meeting_scheduled').length;
 
       return {
@@ -164,7 +166,13 @@ function buildDailySdrTrend(
     const displayName = memberLookup.get(interaction.performed_by);
     if (!displayName) continue;
 
-    const dateStr = interaction.created_at.slice(0, 10);
+    // Group by BRT day, not raw UTC. A 22h-BRT activity has a next-day UTC
+    // timestamp; `.slice(0,10)` on the raw ISO string would bucket it a day
+    // ahead, misaligning this trend from "Atividades por dia" (which shifts
+    // -3h). Match that shift here.
+    const dateStr = new Date(new Date(interaction.created_at).getTime() - 3 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
 
     sdrTotals.set(displayName, (sdrTotals.get(displayName) ?? 0) + 1);
 

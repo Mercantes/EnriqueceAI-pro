@@ -48,16 +48,19 @@ function computeDailyData(
   leadDates: string[],
   month: string,
   target: number,
+  maxDayOverride?: number,
 ): DailyDataPoint[] {
   const days = getDaysInMonth(month);
   const [year, mon] = month.split('-').map(Number) as [number, number];
   // Série vai até HOJE (dia corrente no mês) — mesma régua da janela de contagem,
   // pra que o último ponto do gráfico = número grande do card. Dias futuros ficam
   // null. (O pacing/"esperado" usa régua separada — o dia fechado de ontem.)
+  // `maxDayOverride` fecha a série no fim de um range customizado (dateFrom/dateTo)
+  // dentro do mês, para o gráfico não estender além da janela contada no card.
   const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const isCurrentMonth =
     nowBrt.getUTCFullYear() === year && nowBrt.getUTCMonth() + 1 === mon;
-  const maxDay = isCurrentMonth ? nowBrt.getUTCDate() : days;
+  const maxDay = maxDayOverride ?? (isCurrentMonth ? nowBrt.getUTCDate() : days);
 
   const countByDay = new Map<number, number>();
   for (const dateStr of leadDates) {
@@ -165,10 +168,29 @@ export async function fetchOpportunityKpi(
         )
       : 0;
 
+  // When a custom date range is active, the daily series must follow the SAME
+  // window that produced totalOpportunities — otherwise the count (getDateRange)
+  // and the chart (filters.month) diverge. Derive the series month from the
+  // range start and clamp the last plotted day to the range end when it falls
+  // in that month.
+  const customRange = Boolean(filters.dateFrom && filters.dateTo);
+  const seriesMonth = customRange ? filters.dateFrom!.slice(0, 7) : filters.month;
+  let maxDayOverride: number | undefined;
+  if (customRange) {
+    const [fromYear, fromMon] = filters.dateFrom!.split('-').map(Number) as [number, number];
+    const [toYear, toMon, toDay] = filters.dateTo!.split('-').map(Number) as [number, number, number];
+    // Clamp only when the range ends in the same month it started; a multi-month
+    // range is best-effort (series anchored to the start month).
+    if (toYear === fromYear && toMon === fromMon) {
+      maxDayOverride = toDay;
+    }
+  }
+
   const dailyData = computeDailyData(
     qualifiedLeads.map((l) => l.won_at),
-    filters.month,
+    seriesMonth,
     monthTarget,
+    maxDayOverride,
   );
 
   return {
