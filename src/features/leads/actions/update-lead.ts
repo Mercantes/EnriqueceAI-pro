@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { logAudit } from '@/lib/audit/audit-log';
@@ -70,6 +71,20 @@ export async function updateLead(
 
   if (Object.keys(safeUpdates).length === 0) {
     return { success: false, error: 'Nenhum campo válido para atualizar' };
+  }
+
+  // Valida o enum de status antes de persistir: `updates` chega como Record
+  // arbitrário, e um status inválido caía num erro genérico de banco (23514).
+  // (Phones em formato string já são tolerados pelo resolver — #319 — então não
+  // há bug de fila por essa via; aqui blindamos só o enum.)
+  if ('status' in safeUpdates) {
+    const parsed = z
+      .enum(['new', 'contacted', 'qualified', 'won', 'unqualified', 'archived'])
+      .safeParse(safeUpdates.status);
+    if (!parsed.success) {
+      return { success: false, error: `Status inválido: ${String(safeUpdates.status)}` };
+    }
+    safeUpdates.status = parsed.data;
   }
 
   // Sanitize CNPJ: strip formatting (dots, slashes, hyphens) and convert empty to null
