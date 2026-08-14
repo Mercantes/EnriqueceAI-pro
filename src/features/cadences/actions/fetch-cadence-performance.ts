@@ -192,7 +192,11 @@ export async function fetchCadencePerformance(
         openRate: safeRate(openedLeadSet.size, sentLeadSet.size),
         replyRate: safeRate(repliedLeadSet.size, sentLeadSet.size),
         bounceRate: safeRate(bouncedLeadSet.size, sentLeadSet.size),
-        conversionRate: safeRate(enrollmentCounts.replied, enrollmentCounts.total),
+        // Numerador vem de interactions (repliedLeadSet), não de enrollment.status:
+        // um lead pode ter interação 'replied' com o enrollment ainda 'active'/
+        // 'completed', então `enrollmentCounts.replied` subcontava e divergia do
+        // replyRate logo acima. Denominador segue o total de inscritos.
+        conversionRate: safeRate(repliedLeadSet.size, enrollmentCounts.total),
       },
       enrollments: enrollmentCounts,
       steps: stepMetrics,

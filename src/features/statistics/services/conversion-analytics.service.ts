@@ -210,7 +210,7 @@ function calculateStageConversions(funnel: FunnelStage[]): StageConversion[] {
   return result;
 }
 
-function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: LeadQueryRow[]): PipelineVelocity {
+export function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: LeadQueryRow[]): PipelineVelocity {
   const qualifiedLeadIds = new Set(
     leads.filter((l) => l.status === 'qualified' || l.status === 'won').map((l) => l.id),
   );
@@ -218,7 +218,7 @@ function calculateVelocity(enrollments: EnrollmentQueryRow[], leads: LeadQueryRo
   const durations: number[] = [];
   for (const enrollment of enrollments) {
     if (qualifiedLeadIds.has(enrollment.lead_id)) {
-      const startDate = new Date(enrollment.created_at);
+      const startDate = new Date(enrollment.enrolled_at);
       const endDate = new Date(enrollment.updated_at);
       const days = (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
       if (days >= 0) durations.push(days);

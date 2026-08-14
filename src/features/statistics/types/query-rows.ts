@@ -28,7 +28,10 @@ export interface EnrollmentQueryRow {
   status: string;
   enrolled_by: string | null;
   loss_reason_id: string | null;
-  created_at: string;
+  // `cadence_enrollments` has NO `created_at` column — the enrollment start is
+  // `enrolled_at`. The old `created_at` field here was a phantom: TypeScript
+  // didn't flag `enrollment.created_at`, so velocity read `undefined` → NaN.
+  enrolled_at: string;
   updated_at: string;
 }
 
