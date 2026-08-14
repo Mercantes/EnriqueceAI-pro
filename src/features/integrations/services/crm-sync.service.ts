@@ -163,7 +163,9 @@ export class CrmSyncService {
     await from(supabase, 'crm_sync_log')
       .insert({
         connection_id: connectionId,
-        direction: 'push',
+        // Reflete a direção real: com PUSH_LEADS_TO_CRM=false o sync é pull-only
+        // (só puxa contatos do CRM). Gravar 'push' fixo distorcia o analytics.
+        direction: PUSH_LEADS_TO_CRM ? 'push' : 'pull',
         records_synced: totalSynced,
         errors: totalErrors,
         duration_ms: Date.now() - startTime,

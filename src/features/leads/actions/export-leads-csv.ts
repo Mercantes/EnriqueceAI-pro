@@ -4,11 +4,14 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { validateBulkLeadIds } from '../services/bulk-leads.service';
+
 export async function exportLeadsCsv(
   leadIds: string[],
 ): Promise<ActionResult<{ csv: string; filename: string }>> {
-  if (leadIds.length === 0) {
-    return { success: false, error: 'Nenhum lead selecionado' };
+  const validationError = validateBulkLeadIds(leadIds);
+  if (validationError) {
+    return { success: false, error: validationError };
   }
 
   const auth = await getAuthOrgIdResult();

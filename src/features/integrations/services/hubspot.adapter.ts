@@ -205,6 +205,7 @@ export class HubSpotAdapter implements CRMAdapter {
       : [];
 
     // Paginate through all contacts (max 10 pages = 1000 contacts per sync)
+    let hasMore = false;
     for (let page = 0; page < 10; page++) {
       const body: Record<string, unknown> = {
         limit: 100,
@@ -246,8 +247,20 @@ export class HubSpotAdapter implements CRMAdapter {
         });
       }
 
-      if (!result.paging?.next?.after) break;
-      after = result.paging.next.after;
+      hasMore = Boolean(result.paging?.next?.after);
+      if (!hasMore) break;
+      after = result.paging?.next?.after;
+    }
+
+    // The delta window exceeded the 10-page (1000-contact) cap. Without this the
+    // remainder is dropped silently AND last_sync_at still advances, so those
+    // records are never picked up on the next run either. Surface it so a full
+    // backfill can be triggered.
+    if (hasMore) {
+      console.warn(
+        `[hubspot] pullContacts hit the 1000-contact cap (${contacts.length} fetched); ` +
+          `more modified contacts remain and may be missed until a full re-sync.`,
+      );
     }
 
     return contacts;

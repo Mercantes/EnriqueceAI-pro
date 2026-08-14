@@ -4,22 +4,20 @@ import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
-import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { logLeadEventBulk } from './log-lead-event';
+import { validateBulkLeadIds } from '../services/bulk-leads.service';
 
 export async function bulkAssignLeads(
   leadIds: string[],
   userId: string,
 ): Promise<ActionResult<{ count: number }>> {
-  if (leadIds.length === 0) {
-    return { success: false, error: 'Nenhum lead selecionado' };
-  }
-  if (leadIds.length > MAX_BULK_LEAD_IDS) {
-    return { success: false, error: `Máximo de ${MAX_BULK_LEAD_IDS} leads por operação` };
+  const validationError = validateBulkLeadIds(leadIds);
+  if (validationError) {
+    return { success: false, error: validationError };
   }
 
   const auth = await getAuthOrgIdResult();
