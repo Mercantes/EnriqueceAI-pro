@@ -4,8 +4,7 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import type { SubscriptionStatus } from '../types';
-
-const ALLOWED_BLOCKED_PATHS = ['/upgrade', '/settings/billing'];
+import { BILLING_EXEMPT_PREFIXES, isSubscriptionBlocked } from '../utils/subscription-access';
 
 interface SubscriptionGuardProps {
   status: SubscriptionStatus;
@@ -13,16 +12,20 @@ interface SubscriptionGuardProps {
   children: React.ReactNode;
 }
 
+/**
+ * Client-side belt over the server-side gate in the `(app)` layout. The layout
+ * already blocks server-side (works with JS disabled and against direct
+ * navigation); this just gives a snappier client redirect. Both share
+ * `isSubscriptionBlocked` so they never disagree.
+ */
 export function SubscriptionGuard({ status, periodEnd, children }: SubscriptionGuardProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const isBlocked =
-    status === 'canceled' ||
-    (status === 'trialing' && periodEnd && new Date(periodEnd) < new Date());
+  const isBlocked = isSubscriptionBlocked(status, periodEnd);
 
   useEffect(() => {
-    if (isBlocked && !ALLOWED_BLOCKED_PATHS.some((p) => pathname.startsWith(p))) {
+    if (isBlocked && !BILLING_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p))) {
       router.replace('/upgrade');
     }
   }, [isBlocked, pathname, router]);

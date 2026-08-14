@@ -182,22 +182,23 @@ describe('Stripe Webhook POST — checkout.session.completed', () => {
     vi.clearAllMocks();
   });
 
-  it('should activate subscription on checkout completion', async () => {
+  const stripeSub = {
+    created: 1700000000,
+    items: {
+      data: [
+        {
+          current_period_start: 1700000000,
+          current_period_end: 1702592000,
+        },
+      ],
+    },
+  };
+
+  it('activates the subscription when the checkout payment is paid (card)', async () => {
     const session = {
       metadata: { org_id: 'org-1', plan_id: 'plan-pro' },
       subscription: 'sub_123',
-    };
-
-    const stripeSub = {
-      created: 1700000000,
-      items: {
-        data: [
-          {
-            current_period_start: 1700000000,
-            current_period_end: 1702592000,
-          },
-        ],
-      },
+      payment_status: 'paid',
     };
 
     mockConstructEvent.mockReturnValue(makeStripeEvent('checkout.session.completed', session));
@@ -221,6 +222,26 @@ describe('Stripe Webhook POST — checkout.session.completed', () => {
       }),
     );
     expect(updateChain.eq).toHaveBeenCalledWith('org_id', 'org-1');
+  });
+
+  it('leaves an async checkout (unpaid boleto/PIX) as past_due, not active', async () => {
+    const session = {
+      metadata: { org_id: 'org-1', plan_id: 'plan-pro' },
+      subscription: 'sub_123',
+      payment_status: 'unpaid',
+    };
+
+    mockConstructEvent.mockReturnValue(makeStripeEvent('checkout.session.completed', session));
+    mockRetrieve.mockResolvedValue(stripeSub);
+
+    const updateChain = createChainMock({ data: null });
+    mockFrom.mockReturnValue(updateChain);
+
+    const response = await POST(makeRequest('{}', 'sig_valid'));
+    expect(response.status).toBe(200);
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ plan_id: 'plan-pro', status: 'past_due' }),
+    );
 
     // Should retrieve subscription from Stripe
     expect(mockRetrieve).toHaveBeenCalledWith('sub_123');
@@ -347,6 +368,39 @@ describe('Stripe Webhook POST — invoice.payment_failed', () => {
     expect(mockFrom).toHaveBeenCalledWith('subscriptions');
     expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'past_due' }),
+    );
+    expect(updateChain.eq).toHaveBeenCalledWith('org_id', 'org-3');
+  });
+});
+
+describe('Stripe Webhook POST — invoice.payment_succeeded', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('activates the subscription when an invoice is paid (async payment cleared / renewal)', async () => {
+    const invoice = { customer: 'cus_789' };
+
+    mockConstructEvent.mockReturnValue(
+      makeStripeEvent('invoice.payment_succeeded', invoice),
+    );
+
+    const orgChain = createChainMock({ data: { id: 'org-3' } });
+    const updateChain = createChainMock({ data: null });
+
+    let callIndex = 0;
+    mockFrom.mockImplementation(() => {
+      callIndex++;
+      if (callIndex === 1) return orgChain;
+      return updateChain;
+    });
+
+    const response = await POST(makeRequest('{}', 'sig_valid'));
+
+    expect(response.status).toBe(200);
+    expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'active' }),
     );
     expect(updateChain.eq).toHaveBeenCalledWith('org_id', 'org-3');
   });

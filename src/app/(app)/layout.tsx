@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 
 import { ThemeProvider } from 'next-themes';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth/require-auth';
@@ -14,6 +15,7 @@ import type { MemberWithOrganization, OrganizationMemberRow } from '@/features/a
 import { SubscriptionGuard } from '@/features/billing/components/SubscriptionGuard';
 import { TrialBanner } from '@/features/billing/components/TrialBanner';
 import type { SubscriptionStatus } from '@/features/billing/types';
+import { BILLING_EXEMPT_PREFIXES, isSubscriptionBlocked } from '@/features/billing/utils/subscription-access';
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
@@ -90,6 +92,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const subscriptionStatus: SubscriptionStatus = subscriptionData?.status ?? 'active';
   const subscriptionPeriodEnd: string | null = subscriptionData?.current_period_end ?? null;
   const members = membersResult.data;
+
+  // Server-side subscription gate (D4): blocks canceled / expired-trial / past_due
+  // (after a 3-day grace) even with JS disabled or on direct navigation — the
+  // client SubscriptionGuard below is just a snappier belt. /upgrade and
+  // /settings/billing stay reachable (via x-pathname from the middleware) so the
+  // user can still pay.
+  const currentPathname = (await headers()).get('x-pathname') ?? '';
+  if (
+    isSubscriptionBlocked(subscriptionStatus, subscriptionPeriodEnd) &&
+    !BILLING_EXEMPT_PREFIXES.some((p) => currentPathname.startsWith(p))
+  ) {
+    redirect('/upgrade');
+  }
 
   // Resolve user names via getUserById (listUsers fails with "Database error finding users")
   const userInfoMap = new Map<string, { name: string; avatar_url?: string }>();
