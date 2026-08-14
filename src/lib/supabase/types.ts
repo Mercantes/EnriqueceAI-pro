@@ -1631,6 +1631,11 @@ export type Database = {
       get_distinct_lead_canais: { Args: never; Returns: { canal: string }[] }
       get_distinct_lead_cnaes: { Args: never; Returns: { cnae: string }[] }
       set_primary_lead_contact: { Args: { p_contact_id: string }; Returns: undefined }
+      increment_ai_usage: {
+        Args: { p_org_id: string; p_usage_date: string; p_tokens: number; p_default_limit: number }
+        Returns: { out_count: number; out_limit: number }[]
+      }
+      find_user_id_by_email: { Args: { p_email: string }; Returns: string }
     }
     Enums: {
       cadence_status: "draft" | "active" | "paused" | "archived"
