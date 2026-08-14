@@ -7,7 +7,7 @@ const APP_URL = 'http://localhost:3000';
 const SERVICE_KEY = 'test-service-role-key-123';
 const CRON = 'cron-token-aaa,cron-token-bbb';
 
-function req(path: string, init?: RequestInit): NextRequest {
+function req(path: string, init?: { method?: string; headers?: Record<string, string> }): NextRequest {
   return new NextRequest(new URL(path, APP_URL), init);
 }
 
