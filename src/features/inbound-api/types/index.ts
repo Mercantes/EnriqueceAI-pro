@@ -30,6 +30,10 @@ export interface InboundLeadResult {
   lead_id?: string;
   existing_lead_id?: string;
   error?: string;
+  /** When a cadence_id was provided: whether the enrollment actually happened. */
+  enrolled?: boolean;
+  /** Reason the enrollment was skipped/failed (e.g. missing owner, inactive cadence). */
+  enroll_error?: string;
 }
 
 export interface InboundBatchResult {

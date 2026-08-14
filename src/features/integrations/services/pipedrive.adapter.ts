@@ -203,6 +203,7 @@ export class PipedriveAdapter implements CRMAdapter {
     const contacts: CrmContact[] = [];
     const apiDomain = credentials.api_key ?? '';
     let start = 0;
+    let hasMore = false;
 
     for (let page = 0; page < 10; page++) {
       let path = `/api/v1/persons?limit=100&start=${start}`;
@@ -233,8 +234,18 @@ export class PipedriveAdapter implements CRMAdapter {
         });
       }
 
-      if (!result.additional_data?.pagination?.more_items_in_collection) break;
-      start = result.additional_data.pagination.next_start ?? start + 100;
+      hasMore = Boolean(result.additional_data?.pagination?.more_items_in_collection);
+      if (!hasMore) break;
+      start = result.additional_data?.pagination?.next_start ?? start + 100;
+    }
+
+    // Exceeded the 10-page (1000-person) cap: the remainder is dropped silently
+    // while last_sync_at still advances, so it's never picked up. Surface it.
+    if (hasMore) {
+      console.warn(
+        `[pipedrive] pullContacts hit the 1000-person cap (${contacts.length} fetched); ` +
+          `more modified persons remain and may be missed until a full re-sync.`,
+      );
     }
 
     return contacts;

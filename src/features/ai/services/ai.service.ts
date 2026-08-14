@@ -64,6 +64,28 @@ async function callClaude(messages: ClaudeMessage[]): Promise<{ text: string; to
   return { text, tokensUsed };
 }
 
+/**
+ * Parse the model output as a JSON object, tolerating prose around it. The model
+ * occasionally wraps the JSON in an explanation despite instructions; instead of
+ * throwing (→ generic 500), we retry by extracting the first `{...}` block.
+ */
+export function tryParseJsonObject(text: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    const first = text.indexOf('{');
+    const last = text.lastIndexOf('}');
+    if (first !== -1 && last > first) {
+      try {
+        return JSON.parse(text.slice(first, last + 1)) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
 function parseAIResponse(
   raw: string,
   channel: ChannelTarget,
@@ -74,9 +96,9 @@ function parseAIResponse(
     cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   }
 
-  const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+  const parsed = tryParseJsonObject(cleaned);
 
-  if (typeof parsed.body !== 'string' || !parsed.body.trim()) {
+  if (!parsed || typeof parsed.body !== 'string' || !parsed.body.trim()) {
     throw new Error('Resposta da IA não contém campo "body" válido');
   }
 

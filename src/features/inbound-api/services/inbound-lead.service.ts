@@ -217,11 +217,28 @@ async function ingestSingleLead(
 
   // Enrichment via CNPJ is only triggered for CSV imports, not API/webhook
 
-  // Enroll in cadence if cadence_id provided
+  // Enroll in cadence if cadence_id provided. Await + propagate the outcome: the
+  // enforce_enrollment_has_owner trigger rejects standard cadences without an
+  // assigned_to, and swallowing that (fire-and-forget) made the API answer 201
+  // while the lead silently stayed out of any cadence (limbo the alerts track).
   if (data.cadence_id) {
-    enrollInCadence(supabase, orgId, leadId, data.cadence_id, data.assigned_to ?? null).catch((err) =>
-      console.error('[inbound] cadence enrollment failed:', err),
+    const enroll = await enrollInCadence(
+      supabase,
+      orgId,
+      leadId,
+      data.cadence_id,
+      data.assigned_to ?? null,
     );
+    if (!enroll.enrolled) {
+      console.error('[inbound] cadence enrollment failed:', enroll.error);
+    }
+    return {
+      index,
+      status: 'created',
+      lead_id: leadId,
+      enrolled: enroll.enrolled,
+      ...(enroll.error ? { enroll_error: enroll.error } : {}),
+    };
   }
 
   return { index, status: 'created', lead_id: leadId };
@@ -327,7 +344,7 @@ async function enrollInCadence(
   leadId: string,
   cadenceId: string,
   assignedTo: string | null,
-): Promise<void> {
+): Promise<{ enrolled: boolean; error?: string }> {
   // Validate cadence exists and is active
   const { data: cadence } = await from(supabase, 'cadences')
     .select('id, status')
@@ -336,9 +353,10 @@ async function enrollInCadence(
     .is('deleted_at', null)
     .single() as { data: { id: string; status: string } | null };
 
-  if (!cadence || cadence.status !== 'active') return;
+  if (!cadence) return { enrolled: false, error: 'Cadência não encontrada' };
+  if (cadence.status !== 'active') return { enrolled: false, error: 'Cadência não está ativa' };
 
-  await from(supabase, 'cadence_enrollments')
+  const { error } = await from(supabase, 'cadence_enrollments')
     .insert({
       cadence_id: cadenceId,
       lead_id: leadId,
@@ -347,6 +365,13 @@ async function enrollInCadence(
       status: 'active',
       enrolled_by: assignedTo,
     } as Record<string, unknown>);
+
+  if (error) {
+    // Most common: enforce_enrollment_has_owner rejects a standard cadence with
+    // no assigned_to. Surface it instead of swallowing.
+    return { enrolled: false, error: error.message };
+  }
+  return { enrolled: true };
 }
 
 /**
