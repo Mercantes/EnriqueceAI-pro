@@ -77,10 +77,10 @@ describe('bulkDeleteLeads', () => {
       if (fromCallCount === 1) {
         return makeOrgMemberChain('org-1');
       }
-      return makeUpdateChain([{ id: 'lead-1' }, { id: 'lead-2' }]);
+      return makeUpdateChain([{ id: '11111111-1111-4111-8111-111111111111' }, { id: '22222222-2222-4222-8222-222222222222' }]);
     });
 
-    const result = await bulkDeleteLeads(['lead-1', 'lead-2']);
+    const result = await bulkDeleteLeads(['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222']);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -92,7 +92,7 @@ describe('bulkDeleteLeads', () => {
   it('should return error when org is not found', async () => {
     mockFrom.mockImplementation(() => makeOrgMemberChain(null));
 
-    const result = await bulkDeleteLeads(['lead-1']);
+    const result = await bulkDeleteLeads(['11111111-1111-4111-8111-111111111111']);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -121,7 +121,7 @@ describe('bulkDeleteLeads', () => {
       return makeUpdateChain(null, { message: 'Update failed' });
     });
 
-    const result = await bulkDeleteLeads(['lead-1']);
+    const result = await bulkDeleteLeads(['11111111-1111-4111-8111-111111111111']);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -145,10 +145,10 @@ describe('bulkArchiveLeads', () => {
         return makeOrgMemberChain('org-1');
       }
       // Archive: leads update → returns the org-confirmed ids
-      return makeUpdateChain([{ id: 'lead-1' }, { id: 'lead-2' }, { id: 'lead-3' }]);
+      return makeUpdateChain([{ id: '11111111-1111-4111-8111-111111111111' }, { id: '22222222-2222-4222-8222-222222222222' }, { id: '33333333-3333-4333-8333-333333333333' }]);
     });
 
-    const result = await bulkArchiveLeads(['lead-1', 'lead-2', 'lead-3']);
+    const result = await bulkArchiveLeads(['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333']);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -163,10 +163,10 @@ describe('bulkArchiveLeads', () => {
       fromCallCount++;
       if (fromCallCount === 1) return makeOrgMemberChain('org-1');
       // Two ids requested, but only one belongs to the org → update returns one.
-      return makeUpdateChain([{ id: 'lead-1' }]);
+      return makeUpdateChain([{ id: '11111111-1111-4111-8111-111111111111' }]);
     });
 
-    const result = await bulkArchiveLeads(['lead-1', 'foreign-lead']);
+    const result = await bulkArchiveLeads(['11111111-1111-4111-8111-111111111111', '44444444-4444-4444-8444-444444444444']);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -177,7 +177,7 @@ describe('bulkArchiveLeads', () => {
   it('should return error when org is not found', async () => {
     mockFrom.mockImplementation(() => makeOrgMemberChain(null));
 
-    const result = await bulkArchiveLeads(['lead-1']);
+    const result = await bulkArchiveLeads(['11111111-1111-4111-8111-111111111111']);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -206,7 +206,7 @@ describe('bulkArchiveLeads', () => {
       return makeUpdateChain(null, { message: 'Update failed' });
     });
 
-    const result = await bulkArchiveLeads(['lead-1', 'lead-2']);
+    const result = await bulkArchiveLeads(['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222']);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -247,7 +247,7 @@ describe('exportLeadsCsv', () => {
       return makeLeadsExportChain(mockLeads);
     });
 
-    const result = await exportLeadsCsv(['lead-1']);
+    const result = await exportLeadsCsv(['11111111-1111-4111-8111-111111111111']);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -303,7 +303,7 @@ describe('exportLeadsCsv', () => {
       return makeLeadsExportChain(mockLeads);
     });
 
-    const result = await exportLeadsCsv(['lead-1']);
+    const result = await exportLeadsCsv(['11111111-1111-4111-8111-111111111111']);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -316,7 +316,7 @@ describe('exportLeadsCsv', () => {
   it('should return error when org is not found', async () => {
     mockFrom.mockImplementation(() => makeOrgMemberChain(null));
 
-    const result = await exportLeadsCsv(['lead-1']);
+    const result = await exportLeadsCsv(['11111111-1111-4111-8111-111111111111']);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -345,7 +345,7 @@ describe('exportLeadsCsv', () => {
       return makeLeadsExportChain(null, { message: 'Query failed' });
     });
 
-    const result = await exportLeadsCsv(['lead-1']);
+    const result = await exportLeadsCsv(['11111111-1111-4111-8111-111111111111']);
 
     expect(result.success).toBe(false);
     if (!result.success) {

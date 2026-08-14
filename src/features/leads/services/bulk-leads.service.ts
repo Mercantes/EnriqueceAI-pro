@@ -3,14 +3,20 @@ import { revalidatePath } from 'next/cache';
 
 import { MAX_BULK_LEAD_IDS } from '@/lib/constants/limits';
 import { from } from '@/lib/supabase/from';
+import { isUuid } from '@/lib/utils/uuid';
 
 /**
- * Valida o tamanho do lote de uma operação em massa de leads. Retorna a mensagem
- * de erro (pronta para `ActionResult`) ou `null` quando ok.
+ * Valida uma operação em massa de leads: tamanho E formato dos ids. Retorna a
+ * mensagem de erro (pronta para `ActionResult`) ou `null` quando ok.
+ *
+ * A validação de UUID evita que um único id malformado (`"undefined"`, payload
+ * corrompido) chegue ao `.in('id', leadIds)` e derrube a operação INTEIRA com um
+ * 22P02 genérico — mesmo os ids válidos falhavam junto.
  */
 export function validateBulkLeadIds(leadIds: string[]): string | null {
   if (leadIds.length === 0) return 'Nenhum lead selecionado';
   if (leadIds.length > MAX_BULK_LEAD_IDS) return `Máximo de ${MAX_BULK_LEAD_IDS} leads por operação`;
+  if (!leadIds.every(isUuid)) return 'Seleção inválida: um ou mais ids não são válidos';
   return null;
 }
 

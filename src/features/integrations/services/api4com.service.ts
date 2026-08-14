@@ -127,6 +127,7 @@ export async function hangupCall(
 
   const response = await fetch(url, {
     method: 'POST',
+    signal: AbortSignal.timeout(10_000),
     headers: {
       'Content-Type': 'application/json',
       Authorization: creds.apiKey,

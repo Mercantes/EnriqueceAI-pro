@@ -14,7 +14,14 @@ const envSchema = z.object({
   GCAL_CLIENT_SECRET: z.string().min(1).optional(),
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-  CRON_SECRET: z.string().min(16, 'CRON_SECRET must be at least 16 characters'),
+  // Optional in the shared schema so getEnv() doesn't throw for routes that
+  // don't need it. CRON_SECRET was the ONLY required var, yet cron routes read
+  // process.env.CRON_SECRET directly (via verifyCronSecret) — so requiring it
+  // here protected nothing at the cron sites while breaking unrelated routes
+  // (SSE proxy, Apollo key, Evolution service) with an opaque "Invalid
+  // environment variables" 500 whenever it was unset/too short. The length
+  // guarantee that matters is enforced where the secret is actually used.
+  CRON_SECRET: z.string().min(16, 'CRON_SECRET must be at least 16 characters').optional(),
   SENTRY_DSN: z.string().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   LEMIT_API_URL: z.string().url().optional(),

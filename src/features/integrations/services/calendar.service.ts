@@ -277,6 +277,7 @@ export async function createCalendarEvent(
     `${GCAL_API}/calendars/primary/events${params}`,
     {
       method: 'POST',
+      signal: AbortSignal.timeout(10_000),
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
@@ -312,6 +313,7 @@ export async function deleteCalendarEvent(
     `${GCAL_API}/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
     {
       method: 'DELETE',
+      signal: AbortSignal.timeout(10_000),
       headers: { Authorization: `Bearer ${accessToken}` },
     },
   );
@@ -349,6 +351,7 @@ export async function updateCalendarEvent(
     `${GCAL_API}/calendars/primary/events/${encodeURIComponent(eventId)}${params}`,
     {
       method: 'PATCH',
+      signal: AbortSignal.timeout(10_000),
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
@@ -399,6 +402,7 @@ export async function checkFreeBusy(
 
   const response = await fetch(`${GCAL_API}/freeBusy`, {
     method: 'POST',
+    signal: AbortSignal.timeout(10_000),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,

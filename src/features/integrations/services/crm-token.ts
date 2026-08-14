@@ -21,9 +21,14 @@ export async function ensureFreshCredentials(
     return credentials;
   }
 
+  // Refresh with a 5-minute buffer instead of waiting for exact expiry: a token
+  // expiring in seconds would pass as "valid" and then die mid-pagination (pull
+  // loops up to 10 pages), flipping the whole connection to status:'error' with
+  // valid credentials. Mirrors the Calendar service's ensureValidToken buffer.
+  const REFRESH_BUFFER_MS = 5 * 60 * 1000;
   if (
     credentials.token_expires_at &&
-    new Date(credentials.token_expires_at) <= new Date()
+    new Date(credentials.token_expires_at).getTime() - Date.now() < REFRESH_BUFFER_MS
   ) {
     const refreshed = await adapter.refreshToken(credentials);
     await from(supabase, 'crm_connections')

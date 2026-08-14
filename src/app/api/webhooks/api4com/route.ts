@@ -318,12 +318,15 @@ export async function POST(request: Request) {
   const webhookUrl = new URL(request.url);
   const token = webhookUrl.searchParams.get('token') ?? request.headers.get('x-webhook-secret') ?? '';
 
-  // Log incoming request details for debugging
-  console.warn(`[api4com-webhook] POST received: url=${webhookUrl.pathname}?${webhookUrl.search} tokenPresent=${!!token} tokenLength=${token.length}`);
+  // Log incoming request details for debugging. NEVER log `webhookUrl.search`
+  // or `request.url` — the query string carries `?token=<API4COM_WEBHOOK_SECRET>`,
+  // which would leak the shared secret into stdout/Sentry (anyone with log
+  // access could then forge hangup/answer events).
+  console.warn(`[api4com-webhook] POST received: path=${webhookUrl.pathname} tokenPresent=${!!token} tokenLength=${token.length}`);
 
   if (!token) {
-    // API4COM may strip query params — log and reject
-    console.error('[api4com-webhook] No token in request. Full URL:', request.url);
+    // API4COM may strip query params — log path only (no token in the URL).
+    console.error('[api4com-webhook] No token in request.', { path: webhookUrl.pathname });
     return NextResponse.json({ error: 'Unauthorized - no token' }, { status: 401 });
   }
 

@@ -118,9 +118,13 @@ export async function POST(request: Request) {
       { status: result.created > 0 ? 201 : 200 },
     );
   } catch (err) {
+    // Log the detail server-side, but return a GENERIC message to the external
+    // caller. `err.message` can carry Postgres/RLS internals or lead PII (e.g. a
+    // unique-violation echoing an email/CNPJ) — never expose that to a 3rd-party
+    // integration (RD Station/Zapier/Make).
     console.error('[inbound-leads] Unhandled error:', err);
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Erro interno do servidor' },
+      { success: false, error: 'Erro interno do servidor' },
       { status: 500 },
     );
   }
