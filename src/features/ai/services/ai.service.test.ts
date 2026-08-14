@@ -59,6 +59,8 @@ function createMockServiceSupabase() {
   };
   return {
     from: vi.fn(() => chain),
+    // increment_ai_usage RPC — default: first generation of the day.
+    rpc: vi.fn().mockResolvedValue({ data: [{ out_count: 1, out_limit: 50 }], error: null }),
     _chain: chain,
   };
 }
@@ -76,12 +78,16 @@ function mockFetchResponse(body: string, subject?: string) {
 
 describe('AIService', () => {
   let supabase: ReturnType<typeof createMockSupabase>;
+  let serviceSupabase: ReturnType<typeof createMockServiceSupabase>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreateNotifications.mockClear();
     supabase = createMockSupabase();
     vi.mocked(createServerSupabaseClient).mockResolvedValue(supabase as never);
+    // incrementUsage now runs via the service role client + increment_ai_usage RPC.
+    serviceSupabase = createMockServiceSupabase();
+    vi.mocked(createServiceRoleClient).mockReturnValue(serviceSupabase as never);
     process.env.ANTHROPIC_API_KEY = 'test-key';
     // Mock fetch for Claude API
     vi.stubGlobal('fetch', vi.fn());
@@ -270,49 +276,36 @@ describe('AIService', () => {
   });
 
   describe('incrementUsage', () => {
-    it('should create new record when none exists', async () => {
-      // First call for select (maybeSingle returns null)
-      supabase._chain.maybeSingle.mockResolvedValueOnce({ data: null });
+    it('calls the atomic increment_ai_usage RPC with tokens', async () => {
+      serviceSupabase.rpc.mockResolvedValueOnce({
+        data: [{ out_count: 6, out_limit: 50 }],
+        error: null,
+      });
 
-      await AIService.incrementUsage('org-1');
+      await AIService.incrementUsage('org-1', 320);
 
-      expect(supabase.from).toHaveBeenCalledWith('ai_usage');
-      expect(supabase._chain.insert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          org_id: 'org-1',
-          generation_count: 1,
-          daily_limit: 50,
-        }),
+      expect(serviceSupabase.rpc).toHaveBeenCalledWith(
+        'increment_ai_usage',
+        expect.objectContaining({ p_org_id: 'org-1', p_tokens: 320, p_default_limit: 50 }),
       );
     });
 
-    it('should update existing record', async () => {
-      supabase._chain.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'usage-1', generation_count: 5, daily_limit: 50 },
-      });
-
-      await AIService.incrementUsage('org-1');
-
-      expect(supabase._chain.update).toHaveBeenCalledWith(
-        expect.objectContaining({ generation_count: 6 }),
+    it('defaults tokens to 0 and never sends negative token counts', async () => {
+      await AIService.incrementUsage('org-1', -5);
+      expect(serviceSupabase.rpc).toHaveBeenCalledWith(
+        'increment_ai_usage',
+        expect.objectContaining({ p_tokens: 0 }),
       );
     });
   });
 
   describe('incrementUsage — threshold alerts', () => {
-    let serviceSupabase: ReturnType<typeof createMockServiceSupabase>;
-
-    beforeEach(() => {
-      serviceSupabase = createMockServiceSupabase();
-      vi.mocked(createServiceRoleClient).mockReturnValue(serviceSupabase as never);
-    });
-
     it('should fire 80% threshold alert when crossing threshold', async () => {
-      // count=39, limit=50 → threshold=40. After increment: 40 >= 40 → fires
-      supabase._chain.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'usage-1', generation_count: 39, daily_limit: 50 },
+      // out_count=40, limit=50 → threshold=40; previous=39 < 40, 40 >= 40 → fires
+      serviceSupabase.rpc.mockResolvedValueOnce({
+        data: [{ out_count: 40, out_limit: 50 }],
+        error: null,
       });
-
       // Service role dedup check: no existing notification
       serviceSupabase._chain.maybeSingle.mockResolvedValueOnce({ data: null });
 
@@ -330,9 +323,10 @@ describe('AIService', () => {
     });
 
     it('should NOT fire alert when not crossing threshold', async () => {
-      // count=10, limit=50 → threshold=40. After increment: 11 < 40 → no alert
-      supabase._chain.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'usage-1', generation_count: 10, daily_limit: 50 },
+      // out_count=11 → previous=10 < 40, 11 < 40 → no alert
+      serviceSupabase.rpc.mockResolvedValueOnce({
+        data: [{ out_count: 11, out_limit: 50 }],
+        error: null,
       });
 
       await AIService.incrementUsage('org-1');
@@ -342,9 +336,10 @@ describe('AIService', () => {
     });
 
     it('should NOT fire alert when already above threshold', async () => {
-      // count=45, limit=50 → threshold=40. 45 >= 40 already → no crossing
-      supabase._chain.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'usage-1', generation_count: 45, daily_limit: 50 },
+      // out_count=46 → previous=45 >= 40 already → no crossing
+      serviceSupabase.rpc.mockResolvedValueOnce({
+        data: [{ out_count: 46, out_limit: 50 }],
+        error: null,
       });
 
       await AIService.incrementUsage('org-1');
@@ -354,8 +349,9 @@ describe('AIService', () => {
     });
 
     it('should NOT fire alert when limit is unlimited', async () => {
-      supabase._chain.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'usage-1', generation_count: 100, daily_limit: -1 },
+      serviceSupabase.rpc.mockResolvedValueOnce({
+        data: [{ out_count: 101, out_limit: -1 }],
+        error: null,
       });
 
       await AIService.incrementUsage('org-1');
@@ -366,10 +362,10 @@ describe('AIService', () => {
 
     it('should deduplicate: skip alert if already sent today', async () => {
       // Crosses threshold
-      supabase._chain.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'usage-1', generation_count: 39, daily_limit: 50 },
+      serviceSupabase.rpc.mockResolvedValueOnce({
+        data: [{ out_count: 40, out_limit: 50 }],
+        error: null,
       });
-
       // Dedup: notification already exists today
       serviceSupabase._chain.maybeSingle.mockResolvedValueOnce({
         data: { id: 'existing-notification' },
@@ -381,9 +377,11 @@ describe('AIService', () => {
       expect(mockCreateNotifications).not.toHaveBeenCalled();
     });
 
-    it('should NOT fire alert when creating new record (count=1)', async () => {
-      // No existing record → insert with count=1
-      supabase._chain.maybeSingle.mockResolvedValueOnce({ data: null });
+    it('should NOT fire alert on the first generation (count=1)', async () => {
+      serviceSupabase.rpc.mockResolvedValueOnce({
+        data: [{ out_count: 1, out_limit: 50 }],
+        error: null,
+      });
 
       await AIService.incrementUsage('org-1');
       await new Promise((r) => setTimeout(r, 50));

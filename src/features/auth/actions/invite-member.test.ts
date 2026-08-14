@@ -17,29 +17,23 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const mockInviteUserByEmail = vi.fn();
-// Existing-org members the admin client iterates over to find an existing user
-// by email. Each entry's user_id is resolved via getUserById.
-let adminExistingMembers: Array<{ user_id: string }> = [];
 const mockGetUserById = vi.fn();
+// find_user_id_by_email RPC — resolves an existing user by e-mail in one query.
+const mockAdminRpc = vi.fn().mockResolvedValue({ data: null });
 const mockAdminInsert = vi.fn().mockResolvedValue({ error: null });
 const mockAdminUpsert = vi.fn().mockResolvedValue({ error: null });
 const mockAdminDelete = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
 
-// Admin select on organization_members serves two flows:
-//  - existing-user lookup: select('user_id').eq('status','active')  (awaited array)
-//  - auto-org lookup:       select('org_id').eq().eq().eq().single()
+// Admin select on organization_members: the auto-org lookup (new-user branch)
+// select('org_id').eq().eq().eq().single(). Existing-user detection is now the
+// find_user_id_by_email RPC (mockAdminRpc), not a members loop.
 function makeAdminMembersSelect() {
-  return vi.fn().mockImplementation((cols: string) => {
-    if (cols === 'org_id') {
-      const singleMock = vi.fn().mockResolvedValue({ data: { org_id: 'auto-org-id' } });
-      const eq3 = vi.fn().mockReturnValue({ single: singleMock });
-      const eq2 = vi.fn().mockReturnValue({ eq: eq3 });
-      const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
-      return { eq: eq1 };
-    }
-    // existing-user lookup: .eq('status','active') resolves to the members array
-    const eqMock = vi.fn().mockResolvedValue({ data: adminExistingMembers });
-    return { eq: eqMock };
+  return vi.fn().mockImplementation(() => {
+    const singleMock = vi.fn().mockResolvedValue({ data: { org_id: 'auto-org-id' } });
+    const eq3 = vi.fn().mockReturnValue({ single: singleMock });
+    const eq2 = vi.fn().mockReturnValue({ eq: eq3 });
+    const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
+    return { eq: eq1 };
   });
 }
 
@@ -59,6 +53,7 @@ vi.mock('@/lib/supabase/admin', () => ({
       },
     },
     from: mockAdminFrom,
+    rpc: mockAdminRpc,
   })),
 }));
 
@@ -135,7 +130,7 @@ describe('inviteMember', () => {
   beforeEach(() => {
     resetMocks();
     mockInviteUserByEmail.mockReset();
-    adminExistingMembers = [];
+    mockAdminRpc.mockReset().mockResolvedValue({ data: null });
     mockGetUserById.mockReset().mockResolvedValue({ data: { user: null } });
     mockAdminInsert.mockReset().mockResolvedValue({ error: null });
     mockAdminUpsert.mockReset().mockResolvedValue({ error: null });
@@ -219,10 +214,7 @@ describe('inviteMember', () => {
 
   it('should add existing user to org with active status', async () => {
     setupManagerWithOrg();
-    adminExistingMembers = [{ user_id: 'existing-user-id' }];
-    mockGetUserById.mockResolvedValue({
-      data: { user: { id: 'existing-user-id', email: 'existing@email.com' } },
-    });
+    mockAdminRpc.mockResolvedValue({ data: 'existing-user-id' });
 
     const result = await inviteMember(makeFormData({ email: 'existing@email.com', role: 'sdr' }));
 
@@ -247,19 +239,12 @@ describe('inviteMember', () => {
     // .single() on active membership). If their other org is a real one (not
     // their solo auto-org), block instead of silently double-enrolling.
     setupManagerWithOrg();
-    adminExistingMembers = [{ user_id: 'existing-user-id' }];
-    mockGetUserById.mockResolvedValue({
-      data: { user: { id: 'existing-user-id', email: 'existing@email.com' } },
-    });
+    mockAdminRpc.mockResolvedValue({ data: 'existing-user-id' });
 
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'organization_members') {
         return {
           select: vi.fn().mockImplementation((cols: string) => {
-            if (cols === 'user_id') {
-              // existing-user detection: .eq('status','active') awaited → array
-              return { eq: vi.fn().mockResolvedValue({ data: adminExistingMembers }) };
-            }
             if (cols === 'org_id') {
               // activeMemberships: .eq('user_id').eq('status','active') awaited
               const eq2 = vi.fn().mockResolvedValue({ data: [{ org_id: 'other-real-org' }] });
@@ -299,18 +284,12 @@ describe('inviteMember', () => {
     // H7: their other org is a solo auto-org (they own it, sole member) → safe
     // to delete (mirrors the new-user branch), then add to the inviting org.
     setupManagerWithOrg();
-    adminExistingMembers = [{ user_id: 'existing-user-id' }];
-    mockGetUserById.mockResolvedValue({
-      data: { user: { id: 'existing-user-id', email: 'existing@email.com' } },
-    });
+    mockAdminRpc.mockResolvedValue({ data: 'existing-user-id' });
 
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'organization_members') {
         return {
           select: vi.fn().mockImplementation((cols: string) => {
-            if (cols === 'user_id') {
-              return { eq: vi.fn().mockResolvedValue({ data: adminExistingMembers }) };
-            }
             if (cols === 'org_id') {
               const eq2 = vi.fn().mockResolvedValue({ data: [{ org_id: 'auto-org-id' }] });
               return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };

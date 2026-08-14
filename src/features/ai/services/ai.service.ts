@@ -134,8 +134,8 @@ export class AIService {
 
     const parsed = parseAIResponse(text, request.channel);
 
-    // Increment usage
-    await AIService.incrementUsage(orgId);
+    // Increment usage (persists the real token cost too)
+    await AIService.incrementUsage(orgId, tokensUsed);
 
     return {
       ...parsed,
@@ -160,8 +160,8 @@ export class AIService {
 
     const parsed = parseAIResponse(text, channel);
 
-    // Increment usage
-    await AIService.incrementUsage(orgId);
+    // Increment usage (persists the real token cost too)
+    await AIService.incrementUsage(orgId, tokensUsed);
 
     return {
       ...parsed,
@@ -200,42 +200,37 @@ export class AIService {
     }
   }
 
-  static async incrementUsage(orgId: string): Promise<void> {
-    const supabase = await createServerSupabaseClient();
+  static async incrementUsage(orgId: string, tokensUsed = 0): Promise<void> {
+    // Atomic increment via RPC (SECURITY DEFINER, service_role only): the old
+    // select→update was a read-modify-write that lost increments under
+    // concurrency and let the daily limit be bypassed.
+    const supabase = createServiceRoleClient();
     const today = brtTodayIso();
 
-    // Try to update existing row
-    const { data: existing } = (await from(supabase, 'ai_usage')
-      .select('id, generation_count, daily_limit')
-      .eq('org_id', orgId)
-      .eq('usage_date', today)
-      .maybeSingle()) as { data: { id: string; generation_count: number; daily_limit: number } | null };
+    const { data, error } = await supabase.rpc('increment_ai_usage', {
+      p_org_id: orgId,
+      p_usage_date: today,
+      p_tokens: Math.max(0, Math.trunc(tokensUsed)),
+      p_default_limit: DEFAULT_DAILY_LIMIT,
+    });
 
-    if (existing) {
-      const oldCount = existing.generation_count;
-      const newCount = oldCount + 1;
+    if (error) {
+      console.error('[ai-usage] increment failed:', error.message);
+      return;
+    }
 
-      await from(supabase, 'ai_usage')
-        .update({ generation_count: newCount } as Record<string, unknown>)
-        .eq('id', existing.id);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row || row.out_limit <= 0) return;
 
-      // Fire 80% threshold alert
-      if (existing.daily_limit > 0) {
-        const threshold = Math.floor(existing.daily_limit * ALERT_THRESHOLD);
-        if (oldCount < threshold && newCount >= threshold) {
-          fireAiThresholdAlert(orgId, newCount, existing.daily_limit).catch((err) =>
-            console.error('[ai-usage] Failed to send threshold alert:', err),
-          );
-        }
-      }
-    } else {
-      await from(supabase, 'ai_usage')
-        .insert({
-          org_id: orgId,
-          usage_date: today,
-          generation_count: 1,
-          daily_limit: DEFAULT_DAILY_LIMIT,
-        } as unknown as Record<string, unknown>);
+    // Fire the 80% threshold alert exactly on the crossing. This call did
+    // exactly one +1, so the previous count is out_count - 1.
+    const newCount = row.out_count;
+    const oldCount = newCount - 1;
+    const threshold = Math.floor(row.out_limit * ALERT_THRESHOLD);
+    if (oldCount < threshold && newCount >= threshold) {
+      fireAiThresholdAlert(orgId, newCount, row.out_limit).catch((err) =>
+        console.error('[ai-usage] Failed to send threshold alert:', err),
+      );
     }
   }
 }

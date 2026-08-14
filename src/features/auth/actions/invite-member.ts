@@ -58,22 +58,15 @@ export async function inviteMember(
     const admin = createAdminSupabaseClient();
     const redirectTo = `${getAppUrl()}/api/auth/confirm`;
 
-    // Check if user already exists by email — search org members via getUserById
-    let existingUser: { id: string; email?: string } | undefined;
+    // Resolve an existing user by e-mail in a single query. The old approach
+    // listed ALL active members and called getUserById per member (N+1 over the
+    // whole base, cross-org) — slow and prone to Admin API rate-limits/timeouts.
+    let existingUser: { id: string } | undefined;
     {
-      const { data: allMembers } = (await from(admin, 'organization_members')
-        .select('user_id')
-        .eq('status', 'active')) as { data: Array<{ user_id: string }> | null };
-
-      if (allMembers) {
-        for (const member of allMembers) {
-          const { data: userData } = await admin.auth.admin.getUserById(member.user_id);
-          if (userData?.user?.email?.toLowerCase() === parsed.data.email.toLowerCase()) {
-            existingUser = userData.user;
-            break;
-          }
-        }
-      }
+      const { data: foundUserId } = await admin.rpc('find_user_id_by_email', {
+        p_email: parsed.data.email,
+      });
+      if (foundUserId) existingUser = { id: foundUserId as string };
     }
 
     if (existingUser) {

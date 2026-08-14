@@ -36,17 +36,14 @@ export async function createOrgWithManager(
   const { orgName, managerName, managerEmail, tempPassword } = parsed.data;
   const admin = createAdminSupabaseClient();
 
-  // Check if email already exists — search all org members by getUserById
+  // Check if email already exists — single query instead of listing all members
+  // and calling getUserById per member (N+1 over the whole base).
   {
-    const { data: allMembers } = (await from(admin, 'organization_members')
-      .select('user_id')) as { data: Array<{ user_id: string }> | null };
-    if (allMembers) {
-      for (const member of allMembers) {
-        const { data: userData } = await admin.auth.admin.getUserById(member.user_id);
-        if (userData?.user?.email?.toLowerCase() === managerEmail.toLowerCase()) {
-          return { success: false, error: 'Esse email já está cadastrado' };
-        }
-      }
+    const { data: foundUserId } = await admin.rpc('find_user_id_by_email', {
+      p_email: managerEmail,
+    });
+    if (foundUserId) {
+      return { success: false, error: 'Esse email já está cadastrado' };
     }
   }
 
