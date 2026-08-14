@@ -15,6 +15,7 @@ Reformulação do **formulário público de feedback do closer** (acessado por t
 | #266 | `22aa2d1` | alinha o output do feedback (e-mails/alerta + dashboards) à nova semântica |
 | #275 | `9698d09` | gestor volta a receber TODO feedback do closer (alerta × informativo) |
 | #292 | `705e579` | pergunta dedicada "O decisor estava na call?" de volta + métrica prioriza campo explícito |
+| #320 | `5b1451c` | enriquece o e-mail de feedback (SDR + gestor): decisor, chance de fechar, data, badge, botão Ver lead |
 
 ---
 
@@ -117,6 +118,14 @@ Um gestor apontou que o form reformulado **perdeu a pergunta sobre o decisor na 
 - **`LeadDetailLayout` + `fetch-closer-feedback`**: card exibe "Decisor na call: Sim/Não".
 - ⚠️ Histórico: as ~13 respostas "Bateu" anteriores não têm `decisor_presente` (campo estava fora do form) → seguem pela derivação. Dado explícito vale a partir deste deploy.
 - ✅ **Deploy confirmado em prod:** `/api/version` = `705e579` (= merge do #292) **e** prova visual — o form de `app.enriqueceai.com.br` renderiza "O decisor estava na call? Sim/Não" (obrigatória) quando Realizada.
+
+## E-mail de feedback enriquecido (#320 — `5b1451c`)
+
+Gestor apontou que o e-mail estava "pobrinho". ⭐ **Mesmo drift do #292 mordendo de novo:** quando trouxemos a pergunta do decisor de volta, atualizamos form/endpoint/métrica/card do lead — **mas o e-mail ficou de fora** (não mostrava o decisor). O e-mail do gestor também nunca teve "Chance de fechar" e o "Acesse a plataforma" era texto morto.
+
+- **Fonte ÚNICA** para os dois e-mails (SDR + gestor): `buildFeedbackDetailsHtml` + `buildLeadButtonHtml` (`route.ts`) — extraída justamente para não voltarem a divergir (a raiz do problema era a duplicação).
+- Adiciona: **badge colorido** do resultado, **data da reunião** (`meeting_starts_at`, BRT), **"O decisor estava na call? Sim/Não"**, **"Chance de fechar"** (agora também no e-mail do gestor), **botão "Ver lead na plataforma"** com link real. Observações **escapadas** (anti-injeção de HTML). `decisor_presente` threaded até `notifySdr`/`notifyManagers`.
+- ⚙️ **Nota de processo:** ambiente local resetou p/ o branch inicial da sessão; PR feito via **worktree isolado** em `origin/main` (patch do route.ts) para não arrastar 6 arquivos alheios do working tree.
 
 ## Fora de escopo (intactos)
 
