@@ -38,6 +38,94 @@ const DIVERGENCIA_LABELS: Record<string, string> = {
   dados_cadastrais: 'Dados cadastrais',
 };
 
+// Cor do badge por resultado da reunião (usado nos e-mails de SDR e gestor).
+const RESULT_BADGE: Record<string, { bg: string; fg: string }> = {
+  meeting_done: { bg: '#dcfce7', fg: '#166534' },
+  no_show: { bg: '#fee2e2', fg: '#991b1b' },
+  rescheduled: { bg: '#fef3c7', fg: '#92400e' },
+};
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.enriqueceai.com.br';
+
+/** Escapa texto livre (ex.: observações do closer) antes de injetar no HTML. */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Formata timestamptz para "DD/MM/AAAA HH:MM" em BRT (ou null). */
+function formatMeetingBRT(ts: string | null | undefined): string | null {
+  if (!ts) return null;
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+interface FeedbackDetails {
+  result: string;
+  resultLabel: string;
+  qualificacaoAderente: string | null;
+  divergencias: string[] | null;
+  decisorPresente: boolean | null;
+  rating: number;
+  comment: string | null;
+  meetingDate: string | null;
+}
+
+/** Tabela de detalhes do feedback — fonte ÚNICA para os e-mails do SDR e do gestor. */
+function buildFeedbackDetailsHtml(d: FeedbackDetails): string {
+  const isMeetingDone = d.result === 'meeting_done';
+  const badge = RESULT_BADGE[d.result] ?? { bg: '#f3f4f6', fg: '#374151' };
+  const qualLabel = d.qualificacaoAderente ? (QUALIFICACAO_LABELS[d.qualificacaoAderente] ?? d.qualificacaoAderente) : '—';
+  const divergenciasTxt = d.qualificacaoAderente === 'divergiu' && d.divergencias?.length
+    ? d.divergencias.map((x) => DIVERGENCIA_LABELS[x] ?? x).join(', ')
+    : '';
+  const safeRating = typeof d.rating === 'number' && d.rating >= 1 && d.rating <= 5 ? d.rating : 0;
+  const stars = safeRating > 0 ? '★'.repeat(safeRating) + '☆'.repeat(5 - safeRating) : '';
+
+  const rowsHtml: string[] = [];
+  const row = (label: string, value: string, first = false) =>
+    `<tr><td style="padding: 10px 0;${first ? '' : ' border-top: 1px solid #e5e7eb;'}">
+      <span style="color: #6b7280; font-size: 13px;">${label}</span><br>
+      ${value}
+    </td></tr>`;
+
+  rowsHtml.push(row('Resultado da reunião',
+    `<span style="display:inline-block;background:${badge.bg};color:${badge.fg};font-size:14px;font-weight:600;padding:3px 12px;border-radius:9999px;">${d.resultLabel}</span>`, true));
+
+  if (d.meetingDate) {
+    rowsHtml.push(row('Data da reunião', `<strong style="color:#1a1a1a;font-size:14px;">${d.meetingDate}</strong>`));
+  }
+  if (isMeetingDone && d.qualificacaoAderente) {
+    rowsHtml.push(row('A qualificação bateu?',
+      `<strong style="color:#1a1a1a;font-size:15px;">${qualLabel}</strong>${divergenciasTxt ? `<span style="color:#b91c1c;font-size:14px;"> — não conferiu: ${divergenciasTxt}</span>` : ''}`));
+  }
+  if (isMeetingDone && d.decisorPresente !== null) {
+    rowsHtml.push(row('O decisor estava na call?',
+      `<strong style="color:${d.decisorPresente ? '#166534' : '#b91c1c'};font-size:15px;">${d.decisorPresente ? 'Sim' : 'Não'}</strong>`));
+  }
+  if (isMeetingDone && safeRating > 0) {
+    rowsHtml.push(row('Chance de fechar <span style="font-weight:normal;">(leitura do closer)</span>',
+      `<span style="color:#E53935;font-size:20px;letter-spacing:2px;">${stars}</span><span style="color:#1a1a1a;font-size:14px;margin-left:8px;">${safeRating}/5</span>`));
+  }
+  if (d.comment) {
+    rowsHtml.push(row('Observações do closer', `<span style="color:#1a1a1a;font-size:14px;">${escapeHtml(d.comment)}</span>`));
+  }
+
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:8px;padding:8px 20px;margin-bottom:24px;">${rowsHtml.join('')}</table>`;
+}
+
+/** Botão CTA "Ver lead na plataforma" (link real). */
+function buildLeadButtonHtml(leadId: string): string {
+  return `<table cellpadding="0" cellspacing="0" style="margin:0 0 8px;"><tr>
+    <td style="border-radius:8px;background:#E53935;">
+      <a href="${APP_URL}/leads/${leadId}" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px;">Ver lead na plataforma &rarr;</a>
+    </td>
+  </tr></table>`;
+}
+
 interface FeedbackRequestFull {
   id: string;
   org_id: string;
@@ -239,12 +327,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Qualificação/divergências só se aplicam a meeting_done.
+    // Qualificação/divergências/decisor só se aplicam a meeting_done.
     const qualForNotify = needsMeetingFields ? qualificacao_aderente : null;
+    const decisorForNotify = needsMeetingFields ? decisor_presente : null;
 
     // Notify SDR in background after response is sent
     after(() =>
-      notifySdr(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean).catch((err) =>
+      notifySdr(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean, decisorForNotify).catch((err) =>
         console.error('[api/feedback] SDR notification error:', err),
       ),
     );
@@ -259,7 +348,7 @@ export async function POST(request: Request) {
       || (needsMeetingFields && qualificacao_aderente === 'divergiu');
 
     after(() =>
-      notifyManagers(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean, isActionable).catch((err) =>
+      notifyManagers(supabase, feedbackReq, result, rating, comment, qualForNotify, divergenciasClean, decisorForNotify, isActionable).catch((err) =>
         console.error('[api/feedback] Manager notification error:', err),
       ),
     );
@@ -334,13 +423,14 @@ async function notifySdr(
   comment: string | null,
   qualificacaoAderente: string | null,
   divergencias: string[] | null,
+  decisorPresente: boolean | null,
 ) {
   // Get lead info + who marked as won (SDR)
   const { data: lead } = (await from(supabase, 'leads')
-    .select('nome_fantasia, razao_social, won_by, assigned_to')
+    .select('nome_fantasia, razao_social, won_by, assigned_to, meeting_starts_at')
     .eq('id', feedbackReq.lead_id)
     .is('deleted_at', null)
-    .single()) as { data: { nome_fantasia: string | null; razao_social: string | null; won_by: string | null; assigned_to: string | null } | null };
+    .single()) as { data: { nome_fantasia: string | null; razao_social: string | null; won_by: string | null; assigned_to: string | null; meeting_starts_at: string | null } | null };
 
   if (!lead) return;
 
@@ -393,15 +483,7 @@ async function notifySdr(
   } catch (err) {
     console.error('[api/feedback] Failed to create notification:', err);
   }
-  // "Chance de fechar" (rating) só existe em meeting_done — leitura subjetiva do
-  // closer, sem peso no SLA do SDR. Guarda o renderer de estrelas.
-  const isMeetingDone = result === 'meeting_done';
-  const safeRating = typeof rating === 'number' && rating >= 1 && rating <= 5 ? rating : 0;
-  const stars = safeRating > 0 ? '★'.repeat(safeRating) + '☆'.repeat(5 - safeRating) : '';
-  const qualLabelHtml = qualificacaoAderente ? (QUALIFICACAO_LABELS[qualificacaoAderente] ?? qualificacaoAderente) : '—';
-  const divergenciasHtml = qualificacaoAderente === 'divergiu' && divergencias?.length
-    ? divergencias.map((d) => DIVERGENCIA_LABELS[d] ?? d).join(', ')
-    : '';
+  const meetingDate = formatMeetingBRT(lead.meeting_starts_at);
   const isReopen = result === 'no_show' || result === 'rescheduled';
   const ctaLine = result === 'no_show'
     ? 'Lead reaberto. Retome o contato com o lead.'
@@ -436,40 +518,7 @@ async function notifySdr(
                 <strong>${closerName}</strong> respondeu o feedback sobre a reunião com <strong>${leadName}</strong>.
               </p>
 
-              <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-                <tr>
-                  <td style="padding: 8px 0;">
-                    <span style="color: #6b7280; font-size: 13px;">Resultado da reunião</span><br>
-                    <strong style="color: #1a1a1a; font-size: 15px;">${resultLabel}</strong>
-                  </td>
-                </tr>
-                ${isMeetingDone && qualificacaoAderente ? `
-                <tr>
-                  <td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
-                    <span style="color: #6b7280; font-size: 13px;">A qualificação bateu?</span><br>
-                    <strong style="color: #1a1a1a; font-size: 15px;">${qualLabelHtml}</strong>
-                    ${divergenciasHtml ? `<span style="color: #b91c1c; font-size: 14px;"> — não conferiu: ${divergenciasHtml}</span>` : ''}
-                  </td>
-                </tr>
-                ` : ''}
-                ${isMeetingDone && safeRating > 0 ? `
-                <tr>
-                  <td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
-                    <span style="color: #6b7280; font-size: 13px;">Chance de fechar (leitura do closer)</span><br>
-                    <span style="color: #E53935; font-size: 20px; letter-spacing: 2px;">${stars}</span>
-                    <span style="color: #1a1a1a; font-size: 14px; margin-left: 8px;">${safeRating}/5</span>
-                  </td>
-                </tr>
-                ` : ''}
-                ${comment ? `
-                <tr>
-                  <td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
-                    <span style="color: #6b7280; font-size: 13px;">Observações do closer</span><br>
-                    <span style="color: #1a1a1a; font-size: 14px;">${comment}</span>
-                  </td>
-                </tr>
-                ` : ''}
-              </table>
+              ${buildFeedbackDetailsHtml({ result, resultLabel, qualificacaoAderente, divergencias, decisorPresente, rating, comment, meetingDate })}
 
               ${ctaLine ? `
               <p style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 18px;margin:0 0 20px;color:#78350f;font-size:14px;line-height:1.5;">
@@ -477,9 +526,7 @@ async function notifySdr(
               </p>
               ` : ''}
 
-              <p style="color: #9ca3af; font-size: 13px; margin: 0; line-height: 1.5;">
-                Acesse a plataforma para ver mais detalhes sobre este lead.
-              </p>
+              ${buildLeadButtonHtml(feedbackReq.lead_id)}
             </td>
           </tr>
           <tr>
@@ -523,16 +570,19 @@ async function notifyManagers(
   comment: string | null,
   qualificacaoAderente: string | null,
   divergencias: string[] | null,
+  decisorPresente: boolean | null,
   isActionable: boolean,
 ) {
   // Pull lead, closer, sdr names for context
   const { data: lead } = (await from(supabase, 'leads')
-    .select('nome_fantasia, razao_social, won_by, assigned_to')
+    .select('nome_fantasia, razao_social, won_by, assigned_to, meeting_starts_at')
     .eq('id', feedbackReq.lead_id)
     .is('deleted_at', null)
-    .single()) as { data: { nome_fantasia: string | null; razao_social: string | null; won_by: string | null; assigned_to: string | null } | null };
+    .single()) as { data: { nome_fantasia: string | null; razao_social: string | null; won_by: string | null; assigned_to: string | null; meeting_starts_at: string | null } | null };
 
   if (!lead) return;
+
+  const meetingDate = formatMeetingBRT(lead.meeting_starts_at);
 
   const { data: closer } = (await from(supabase, 'closers')
     .select('name')
@@ -622,28 +672,8 @@ async function notifyManagers(
             <strong>Motivo do alerta:</strong> ${reasonLine}
           </p>
           ` : ''}
-          <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-            <tr><td style="padding: 8px 0;">
-              <span style="color: #6b7280; font-size: 13px;">Resultado da reunião</span><br>
-              <strong style="color: #1a1a1a; font-size: 15px;">${resultLabel}</strong>
-            </td></tr>
-            ${result === 'meeting_done' && qualificacaoAderente ? `
-            <tr><td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
-              <span style="color: #6b7280; font-size: 13px;">A qualificação bateu?</span><br>
-              <strong style="color: #1a1a1a; font-size: 15px;">${qualLabelHtml}</strong>
-              ${divergenciasTxt ? `<span style="color: #b91c1c; font-size: 14px;"> — não conferiu: ${divergenciasTxt}</span>` : ''}
-            </td></tr>
-            ` : ''}
-            ${comment ? `
-            <tr><td style="padding: 8px 0; border-top: 1px solid #e5e7eb;">
-              <span style="color: #6b7280; font-size: 13px;">Observações do closer</span><br>
-              <span style="color: #1a1a1a; font-size: 14px;">${comment}</span>
-            </td></tr>
-            ` : ''}
-          </table>
-          <p style="color: #9ca3af; font-size: 13px; margin: 0; line-height: 1.5;">
-            Acesse a plataforma para ver detalhes e acompanhar o lead.
-          </p>
+          ${buildFeedbackDetailsHtml({ result, resultLabel, qualificacaoAderente, divergencias, decisorPresente, rating, comment, meetingDate })}
+          ${buildLeadButtonHtml(feedbackReq.lead_id)}
         </td></tr>
         <tr><td style="background: #f9fafb; padding: 16px 32px; border-top: 1px solid #e5e7eb;">
           <p style="color: #9ca3af; font-size: 12px; margin: 0;">
