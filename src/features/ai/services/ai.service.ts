@@ -1,6 +1,7 @@
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { brtTodayIso } from '@/lib/utils/brt-date';
 
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
@@ -148,7 +149,7 @@ export class AIService {
 
   static async getUsage(orgId: string): Promise<AIUsageInfo> {
     const supabase = await createServerSupabaseClient();
-    const today = new Date().toISOString().split('T')[0] ?? '';
+    const today = brtTodayIso();
 
     const { data } = (await from(supabase, 'ai_usage')
       .select('*')
@@ -179,7 +180,7 @@ export class AIService {
 
   static async incrementUsage(orgId: string): Promise<void> {
     const supabase = await createServerSupabaseClient();
-    const today = new Date().toISOString().split('T')[0] ?? '';
+    const today = brtTodayIso();
 
     // Try to update existing row
     const { data: existing } = (await from(supabase, 'ai_usage')

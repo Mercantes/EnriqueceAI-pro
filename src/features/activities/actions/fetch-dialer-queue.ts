@@ -4,6 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
+import { brtDayStartIso, brtTodayIso } from '@/lib/utils/brt-date';
 
 export interface DialerQueuePhone {
   formatted: string;
@@ -174,9 +175,10 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
   const callsPerLead = new Map<string, number>();
 
   if (leadIds.length > 0) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayStartIso = todayStart.toISOString();
+    // Start of TODAY in BRT (not the server's UTC midnight). `setHours(0,0,0,0)`
+    // on a UTC-clock server counts the daily call limit against the wrong day
+    // near midnight BRT.
+    const todayStartIso = brtDayStartIso(brtTodayIso());
 
     const todayCalls = await chunkedIn<{ lead_id: string }>(leadIds, (chunk) =>
       from(supabase, 'calls')

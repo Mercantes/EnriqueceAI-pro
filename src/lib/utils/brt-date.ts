@@ -8,6 +8,19 @@
  */
 
 const BRT_OFFSET_HOURS = 3;
+const BRT_OFFSET_MS = BRT_OFFSET_HOURS * 60 * 60 * 1000;
+
+/**
+ * Today's calendar date in BRT as `YYYY-MM-DD`.
+ *
+ * `new Date()` reads the server clock in UTC, so after 21:00 BRT it already
+ * reports the next calendar day. Daily counters/limits keyed on the raw UTC
+ * date (`new Date().toISOString().slice(0,10)`) therefore roll over 3h early.
+ * Shift the instant -3h before extracting the day.
+ */
+export function brtTodayIso(): string {
+  return new Date(Date.now() - BRT_OFFSET_MS).toISOString().slice(0, 10);
+}
 
 /**
  * "Start of BRT day" for a `YYYY-MM-DD` input, expressed as ISO UTC.
