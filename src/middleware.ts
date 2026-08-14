@@ -99,8 +99,14 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Expose the pathname to Server Components (a layout can't read it otherwise),
+  // so the (app) layout's subscription gate can exempt /upgrade and
+  // /settings/billing without an infinite redirect loop.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-pathname', pathname);
+
   // Create supabase client with cookie handling
-  let response = NextResponse.next({ request });
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -114,7 +120,7 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          response = NextResponse.next({ request });
+          response = NextResponse.next({ request: { headers: requestHeaders } });
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
           );
