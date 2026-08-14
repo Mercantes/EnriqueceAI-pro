@@ -242,6 +242,109 @@ describe('inviteMember', () => {
     );
   });
 
+  it('blocks inviting an existing user who belongs to another real org (avoids lockout)', async () => {
+    // H7: creating a 2nd active membership locks the user out (guards use
+    // .single() on active membership). If their other org is a real one (not
+    // their solo auto-org), block instead of silently double-enrolling.
+    setupManagerWithOrg();
+    adminExistingMembers = [{ user_id: 'existing-user-id' }];
+    mockGetUserById.mockResolvedValue({
+      data: { user: { id: 'existing-user-id', email: 'existing@email.com' } },
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') {
+        return {
+          select: vi.fn().mockImplementation((cols: string) => {
+            if (cols === 'user_id') {
+              // existing-user detection: .eq('status','active') awaited → array
+              return { eq: vi.fn().mockResolvedValue({ data: adminExistingMembers }) };
+            }
+            if (cols === 'org_id') {
+              // activeMemberships: .eq('user_id').eq('status','active') awaited
+              const eq2 = vi.fn().mockResolvedValue({ data: [{ org_id: 'other-real-org' }] });
+              return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };
+            }
+            // active member count for the other org
+            const eq2 = vi.fn().mockResolvedValue({ count: 3 });
+            return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };
+          }),
+          upsert: mockAdminUpsert,
+          insert: mockAdminInsert,
+        };
+      }
+      if (table === 'organizations') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: { owner_id: 'someone-else' } }),
+            }),
+          }),
+          delete: mockAdminDelete,
+        };
+      }
+      return { insert: mockAdminInsert, upsert: mockAdminUpsert };
+    });
+
+    const result = await inviteMember(makeFormData({ email: 'existing@email.com', role: 'sdr' }));
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain('outra organização');
+    }
+    expect(mockAdminUpsert).not.toHaveBeenCalled();
+  });
+
+  it('removes the existing user solo auto-org before adding them (no dual membership)', async () => {
+    // H7: their other org is a solo auto-org (they own it, sole member) → safe
+    // to delete (mirrors the new-user branch), then add to the inviting org.
+    setupManagerWithOrg();
+    adminExistingMembers = [{ user_id: 'existing-user-id' }];
+    mockGetUserById.mockResolvedValue({
+      data: { user: { id: 'existing-user-id', email: 'existing@email.com' } },
+    });
+
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') {
+        return {
+          select: vi.fn().mockImplementation((cols: string) => {
+            if (cols === 'user_id') {
+              return { eq: vi.fn().mockResolvedValue({ data: adminExistingMembers }) };
+            }
+            if (cols === 'org_id') {
+              const eq2 = vi.fn().mockResolvedValue({ data: [{ org_id: 'auto-org-id' }] });
+              return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };
+            }
+            const eq2 = vi.fn().mockResolvedValue({ count: 1 });
+            return { eq: vi.fn().mockReturnValue({ eq: eq2 }) };
+          }),
+          upsert: mockAdminUpsert,
+          insert: mockAdminInsert,
+        };
+      }
+      if (table === 'organizations') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: { owner_id: 'existing-user-id' } }),
+            }),
+          }),
+          delete: mockAdminDelete,
+        };
+      }
+      return { insert: mockAdminInsert, upsert: mockAdminUpsert };
+    });
+
+    const result = await inviteMember(makeFormData({ email: 'existing@email.com', role: 'sdr' }));
+
+    expect(result.success).toBe(true);
+    expect(mockAdminDelete).toHaveBeenCalled();
+    expect(mockAdminUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ org_id: 'org-abc', user_id: 'existing-user-id', status: 'active' }),
+      expect.objectContaining({ onConflict: 'org_id,user_id' }),
+    );
+  });
+
   it('should redirect if not a manager', async () => {
     mockSupabaseAuth.getUser.mockResolvedValue({
       data: { user: { id: 'user-123' } },

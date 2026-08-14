@@ -72,18 +72,23 @@ async function getOrgDailyMetrics(supabase: SupabaseClient, orgId: string, start
   const whatsapp_sent = items.filter((i) => i.channel === 'whatsapp' && i.type === 'sent').length;
   const whatsapp_failed = items.filter((i) => i.channel === 'whatsapp' && i.type === 'failed').length;
 
-  // Count enrollments paused today
+  // Count enrollments paused today — org-scoped. This runs under the service
+  // role (RLS bypassed), so the org_id filter is mandatory; without it the
+  // count summed pauses across EVERY organization. There's no paused_at column,
+  // so `updated_at` is the proxy for "changed to paused today" (better than the
+  // old enrolled_at, which counted enrollments *enrolled* today that are paused
+  // now, not those actually paused today).
   const { count: enrollments_paused } = (await from(supabase, 'cadence_enrollments')
     .select('id', { count: 'exact', head: true })
+    .eq('org_id', orgId)
     .eq('status', 'paused')
-    .gte('enrolled_at', start)
-    .lte('enrolled_at', end)
-    // Filter by org via lead join
-    .not('lead_id', 'is', null)) as { count: number | null };
+    .gte('updated_at', start)
+    .lte('updated_at', end)) as { count: number | null };
 
-  // Count enrollments completed today
+  // Count enrollments completed today — org-scoped (same cross-org bug as above).
   const { count: enrollments_completed } = (await from(supabase, 'cadence_enrollments')
     .select('id', { count: 'exact', head: true })
+    .eq('org_id', orgId)
     .eq('status', 'completed')
     .gte('completed_at', start)
     .lte('completed_at', end)) as { count: number | null };
