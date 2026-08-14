@@ -65,10 +65,19 @@ export async function processStripeEvent(
         const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
         const period = getSubscriptionPeriod(sub);
 
+        // Only activate once the payment actually cleared. Async methods
+        // (boleto/PIX) fire checkout.session.completed with payment_status
+        // 'unpaid'/'no_payment_required' — activating then would grant access
+        // before the money settles. Those land as 'past_due' here and flip to
+        // 'active' later via invoice.payment_succeeded. Card checkouts are
+        // already 'paid', so they activate immediately as before.
+        const paid =
+          session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+
         await from(supabase, 'subscriptions')
           .update({
             plan_id: planId,
-            status: 'active',
+            status: paid ? 'active' : 'past_due',
             stripe_subscription_id: stripeSubscriptionId,
             current_period_start: period.start,
             current_period_end: period.end,
@@ -156,6 +165,30 @@ export async function processStripeEvent(
       if (org) {
         await from(supabase, 'subscriptions')
           .update({ status: 'past_due' } as Record<string, unknown>)
+          .eq('org_id', org.id);
+      }
+      break;
+    }
+
+    case 'invoice.payment_succeeded': {
+      // Activation for async payments (boleto/PIX) that landed as 'past_due' at
+      // checkout, and reactivation after a failed renewal is paid. Fires on every
+      // successful invoice, including recurring renewals — setting 'active' is
+      // correct in all of them.
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = invoice.customer as string;
+
+      const { data: org } = (await from(supabase, 'organizations')
+        .select('id')
+        .eq('stripe_customer_id', customerId)
+        .maybeSingle()) as { data: { id: string } | null };
+
+      if (!org) {
+        logger.warn('No org for stripe customer', { customer_id: customerId, event_type: event.type });
+      }
+      if (org) {
+        await from(supabase, 'subscriptions')
+          .update({ status: 'active' } as Record<string, unknown>)
           .eq('org_id', org.id);
       }
       break;
