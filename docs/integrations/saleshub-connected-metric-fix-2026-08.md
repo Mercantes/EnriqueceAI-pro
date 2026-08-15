@@ -172,3 +172,60 @@ O proxy resgata a conversa genuína de ramais sem webhook (`answered_at` nunca c
 \* *Abr subiu porque o SH não tinha `answered_at` no payload histórico e estava sub-contado; a Opção B, com os campos re-puxados do Enriquece, corrigiu pra cima até o valor real.*
 
 **Paridade por SDR (agosto) SH ↔ Enriquece Opção B:** Guilherme 222=222, Ismael 226=226, Matheus 194=194, João 57=57, Vinicius 7=7. Giovanni 8≈11 (baixo dos dois lados — telefonia dele quebrada na API4COM; ver relatório `api4com-webhook-report-2026-08.md`).
+
+---
+
+## Atualização 14/08/2026 — "Piso 50s" (corta caixa postal do `answered_at`)
+
+**Motivo:** depois que os webhooks de TODOS os ramais voltaram a emitir
+`channel-answer` (incl. 1042/1045, religados em 14/08), o card de conexão voltou a
+parecer alto (Guilherme 29%, Ismael 30%). Investigação provou que a API4COM
+dispara `answered_at` também quando **CAIXA POSTAL / SECRETÁRIA / gravação de
+operadora** atende a linha:
+
+- **41% das "conectadas" de agosto eram atendimentos de <10s** (pico em 0-5s).
+- **21 ligações para número inexistente** (`UNALLOCATED_NUMBER`, 0s) vinham com `answered_at`.
+- **Transcrições dos curtos** (Callface) são operadora/caixa postal: *"sua ligação
+  foi encaminhada"*, *"este número mudou"*, *"o número chamado está desligado…"*,
+  *"verifique o número discado"*. O texto marcado como `Lead:` é a voz da máquina.
+
+**Regra nova (decisão de negócio V4 — "conectada = conversa real de ≥50s"):**
+```
+conectada = NÃO-voicemail  E  answered_at presente  E  duração >= 50s
+```
+Removidos os sinais answered-solo, significant-solo e o proxy. Verificado limpo: o
+conjunto que sobra é **100% `NORMAL_CLEARING`/`FINISHED`, média ~180s** — conversa
+de fato (nenhuma causa de não-atendimento passa).
+
+**Mudanças (14/08):**
+- **App** — `isConnectedCall` (`src/features/calls/connection.ts`, `CONNECTED_MIN_DURATION_SECONDS=50`). Fonte única do card/Painel/Extrato. PR #328 (`3b60934`), deploy confirmado via `/api/version`. ⚠️ `significant` (30s) deixa de ser subconjunto de conectadas (poucas linhas 30-49s).
+- **Enriquece** — overload de métricas `get_calls_for_v4sales` (p_year/p_month) → 50s. Migration `20260815060800_get_calls_for_v4sales_connected_50s.sql`. (A overload p_from_date não muda — só exporta os campos; o cálculo é no SH.)
+- **Sales Hub** — `sync_calls_from_enriquece` → `v_connected = não-voicemail AND answered_at IS NOT NULL AND duration>=50`. Aplicado via MCP.
+
+**Recompute do histórico (Abr-Ago):** re-puxado do Enriquece via `net.http_post` →
+RPC temp `apply_conn_fix_v1` (gated por segredo, **já removida**), ~5,9k linhas.
+⭐ **Onde faltava `answered_at` em meses antigos** (Abr = 0 answered no mês inteiro;
+Mai parcial), a regra estrita zerava o mês por falta de dado. Para o histórico ficar
+honesto, usei **fallback de prova-positiva** onde `answered_at` está ausente:
+`NORMAL_CLEARING` + gravação + ≥50s. O app/live continua estrito (answered+50, hoje
+confiável); só a recomputação histórica usa o fallback.
+
+**Connected por mês, Opção B (13/08) → Piso 50s (14/08), no `call_logs` do SH:**
+
+| Mês | Opção B | **Piso 50s** |
+|-----|---------|--------------|
+| Abr | 282 | **123** * |
+| Mai | 1.486 | **574** |
+| Jun | 1.680 | **359** |
+| Jul | 2.804 | **697** |
+| Ago | 714 | **254** |
+
+\* *Abr/Mai usam o fallback de prova-positiva (não têm `answered_at` histórico).*
+
+**Impacto por SDR (agosto, % de conectadas):** Guilherme 29%→~9%, Ismael 30%→~8%,
+Matheus 27%→~5%, João 26%→~5%. Número mais baixo por definição — só conversa real
+de ≥50s; o balde de caixa postal saiu.
+
+⚠️ **Consequência operacional:** com conexão em 5-9% e meta de 17%, o card fica
+sempre abaixo da meta. Provavelmente a meta de conexão precisa ser recalibrada no
+painel para refletir a nova definição.
