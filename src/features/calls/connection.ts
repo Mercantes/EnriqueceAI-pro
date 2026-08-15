@@ -31,11 +31,12 @@
 import type { CallDisposition, CallStatus } from './types';
 
 /**
- * Piso de duração que, sozinho, comprova conexão. Igual ao usado pelo
- * warehouse do Sales Hub (`status='significant' OR duration_seconds>=30`),
- * para que o número do app e o do BI partam da mesma base.
+ * Piso de duração de conversa para uma ligação contar como CONECTADA (14/ago/2026).
+ * Decisão de negócio da V4: "conectada = falou de verdade com o lead", e isso é
+ * uma ligação atendida de pelo menos 50s. Abaixo disso, o atendimento é
+ * predominantemente caixa postal/secretária ou "alô?"+desligou (ver abaixo).
  */
-export const CONNECTED_MIN_DURATION_SECONDS = 30;
+export const CONNECTED_MIN_DURATION_SECONDS = 50;
 
 export interface CallConnectionSignals {
   status: CallStatus;
@@ -66,68 +67,53 @@ export interface CallConnectionSignals {
 }
 
 /**
- * A ligação alcançou a pessoa do outro lado — regra "answered-first".
+ * A ligação foi uma CONVERSA real com o lead — regra "answered + piso de 50s".
  *
- * ORDEM DE PRECEDÊNCIA (a fonte de verdade vem primeiro):
- *  1. `answered_at` — o provedor confirmou channel-answer. Sinal FORTE e direto;
- *     é o que o BI do Sales Hub adotou como fonte de verdade de "atendida".
- *     Cobre 100% das conexões nos ramais com webhook saudável (jul/2026:
- *     `answered_at` explica ~99,7% das conectadas; ver PR).
- *  2. `significant` — salvaguarda qualitativa. Só ADICIONA linhas que não têm
- *     `answered_at` (REST/legado); mantida para garantir a invariante
- *     `significant ⊆ conectadas`. NÃO é atingida pelo bug de escrita — esse bug
- *     produz `not_significant` em não-atendimentos, nunca `significant`.
- *  3. proxy de ramal-sem-webhook — `NORMAL_CLEARING` + gravação + duração >= 30s.
- *     Para ramais cujo `answered_at` nunca chega (ex. 1042/1045, defeito da
- *     API4COM que não emite channel-answer), esta é a ÚNICA evidência de conversa
- *     — mas EXIGE prova positiva: encerramento normal de chamada atendida
- *     (`NORMAL_CLEARING`) + gravação de áudio + duração real. Assim resgata a
- *     conversa genuína sem readmitir o fracasso de discagem.
+ * REGRA (14/ago/2026): conectada = NÃO-voicemail  E  `answered_at` presente
+ * (o provedor confirmou channel-answer)  E  duração >= 50s.
  *
- * POR QUE A DURAÇÃO CRUA (>= 30s) SOZINHA FOI REMOVIDA (ago/2026)
+ * POR QUE `answered_at` SOZINHO NÃO BASTA (o que esta versão corrige)
  *
- * A regra anterior contava QUALQUER ligação com duração >= 30s como conectada.
- * Os dados de produção provaram que isso inflava a conexão de TODOS os SDRs: a
- * operadora deixa "tocando" 30-500s a gravação de aviso em não-atendimentos
- * (NUMBER_CHANGED, ORIGINATOR_CANCEL, UNALLOCATED_NUMBER, ...), todos com
- * `answered_at` nulo, `status='not_connected'` e duração alta. Em agosto isso
- * somava ~570 falsas conexões na org — e nem "salvava" o ramal sem webhook
- * (Giovanni/1042 tinha 197 dessas, `not_connected`, só 7 com gravação). O
- * separador confiável é a CAUSA de encerramento: conversa real termina em
- * `NORMAL_CLEARING`; discagem falha, não.
+ * A regra anterior contava QUALQUER ligação com `answered_at` como conectada.
+ * Depois que os webhooks de todos os ramais voltaram a emitir `channel-answer`
+ * (incl. 1042/1045), ficou provado que a API4COM dispara o answer também quando
+ * a CAIXA POSTAL / SECRETÁRIA / gravação de operadora ATENDE a linha — não um
+ * humano. Evidência (ago/2026): 41% das "conectadas" eram atendimentos de <10s,
+ * com pico em 0-5s; 21 ligações para número inexistente (UNALLOCATED_NUMBER, 0s)
+ * vinham com `answered_at`; e as transcrições dos curtos são operadora/caixa
+ * postal ("sua ligação foi encaminhada", "este número mudou", "verifique o
+ * número discado"). O piso de 50s remove esse balde de máquina: o conjunto que
+ * sobra é 100% `NORMAL_CLEARING`/`FINISHED` com média de ~180s — conversa de fato.
  *
- * `not_significant` continua deliberadamente FORA: de não-atendimento tem
- * `answered_at` nulo, causa != NORMAL_CLEARING e/ou sem gravação, então nunca
- * dispara nenhum dos três sinais.
+ * `sdr_disposition='voicemail'` continua excluído ANTES de tudo (o SDR confirmou
+ * a caixa postal no atendimento longo que a máquina segurou).
  *
- * NOTA: os sinais 2 e 3 são salvaguardas para dados sem `answered_at`. Quando o
- * webhook cobrir todos os ramais (resolvido o channel-answer do 1042/1045), a
- * regra pode colapsar em `answered_at` puro — hoje isso cegaria os ramais sem
- * webhook.
+ * TRADE-OFFS ASSUMIDOS (decisão de negócio da V4 — "50s pra tudo"):
+ *  - Exige `answered_at`: um ramal cujo webhook pare de emitir channel-answer
+ *    fica sem conexão medida (hoje todos emitem; ver relatório API4COM). O proxy
+ *    de "ramal-sem-webhook" (NORMAL_CLEARING+gravação) foi removido junto.
+ *  - `significant` (status, piso de 30s da org) DEIXA de ser, sozinho, sinal de
+ *    conexão. Logo `significant ⊆ conectadas` não vale mais para 30-49s (poucas
+ *    linhas); é intencional — "conectada" agora é mais estrita que "significativa".
+ *
+ * `hangup_cause` / `recording_url` não são mais lidos aqui (a regra é answered +
+ * duração), mas seguem no payload/colunas para paridade com o BI e diagnóstico.
  */
 export function isConnectedCall(call: CallConnectionSignals): boolean {
-  // Override do SDR (fase 2 da taxa de conexão): caixa postal/secretária. A
-  // telefonia marca `answered_at` (a máquina atendeu), mas não houve humano — o
-  // SDR confirmou via `voicemail`. Vem ANTES de tudo para corrigir o único
-  // falso-positivo que sobrava no lado "answered".
   if (call.sdr_disposition === 'voicemail') return false;
-  if (call.answered_at) return true;
-  if (call.status === 'significant') return true;
-  // Proxy sem-webhook: prova positiva de conversa, não duração crua (ver acima).
-  return (
-    call.hangup_cause === 'NORMAL_CLEARING' &&
-    Boolean(call.recording_url) &&
-    call.duration_seconds >= CONNECTED_MIN_DURATION_SECONDS
-  );
+  return Boolean(call.answered_at) && call.duration_seconds >= CONNECTED_MIN_DURATION_SECONDS;
 }
 
 /**
  * Conversa relevante — o bucket qualitativo que o classificador atribui quando
- * a duração passa do limite significativo configurado pela org.
+ * a duração passa do limite significativo configurado pela org (30s default).
  *
- * Sempre um SUBCONJUNTO de `isConnectedCall`. Antes deste módulo o Painel de
- * Ligações calculava `significant = connected`, então os cards "Taxa de
- * Conexão" e "Taxa de Significativas" exibiam sempre o mesmo número.
+ * NOTA: com o piso de conexão em 50s (14/ago), `significant` NÃO é mais um
+ * subconjunto estrito de `isConnectedCall` — uma conversa de 30-49s pode ser
+ * `significant` sem ser "conectada". São poucas linhas (a maioria das
+ * significativas passa de 50s), mas a Taxa de Significativas pode, em tese,
+ * ficar marginalmente acima da Taxa de Conexão. É esperado, dado o critério de
+ * negócio "conectada = conversa de pelo menos 50s".
  */
 export function isSignificantCall(call: Pick<CallConnectionSignals, 'status'>): boolean {
   return call.status === 'significant';
