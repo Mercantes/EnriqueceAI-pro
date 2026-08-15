@@ -16,6 +16,7 @@ Reformulação do **formulário público de feedback do closer** (acessado por t
 | #275 | `9698d09` | gestor volta a receber TODO feedback do closer (alerta × informativo) |
 | #292 | `705e579` | pergunta dedicada "O decisor estava na call?" de volta + métrica prioriza campo explícito |
 | #320 | `5b1451c` | enriquece o e-mail de feedback (SDR + gestor): decisor, chance de fechar, data, badge, botão Ver lead |
+| #330 | `158fac9` | Observações obrigatória quando Realizada (descrever a call) + placeholder guiado |
 
 ---
 
@@ -126,6 +127,15 @@ Gestor apontou que o e-mail estava "pobrinho". ⭐ **Mesmo drift do #292 mordend
 - **Fonte ÚNICA** para os dois e-mails (SDR + gestor): `buildFeedbackDetailsHtml` + `buildLeadButtonHtml` (`route.ts`) — extraída justamente para não voltarem a divergir (a raiz do problema era a duplicação).
 - Adiciona: **badge colorido** do resultado, **data da reunião** (`meeting_starts_at`, BRT), **"O decisor estava na call? Sim/Não"**, **"Chance de fechar"** (agora também no e-mail do gestor), **botão "Ver lead na plataforma"** com link real. Observações **escapadas** (anti-injeção de HTML). `decisor_presente` threaded até `notifySdr`/`notifyManagers`.
 - ⚙️ **Nota de processo:** ambiente local resetou p/ o branch inicial da sessão; PR feito via **worktree isolado** em `origin/main` (patch do route.ts) para não arrastar 6 arquivos alheios do working tree.
+
+## Observações obrigatória em Realizada (#330 — `158fac9`)
+
+Gestor viu um feedback "Bateu" sem observação e pediu para tornar o campo **obrigatório** — o closer deve descrever a call (ex.: se o lead entrou pelo **computador ou celular**, comportamento, objeções, próximos passos). Diagnóstico prévio (30 dias): de 104 respondidos, **89 com obs útil, 13 em branco, 2 lixo** — não era bug, era campo opcional pouco preenchido.
+
+- **Obrigatório só em "Realizada"** (só aí há call a descrever); No-show/Remarcada seguem opcionais.
+- `FeedbackForm.tsx`: rótulo com `*` quando Realizada; **placeholder guiado**; bloqueia envio (botão desabilitado + erro "Escreva uma observação sobre a reunião."); textarea 3 linhas.
+- `route.ts`: validação server-side espelha o cliente (`meeting_done` sem obs → 400).
+- Validado ponta a ponta (sem obs trava; com obs grava o `comment`). typecheck/lint verdes.
 
 ## Fora de escopo (intactos)
 
