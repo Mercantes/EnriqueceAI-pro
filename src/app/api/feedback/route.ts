@@ -178,6 +178,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Informe se o decisor estava na call' }, { status: 400 });
     }
 
+    // Observações são obrigatórias quando a reunião aconteceu — o closer descreve
+    // a call (ex.: se o lead entrou pelo computador ou celular, objeções etc.).
+    if (needsMeetingFields && (typeof comment !== 'string' || !comment.trim())) {
+      return NextResponse.json({ error: 'Escreva uma observação sobre a reunião' }, { status: 400 });
+    }
+
     // Normaliza divergências para um array validado (ou nulo), espelhando os três
     // constraints do banco para devolver erro amigável em vez de 500.
     let divergenciasClean: string[] | null = null;

@@ -84,6 +84,11 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
       setError('Marque ao menos um item que não conferiu.');
       return;
     }
+    // Observações são obrigatórias quando a reunião aconteceu (descrever a call).
+    if (isMeetingDone && !comment.trim()) {
+      setError('Escreva uma observação sobre a reunião.');
+      return;
+    }
 
     setSubmitting(true);
     setError('');
@@ -128,7 +133,7 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
     );
   }
 
-  const submitDisabled = submitting || !result || (isMeetingDone && (!qualificacao || decisorPresente === null));
+  const submitDisabled = submitting || !result || (isMeetingDone && (!qualificacao || decisorPresente === null || !comment.trim()));
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -241,16 +246,22 @@ export function FeedbackForm({ token }: FeedbackFormProps) {
         </div>
       )}
 
-      {/* 5. Observações — opcional */}
+      {/* 5. Observações — obrigatória quando Realizada (descreve a call);
+          opcional em No-show/Remarcada. */}
       <div>
         <label className="block text-sm font-semibold text-[var(--foreground)] mb-2">
-          Observações <span className="text-[var(--muted-foreground)] font-normal">(opcional)</span>
+          Observações{' '}
+          {isMeetingDone
+            ? <span className="text-primary">*</span>
+            : <span className="text-[var(--muted-foreground)] font-normal">(opcional)</span>}
         </label>
         <textarea
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="O que o SDR precisa saber para a próxima"
-          rows={2}
+          onChange={(e) => { setComment(e.target.value); setError(''); }}
+          placeholder={isMeetingDone
+            ? 'Como foi a call? Ex.: o lead entrou pelo computador ou pelo celular, comportamento, objeções, próximos passos.'
+            : 'O que o SDR precisa saber para a próxima'}
+          rows={3}
           className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-y"
         />
       </div>
