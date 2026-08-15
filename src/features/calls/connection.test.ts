@@ -3,39 +3,34 @@ import { describe, expect, it } from 'vitest';
 import { CONNECTED_MIN_DURATION_SECONDS, isConnectedCall, isSignificantCall } from './connection';
 
 describe('isConnectedCall', () => {
-  it('conta como conectada quando a conversa foi significativa', () => {
-    expect(isConnectedCall({ status: 'significant', duration_seconds: 5, answered_at: null })).toBe(true);
-  });
-
-  it('conta como conectada quando o provedor confirmou o atendimento', () => {
-    // answered_at é o sinal mais forte — vale mesmo em ligação curta.
+  it('conta como conectada: atendida (answered_at) E duração >= piso de 50s', () => {
     expect(
-      isConnectedCall({ status: 'not_significant', duration_seconds: 8, answered_at: '2026-07-22T12:00:00Z' }),
+      isConnectedCall({ status: 'significant', duration_seconds: 120, answered_at: '2026-08-14T12:00:00Z' }),
     ).toBe(true);
   });
 
-  it('proxy sem-webhook: conta com encerramento normal + gravação + duração >= piso', () => {
-    // Ramal sem channel-answer (ex. 1042): resgata a conversa genuína só com
-    // prova positiva — NORMAL_CLEARING + gravação + duração real.
+  it('conta no piso exato de 50s', () => {
     expect(
       isConnectedCall({
-        status: 'not_connected',
+        status: 'not_significant',
         duration_seconds: CONNECTED_MIN_DURATION_SECONDS,
-        answered_at: null,
-        hangup_cause: 'NORMAL_CLEARING',
-        recording_url: 'https://rec/1.mp3',
+        answered_at: '2026-08-14T12:00:00Z',
       }),
     ).toBe(true);
   });
 
-  it('NÃO conta duração crua sem prova positiva (bug de inflação removido)', () => {
-    // A regra antiga contava QUALQUER duração >= 30s. A operadora deixa a gravação
-    // de aviso tocando 30-500s em não-atendimentos — todos com answered_at nulo.
-    // Sem NORMAL_CLEARING e/ou sem gravação, não é conexão.
-    expect(
-      isConnectedCall({ status: 'not_connected', duration_seconds: 182, answered_at: null }),
-    ).toBe(false);
-    // O caso exato que inflava: NUMBER_CHANGED com gravação da operadora tocando.
+  it('NÃO conta atendimento curto (< 50s) — caixa postal/secretária/"alô"+desligou', () => {
+    // O cerne da regra dos 50s: a API4COM dispara answered_at quando a MÁQUINA
+    // atende. Um atendimento de poucos segundos é caixa postal, não conversa.
+    for (const dur of [1, 4, 9, 20, 39, 49]) {
+      expect(
+        isConnectedCall({ status: 'not_significant', duration_seconds: dur, answered_at: '2026-08-14T12:00:00Z' }),
+      ).toBe(false);
+    }
+  });
+
+  it('NÃO conta sem answered_at, mesmo com duração alta (gravação de aviso da operadora)', () => {
+    // NUMBER_CHANGED etc.: a operadora deixa o aviso tocando 30-500s, sem answer.
     expect(
       isConnectedCall({
         status: 'not_connected',
@@ -45,34 +40,11 @@ describe('isConnectedCall', () => {
         recording_url: 'https://rec/aviso.mp3',
       }),
     ).toBe(false);
-    // NORMAL_CLEARING mas SEM gravação também não basta (linha não abriu áudio).
+    // Mesmo NORMAL_CLEARING longo sem answered_at não conta (regra exige answer).
     expect(
       isConnectedCall({
         status: 'not_connected',
-        duration_seconds: 90,
-        answered_at: null,
-        hangup_cause: 'NORMAL_CLEARING',
-        recording_url: null,
-      }),
-    ).toBe(false);
-  });
-
-  it('NÃO conta como conectada uma not_significant curta sem answered_at', () => {
-    // Regressão do bug de escrita do pipeline API4COM: 6.221 linhas em 90 dias
-    // com hangup_cause de não-atendimento herdaram status not_significant.
-    expect(
-      isConnectedCall({ status: 'not_significant', duration_seconds: 0, answered_at: null }),
-    ).toBe(false);
-    expect(
-      isConnectedCall({ status: 'not_significant', duration_seconds: 2, answered_at: null }),
-    ).toBe(false);
-  });
-
-  it('proxy não conta logo abaixo do piso de duração', () => {
-    expect(
-      isConnectedCall({
-        status: 'not_connected',
-        duration_seconds: CONNECTED_MIN_DURATION_SECONDS - 1,
+        duration_seconds: 200,
         answered_at: null,
         hangup_cause: 'NORMAL_CLEARING',
         recording_url: 'https://rec/1.mp3',
@@ -84,14 +56,12 @@ describe('isConnectedCall', () => {
     expect(isConnectedCall({ status: 'no_contact', duration_seconds: 0 })).toBe(false);
   });
 
-  it('NÃO conta caixa postal/secretária confirmada pelo SDR, mesmo com answered_at', () => {
-    // Fase 2: voicemail é o falso-positivo do lado "answered" — a linha atende
-    // (answered_at + duração), mas era máquina. O desfecho do SDR sobrepõe.
+  it('NÃO conta caixa postal confirmada pelo SDR, mesmo com answered_at + duração alta', () => {
     expect(
       isConnectedCall({
         status: 'significant',
-        duration_seconds: 39,
-        answered_at: '2026-08-03T17:00:00Z',
+        duration_seconds: 120,
+        answered_at: '2026-08-14T12:00:00Z',
         sdr_disposition: 'voicemail',
       }),
     ).toBe(false);
@@ -101,8 +71,8 @@ describe('isConnectedCall', () => {
     expect(
       isConnectedCall({
         status: 'significant',
-        duration_seconds: 39,
-        answered_at: '2026-08-03T17:00:00Z',
+        duration_seconds: 120,
+        answered_at: '2026-08-14T12:00:00Z',
         sdr_disposition: 'relevant_conversation',
       }),
     ).toBe(true);
@@ -117,11 +87,15 @@ describe('isSignificantCall', () => {
     }
   });
 
-  it('é sempre um subconjunto de conectadas', () => {
-    // Guarda contra a regressão em que significantRate era literalmente
-    // atribuído a connectionRate, exibindo dois cards idênticos.
-    const call = { status: 'significant', duration_seconds: 1, answered_at: null } as const;
+  it('significant de 30-49s NÃO é mais garantidamente conectada (piso de conexão em 50s)', () => {
+    // Com o piso de 50s, "conectada" é mais estrita que "significativa": uma
+    // conversa relevante de 40s é significant mas não conta como conexão.
+    const call = {
+      status: 'significant' as const,
+      duration_seconds: 40,
+      answered_at: '2026-08-14T12:00:00Z',
+    };
     expect(isSignificantCall(call)).toBe(true);
-    expect(isConnectedCall(call)).toBe(true);
+    expect(isConnectedCall(call)).toBe(false);
   });
 });
