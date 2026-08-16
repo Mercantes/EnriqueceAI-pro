@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, FileWarning, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileWarning, XCircle } from 'lucide-react';
 import Link from 'next/link';
 
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
@@ -64,6 +64,39 @@ export function ImportReport({ result, onReset }: ImportReportProps) {
           </div>
         </AlertDescription>
       </Alert>
+
+      {result.warnings.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="flex items-center gap-1.5 text-sm font-medium">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            Importados com ressalva ({result.warnings.length})
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Estes leads entraram na base. O CNPJ é opcional — quando ele vem inválido, o lead é
+            criado sem CNPJ e fica de fora do enriquecimento automático.
+          </p>
+          <div className="max-h-48 overflow-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">Linha</TableHead>
+                  <TableHead>Ressalva</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {result.warnings.map((warning, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{warning.row_number}</TableCell>
+                    <TableCell className="text-amber-700 dark:text-amber-400">
+                      {warning.error_message}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       {result.errors.length > 0 && (
         <div className="space-y-2">

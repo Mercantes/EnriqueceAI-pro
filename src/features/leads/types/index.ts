@@ -120,12 +120,17 @@ export interface LeadImportRow {
   total_rows: number;
   processed_rows: number;
   success_count: number;
+  /** Apenas falhas reais — duplicados são contados em `duplicate_count`. */
   error_count: number;
+  duplicate_count: number;
   status: ImportStatus;
   lead_source: string | null;
   created_by: string | null;
   created_at: string;
 }
+
+/** error = linha perdida | duplicate = lead já existia | warning = importado com ressalva. */
+export type LeadImportRowKind = 'error' | 'duplicate' | 'warning';
 
 // Lead import error row matching database table
 export interface LeadImportErrorRow {
@@ -134,6 +139,7 @@ export interface LeadImportErrorRow {
   row_number: number;
   cnpj: string | null;
   error_message: string;
+  kind: LeadImportRowKind;
   created_at: string;
 }
 

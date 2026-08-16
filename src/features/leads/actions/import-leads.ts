@@ -10,6 +10,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
 import { createNotification } from '@/features/notifications/services/notification.service';
+import { escapeLikePattern } from '@/lib/utils/like';
 import { exceedsLimit, remainingSlots } from '@/lib/utils/plan-limits';
 
 import type { LeadImportErrorRow } from '../types';
@@ -21,9 +22,12 @@ export interface ImportLeadsResult {
   importId: string;
   totalRows: number;
   successCount: number;
+  /** Só falhas reais — duplicados têm contador próprio. */
   errorCount: number;
   duplicateCount: number;
   errors: LeadImportErrorRow[];
+  /** Linhas importadas com ressalva (ex.: CNPJ inválido ignorado). */
+  warnings: LeadImportErrorRow[];
 }
 
 export async function importLeads(formData: FormData): Promise<ActionResult<ImportLeadsResult>> {
@@ -136,7 +140,39 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   let successCount = 0;
   let duplicateCount = 0;
   const importErrors: LeadImportErrorRow[] = [];
+  const importWarnings: LeadImportErrorRow[] = [];
   const importedLeadIds: string[] = [];
+
+  // Toda linha não-importada (ou importada com ressalva) vira uma linha em
+  // lead_import_errors classificada por `kind`. Só `error` conta como erro:
+  // duplicado é resultado esperado de re-importação e antes inflava o
+  // error_count, fazendo um arquivo só de duplicatas parecer um desastre.
+  const recordRow = async (
+    kind: 'error' | 'duplicate' | 'warning',
+    rowNumber: number,
+    cnpj: string | null,
+    message: string,
+  ) => {
+    await from(supabase, 'lead_import_errors').insert({
+      import_id: importId,
+      row_number: rowNumber,
+      cnpj,
+      error_message: message,
+      kind,
+    } as Record<string, unknown>);
+
+    const entry: LeadImportErrorRow = {
+      id: '',
+      import_id: importId,
+      row_number: rowNumber,
+      cnpj,
+      error_message: message,
+      kind,
+      created_at: new Date().toISOString(),
+    };
+    if (kind === 'error') importErrors.push(entry);
+    else if (kind === 'warning') importWarnings.push(entry);
+  };
 
   // SDR auto-assign: when an SDR imports leads, auto-assign to themselves
   const autoAssignTo = role === 'sdr' ? userId : null;
@@ -187,10 +223,13 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       let existing: { id: string; deleted_at: string | null } | null = null;
 
       if (row.email) {
+        // escapeLikePattern: `%`/`_` no e-mail viram wildcard no ILIKE e
+        // casariam com outro lead (`joao_silva@` ≡ `joaoXsilva@`), descartando
+        // o lead novo como falso duplicado.
         const { data } = (await from(dupClient, 'leads')
           .select('id, deleted_at')
           .eq('org_id', orgId)
-          .ilike('email', row.email)
+          .ilike('email', escapeLikePattern(row.email))
           .limit(1)
           .maybeSingle()) as { data: { id: string; deleted_at: string | null } | null };
         existing = data;
@@ -204,7 +243,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         const { data } = (await from(dupClient, 'leads')
           .select('id, deleted_at')
           .eq('org_id', orgId)
-          .ilike('razao_social', row.razao_social)
+          .ilike('razao_social', escapeLikePattern(row.razao_social))
           .eq('telefone', row.telefone)
           .limit(1)
           .maybeSingle()) as { data: { id: string; deleted_at: string | null } | null };
@@ -245,6 +284,12 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
         }
 
         duplicateCount++;
+        await recordRow(
+          'duplicate',
+          row.rowNumber,
+          row.cnpj,
+          `Lead já existe nesta organização (casou por ${row.email ? 'e-mail' : 'razão social + telefone'})`,
+        );
         continue;
       }
     }
@@ -307,7 +352,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
           const { data } = (await from(dupClient, 'leads')
             .select('id, deleted_at, status')
             .eq('org_id', orgId)
-            .ilike('email', row.email)
+            .ilike('email', escapeLikePattern(row.email))
             .limit(1)
             .maybeSingle()) as { data: { id: string; deleted_at: string | null; status: string } | null };
           existingLead = data;
@@ -369,25 +414,13 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       const dupReason = alreadyExistsStatus
         ? `${dupField} duplicado (lead já existe, status=${alreadyExistsStatus})`
         : `${dupField} duplicado nesta organização`;
-      const errorEntry = {
-        id: '',
-        import_id: importId,
-        row_number: row.rowNumber,
-        cnpj: row.cnpj,
-        error_message: isDuplicate ? dupReason : (insertError.message ?? 'Erro ao inserir'),
-        created_at: new Date().toISOString(),
-      };
 
-      // Record error in database
-      await from(supabase, 'lead_import_errors')
-        .insert({
-          import_id: importId,
-          row_number: row.rowNumber,
-          cnpj: row.cnpj,
-          error_message: errorEntry.error_message,
-        } as Record<string, unknown>);
-
-      importErrors.push(errorEntry);
+      await recordRow(
+        isDuplicate ? 'duplicate' : 'error',
+        row.rowNumber,
+        row.cnpj,
+        isDuplicate ? dupReason : (insertError.message ?? 'Erro ao inserir'),
+      );
     } else {
       successCount++;
       if (insertedLead) importedLeadIds.push(insertedLead.id);
@@ -396,32 +429,26 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
   // Record parse validation errors
   for (const error of parsed.errors) {
-    await from(supabase, 'lead_import_errors')
-      .insert({
-        import_id: importId,
-        row_number: error.rowNumber,
-        cnpj: error.cnpj,
-        error_message: error.errorMessage,
-      } as Record<string, unknown>);
+    await recordRow('error', error.rowNumber, error.cnpj, error.errorMessage);
+  }
 
-    importErrors.push({
-      id: '',
-      import_id: importId,
-      row_number: error.rowNumber,
-      cnpj: error.cnpj,
-      error_message: error.errorMessage,
-      created_at: new Date().toISOString(),
-    });
+  // Record parse warnings — linhas que ENTRARAM, mas com ressalva (CNPJ
+  // inválido ignorado, zeros à esquerda restaurados). Ficam visíveis para o
+  // operador sem contaminar o contador de erros.
+  for (const warning of parsed.warnings) {
+    await recordRow('warning', warning.rowNumber, warning.cnpj, warning.message);
   }
 
   const totalErrorCount = importErrors.length;
 
-  // Update import record with final counts
+  // Update import record with final counts. `processed_rows` fica limitado a
+  // total_rows por causa do CHECK chk_imports_processed.
   await from(supabase, 'lead_imports')
     .update({
-      processed_rows: parsed.totalRows,
+      processed_rows: Math.min(parsed.totalRows, successCount + duplicateCount + totalErrorCount),
       success_count: successCount,
       error_count: totalErrorCount,
+      duplicate_count: duplicateCount,
       status: 'completed',
     } as Record<string, unknown>)
     .eq('id', importId);
@@ -461,6 +488,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       errorCount: totalErrorCount,
       duplicateCount,
       errors: importErrors,
+      warnings: importWarnings,
     },
   };
   } catch (err) {
@@ -471,9 +499,10 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
     console.error(`[importLeads] Aborted import=${importId} after ${successCount} successes:`, message);
     await from(supabase, 'lead_imports')
       .update({
-        processed_rows: successCount + importErrors.length,
+        processed_rows: Math.min(parsed.totalRows, successCount + duplicateCount + importErrors.length),
         success_count: successCount,
         error_count: importErrors.length,
+        duplicate_count: duplicateCount,
         status: 'failed',
       } as Record<string, unknown>)
       .eq('id', importId);

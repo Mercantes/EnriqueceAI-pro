@@ -53,10 +53,17 @@ async function handle(request: Request) {
 
     const { count: errCount } = (await from(supabase, 'lead_import_errors')
       .select('id', { count: 'exact', head: true })
-      .eq('import_id', imp.id)) as { count: number | null };
+      .eq('import_id', imp.id)
+      .eq('kind', 'error')) as { count: number | null };
+
+    const { count: dupCount } = (await from(supabase, 'lead_import_errors')
+      .select('id', { count: 'exact', head: true })
+      .eq('import_id', imp.id)
+      .eq('kind', 'duplicate')) as { count: number | null };
 
     const successCount = leadsInserted ?? 0;
     const errorCount = errCount ?? 0;
+    const duplicateCount = dupCount ?? 0;
     // 'failed' when nothing landed, 'completed' when at least one lead did.
     // The UI distinguishes the two and the manager benefits from the split.
     const finalStatus = successCount > 0 ? 'completed' : 'failed';
@@ -65,7 +72,9 @@ async function handle(request: Request) {
       status: finalStatus,
       success_count: successCount,
       error_count: errorCount,
-      processed_rows: successCount + errorCount,
+      duplicate_count: duplicateCount,
+      // O CHECK chk_imports_processed exige processed_rows <= total_rows.
+      processed_rows: Math.min(imp.total_rows, successCount + errorCount + duplicateCount),
     } as Record<string, unknown>).eq('id', imp.id);
 
     summary.push({ id: imp.id, success: successCount, errors: errorCount, final_status: finalStatus });

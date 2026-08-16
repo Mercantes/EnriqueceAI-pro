@@ -3,8 +3,10 @@
  *
  * CNPJ is no longer required — a row is accepted as long as it carries some
  * identifying information (CNPJ, email, razao_social, or telefone). Rows with
- * a CNPJ still validate the checksum; rows without CNPJ rely on the import
- * action's composite dedup (CNPJ → email → razao_social+telefone).
+ * a CNPJ still validate the checksum, but a failed checksum no longer discards
+ * the row: the lead is imported without CNPJ and the operator gets a warning.
+ * Dedup then relies on the import action's composite fallback (CNPJ → email →
+ * razao_social+telefone).
  */
 
 import { isValidCnpj, stripCnpj } from './cnpj';
@@ -12,6 +14,8 @@ import { isValidCnpj, stripCnpj } from './cnpj';
 export interface CsvParseResult {
   rows: ParsedRow[];
   errors: ParseError[];
+  /** Non-fatal issues — the row WAS imported, but something was adjusted or dropped. */
+  warnings: ParseWarning[];
   totalRows: number;
 }
 
@@ -45,6 +49,12 @@ export interface ParseError {
   errorMessage: string;
 }
 
+export interface ParseWarning {
+  rowNumber: number;
+  cnpj: string | null;
+  message: string;
+}
+
 const MAX_ROWS = 1000;
 const CNPJ_COLUMN_NAMES = ['cnpj', 'cnpj_cpf', 'documento', 'document', 'cpf_cnpj'];
 
@@ -56,7 +66,7 @@ export function parseCsv(content: string): CsvParseResult {
   // byte, which would otherwise contaminate the first header.
   const lines = content.replace(/^﻿/, '').trim().split(/\r?\n/);
   if (lines.length < 2) {
-    return { rows: [], errors: [{ rowNumber: 0, cnpj: null, errorMessage: 'Arquivo vazio ou sem dados' }], totalRows: 0 };
+    return { rows: [], errors: [{ rowNumber: 0, cnpj: null, errorMessage: 'Arquivo vazio ou sem dados' }], warnings: [], totalRows: 0 };
   }
 
   const headerLine = lines[0]!;
@@ -65,13 +75,15 @@ export function parseCsv(content: string): CsvParseResult {
   // Detect CNPJ column by header name first.
   let cnpjIndex = headers.findIndex((h) => CNPJ_COLUMN_NAMES.includes(h));
 
-  // Fallback: detect by content (first column with 14-digit values) — only
-  // when the header didn't already give us one.
+  // Fallback: detect by content (first column with CNPJ-shaped values) — only
+  // when the header didn't already give us one. The 12-14 digit window (instead
+  // of exactly 14) catches spreadsheets that dropped leading zeros; phone
+  // numbers top out at 11 digits, so the window stays unambiguous.
   if (cnpjIndex === -1) {
     const firstDataRow = lines[1] ? parseRow(lines[1]) : [];
     cnpjIndex = firstDataRow.findIndex((cell) => {
       const stripped = stripCnpj(cell);
-      return stripped.length === 14 && /^\d+$/.test(stripped);
+      return stripped.length >= 12 && stripped.length <= 14 && /^\d+$/.test(stripped);
     });
   }
 
@@ -86,6 +98,7 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
     return {
       rows: [],
       errors: [{ rowNumber: 0, cnpj: null, errorMessage: `Limite de ${MAX_ROWS} linhas por importação excedido (${totalRows} linhas)` }],
+      warnings: [],
       totalRows,
     };
   }
@@ -195,12 +208,14 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
         cnpj: null,
         errorMessage: 'Nenhuma coluna identificável encontrada. Use ao menos uma de: cnpj, razao_social, email, telefone.',
       }],
+      warnings: [],
       totalRows,
     };
   }
 
   const rows: ParsedRow[] = [];
   const errors: ParseError[] = [];
+  const warnings: ParseWarning[] = [];
 
   for (let i = 0; i < dataLines.length; i++) {
     const line = dataLines[i]!;
@@ -212,17 +227,29 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
     const cellAt = (idx: number): string | undefined =>
       idx >= 0 ? cells[idx]?.trim() || undefined : undefined;
 
-    // CNPJ extraction: present + valid → keep; present + invalid → row-level
-    // error; absent → null (the row can still be valid if it has email/razao).
+    // CNPJ extraction. The CNPJ is an OPTIONAL enrichment key, never a gate:
+    //   - valid (after zero-padding)  → keep
+    //   - invalid                     → cnpj = null + warning; the row is still
+    //                                   imported if anything else identifies it
+    //   - absent                      → null
+    //
+    // Dropping the whole row on a bad checksum cost us 234 leads historically —
+    // 165 of them only because Excel/Sheets treated the CNPJ as a number and
+    // ate the leading zeros (12-13 digits). restoreCnpjPadding fixes those.
     const rawCnpj = cnpjIndex >= 0 ? (cells[cnpjIndex]?.trim() ?? '') : '';
     let cnpj: string | null = null;
+    let cnpjWarning: string | null = null;
     if (rawCnpj) {
       const stripped = stripCnpj(rawCnpj);
-      if (!isValidCnpj(stripped)) {
-        errors.push({ rowNumber, cnpj: rawCnpj, errorMessage: 'CNPJ inválido' });
-        continue;
+      const padded = restoreCnpjPadding(stripped);
+      if (isValidCnpj(padded)) {
+        cnpj = padded;
+        if (padded !== stripped) {
+          cnpjWarning = `CNPJ com zeros à esquerda restaurados (${stripped} → ${padded})`;
+        }
+      } else {
+        cnpjWarning = `CNPJ inválido (${rawCnpj}) — lead importado sem CNPJ, sem enriquecimento automático`;
       }
-      cnpj = stripped;
     }
 
     // Walk phone columns in score order; first non-empty cell wins as the
@@ -265,8 +292,20 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
 
     // At least one identifier is required so the row is dedupable downstream.
     if (!cnpj && !email && !razaoSocial && !telefone) {
-      errors.push({ rowNumber, cnpj: null, errorMessage: 'Linha sem identificação (CNPJ, email, razão social ou telefone)' });
+      errors.push({
+        rowNumber,
+        cnpj: rawCnpj || null,
+        errorMessage: rawCnpj
+          ? `CNPJ inválido (${rawCnpj}) e nenhum outro identificador (email, razão social ou telefone)`
+          : 'Linha sem identificação (CNPJ, email, razão social ou telefone)',
+      });
       continue;
+    }
+
+    // Only surfaced for rows that actually made it in — a warning on a row that
+    // failed anyway would just duplicate the error above.
+    if (cnpjWarning) {
+      warnings.push({ rowNumber, cnpj: cnpj ?? rawCnpj, message: cnpjWarning });
     }
 
     rows.push({
@@ -287,7 +326,17 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
     });
   }
 
-  return { rows, errors, totalRows };
+  return { rows, errors, warnings, totalRows };
+}
+
+/**
+ * Restores leading zeros eaten by spreadsheets that stored the CNPJ as a
+ * number ("01234567000190" → 1234567000190). Only 12-13 digit values are
+ * padded — anything shorter isn't a truncated CNPJ, it's a different field.
+ */
+function restoreCnpjPadding(digits: string): string {
+  if (digits.length >= 12 && digits.length < 14) return digits.padStart(14, '0');
+  return digits;
 }
 
 /**
