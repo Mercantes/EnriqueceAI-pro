@@ -40,14 +40,51 @@ describe('csv-parser', () => {
       expect(result.rows[0]?.cnpj).toBe('11222333000181');
     });
 
-    it('should report invalid CNPJs as errors', () => {
+    it('should reject invalid-CNPJ rows only when nothing else identifies them', () => {
+      // CNPJ-only file: a bad checksum leaves the row with zero identifiers,
+      // so it still fails — but the message says why.
       const csv = 'cnpj\n11222333000181\n00000000000000\n11222333000199';
       const result = parseCsv(csv);
 
       expect(result.rows).toHaveLength(1);
       expect(result.errors).toHaveLength(2);
-      expect(result.errors[0]?.errorMessage).toBe('CNPJ inválido');
+      expect(result.errors[0]?.errorMessage).toContain('CNPJ inválido');
+      expect(result.errors[0]?.errorMessage).toContain('nenhum outro identificador');
       expect(result.errors[0]?.rowNumber).toBe(3);
+    });
+
+    it('should import rows with invalid CNPJ when another identifier exists', () => {
+      // O CNPJ é chave de enriquecimento, não requisito de importação: checksum
+      // ruim vira lead sem CNPJ + aviso, em vez de linha descartada.
+      const csv = 'cnpj,razao_social,email\n11222333000199,Empresa Boa,contato@boa.com.br';
+      const result = parseCsv(csv);
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(result.rows[0]?.cnpj).toBeNull();
+      expect(result.rows[0]?.razao_social).toBe('Empresa Boa');
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]?.message).toContain('CNPJ inválido');
+      expect(result.warnings[0]?.rowNumber).toBe(2);
+    });
+
+    it('should restore leading zeros eaten by spreadsheets', () => {
+      // 01023456000130 salvo como número vira 1023456000130 (13 dígitos).
+      const csv = 'cnpj,razao_social\n1023456000130,Empresa Zero';
+      const result = parseCsv(csv);
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]?.cnpj).toBe('01023456000130');
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]?.message).toContain('zeros à esquerda');
+    });
+
+    it('should not warn when the CNPJ needed no padding', () => {
+      const csv = 'cnpj,razao_social\n11222333000181,Empresa Ok';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.cnpj).toBe('11222333000181');
+      expect(result.warnings).toHaveLength(0);
     });
 
     it('should accept rows with empty CNPJ when another identifier is present', () => {

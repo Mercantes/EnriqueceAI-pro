@@ -100,6 +100,7 @@ export function ImportListView({ result, leadSourceOptions }: ImportListViewProp
               <TableHead>Data</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="text-right">Importados</TableHead>
+              <TableHead className="text-right">Duplicados</TableHead>
               <TableHead className="text-right">Erros</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Origem</TableHead>
@@ -125,6 +126,15 @@ export function ImportListView({ result, leadSourceOptions }: ImportListViewProp
                     <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                       {row.success_count}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {row.duplicate_count > 0 ? (
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
+                        {row.duplicate_count}
+                      </Badge>
+                    ) : (
+                      <span className="text-[var(--muted-foreground)] dark:text-[var(--foreground)]">0</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.error_count > 0 ? (

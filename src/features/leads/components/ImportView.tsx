@@ -116,6 +116,7 @@ export function ImportView() {
           <CsvPreview
             rows={parseResult.rows}
             errorCount={parseResult.errors.length}
+            warnings={parseResult.warnings.map((w) => ({ rowNumber: w.rowNumber, message: w.message }))}
             totalRows={parseResult.totalRows}
           />
           <div className="flex gap-3">

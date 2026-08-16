@@ -16,10 +16,12 @@ import {
 interface CsvPreviewProps {
   rows: ParsedRow[];
   errorCount: number;
+  /** Linhas que serão importadas com ressalva (ex.: CNPJ inválido ignorado). */
+  warnings?: { rowNumber: number; message: string }[];
   totalRows: number;
 }
 
-export function CsvPreview({ rows, errorCount, totalRows }: CsvPreviewProps) {
+export function CsvPreview({ rows, errorCount, warnings = [], totalRows }: CsvPreviewProps) {
   const previewRows = rows.slice(0, 10);
   const withoutCnpj = rows.filter((r) => !r.cnpj).length;
 
@@ -38,6 +40,18 @@ export function CsvPreview({ rows, errorCount, totalRows }: CsvPreviewProps) {
           </span>
         )}
       </div>
+
+      {warnings.length > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          <strong>{warnings.length}</strong> {warnings.length === 1 ? 'linha' : 'linhas'} com ressalva no CNPJ — vão ser importadas assim mesmo:
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
+            {warnings.slice(0, 3).map((w) => (
+              <li key={w.rowNumber}>Linha {w.rowNumber}: {w.message}</li>
+            ))}
+          </ul>
+          {warnings.length > 3 && <p className="mt-1">…e mais {warnings.length - 3}.</p>}
+        </div>
+      )}
 
       {withoutCnpj > 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
