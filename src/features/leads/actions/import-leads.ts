@@ -14,9 +14,17 @@ import { escapeLikePattern } from '@/lib/utils/like';
 import { exceedsLimit, remainingSlots } from '@/lib/utils/plan-limits';
 
 import type { LeadImportErrorRow } from '../types';
+import type { ParsedRow } from '../utils/csv-parser';
 import { logLeadEventBulk } from './log-lead-event';
 import { normalizeOriginFields } from '../schemas/lead.schemas';
 import { parseCsv } from '../utils/csv-parser';
+import { decodeCsvFile } from '../utils/decode-csv';
+
+/**
+ * Linhas por bloco. 100 mantém a URL do `.in()` de dedup dentro do limite do
+ * PostgREST e o payload do INSERT em tamanho saudável.
+ */
+const IMPORT_CHUNK_SIZE = 100;
 
 export interface ImportLeadsResult {
   importId: string;
@@ -70,7 +78,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   }
 
   // Read file content
-  const content = await file.text();
+  const content = await decodeCsvFile(file);
   const parsed = parseCsv(content);
 
   // Check for parser-level errors (empty file, no CNPJ column, too many rows)
@@ -181,15 +189,13 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
   // violation, etc.) doesn't leave lead_imports stuck in 'processing' forever.
   // We've seen 2 stuck imports (852f11c4, 9b0967af) before this guard existed.
   try {
-  // Insert valid rows
-  for (const row of parsed.rows) {
+  const buildLeadPayload = (row: ParsedRow): Record<string, unknown> => {
     // Resolution order: operator dropdown → CSV column → DEFAULT_SOURCE.
     // Same rule for canal, but only the default fallback is named explicitly
     // — normalizeOriginFields will move sub-origens (Reativação, Apollo, etc.)
     // to canal automatically when they appear in the source slot.
     const resolvedSource = leadSource ?? row.lead_source ?? DEFAULT_SOURCE;
-    const resolvedCanal =
-      operatorPickedSource || row.lead_source ? null : DEFAULT_CANAL;
+    const resolvedCanal = operatorPickedSource || row.lead_source ? null : DEFAULT_CANAL;
     const normalized = normalizeOriginFields(resolvedSource, resolvedCanal);
 
     // Enrichment status reflects whether the CSV brought the decisor (contact
@@ -206,11 +212,39 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       : row.cnpj
         ? 'pending'
         : 'not_found';
-    const isEnriched = enrichmentStatus === 'enriched';
-    const socios = row.decisor
-      ? [{ nome: row.decisor, qualificacao: row.job_title ?? null }]
-      : null;
 
+    return {
+      org_id: orgId,
+      cnpj: row.cnpj,
+      status: 'new',
+      enrichment_status: enrichmentStatus,
+      enriched_at: enrichmentStatus === 'enriched' ? new Date().toISOString() : null,
+      razao_social: row.razao_social ?? null,
+      nome_fantasia: row.nome_fantasia ?? null,
+      telefone: row.telefone ?? null,
+      phones: row.phones ?? [],
+      email: row.email ?? null,
+      emails: row.emails ?? null,
+      socios: row.decisor ? [{ nome: row.decisor, qualificacao: row.job_title ?? null }] : null,
+      job_title: row.job_title ?? null,
+      website: row.website ?? null,
+      instagram: row.instagram ?? null,
+      linkedin: row.linkedin ?? null,
+      first_name: row.decisor ? row.decisor.split(' ')[0] ?? null : null,
+      last_name: row.decisor ? (row.decisor.split(' ').slice(1).join(' ') || null) : null,
+      lead_source: normalized.lead_source,
+      canal: normalized.canal,
+      created_by: userId,
+      assigned_to: autoAssignTo,
+      import_id: importId,
+    };
+  };
+
+  // Caminho linha-a-linha: 1 SELECT de dedup + 1 INSERT por linha, com todo o
+  // tratamento de restore/duplicata. Deixou de ser o caminho normal (agora é
+  // o lote, abaixo) e virou o fallback para quando o INSERT em lote falha —
+  // tipicamente uma unique violation que o pré-carregamento não previu.
+  const processRowIndividually = async (row: ParsedRow): Promise<void> => {
     // Pre-INSERT dedup for rows without CNPJ. The DB has a unique constraint
     // on (org_id, cnpj), so CNPJ-keyed rows are caught by the duplicate path
     // below. Rows without CNPJ have no DB-level constraint — without an
@@ -279,7 +313,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
           if (!restoreError && restored) {
             successCount++;
-            continue;
+            return;
           }
         }
 
@@ -290,36 +324,12 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
           row.cnpj,
           `Lead já existe nesta organização (casou por ${row.email ? 'e-mail' : 'razão social + telefone'})`,
         );
-        continue;
+        return;
       }
     }
 
     const { data: insertedLead, error: insertError } = (await from(supabase, 'leads')
-      .insert({
-        org_id: orgId,
-        cnpj: row.cnpj,
-        status: 'new',
-        enrichment_status: enrichmentStatus,
-        enriched_at: isEnriched ? new Date().toISOString() : null,
-        razao_social: row.razao_social ?? null,
-        nome_fantasia: row.nome_fantasia ?? null,
-        telefone: row.telefone ?? null,
-        phones: row.phones ?? [],
-        email: row.email ?? null,
-        emails: row.emails ?? null,
-        socios,
-        job_title: row.job_title ?? null,
-        website: row.website ?? null,
-        instagram: row.instagram ?? null,
-        linkedin: row.linkedin ?? null,
-        first_name: row.decisor ? row.decisor.split(' ')[0] ?? null : null,
-        last_name: row.decisor ? (row.decisor.split(' ').slice(1).join(' ') || null) : null,
-        lead_source: normalized.lead_source,
-        canal: normalized.canal,
-        created_by: userId,
-        assigned_to: autoAssignTo,
-        import_id: importId,
-      } as Record<string, unknown>)
+      .insert(buildLeadPayload(row))
       .select('id')
       .single()) as { data: { id: string } | null; error: { message?: string } | null };
 
@@ -401,7 +411,7 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
 
             if (!restoreError && restored) {
               successCount++;
-              continue;
+              return;
             }
           }
         }
@@ -425,7 +435,142 @@ export async function importLeads(formData: FormData): Promise<ActionResult<Impo
       successCount++;
       if (insertedLead) importedLeadIds.push(insertedLead.id);
     }
-  }
+  };
+
+  /**
+   * Caminho rápido. Antes eram 1-3 queries POR LINHA (dedup + insert), o que
+   * estourava o timeout da Server Action em arquivos grandes e deixava o
+   * import travado — a razão de existir o cron reap-stuck-imports. Agora cada
+   * bloco de 100 linhas custa 3 SELECTs de dedup + 1 INSERT: um arquivo de
+   * 1.000 linhas sai de ~2.500 queries para ~40.
+   *
+   * O que o lote NÃO tenta resolver sozinho cai em processRowIndividually:
+   * lead que já existe (restore tem regra própria) e INSERT em lote recusado
+   * pelo banco (o Postgres aborta o comando inteiro na primeira violação, e
+   * aí não dá para saber qual linha causou sem reprocessar).
+   */
+  const importRowsInChunks = async (rows: ParsedRow[]): Promise<void> => {
+    // Dedup DENTRO do próprio arquivo. Antes isso saía de graça: como cada
+    // INSERT era imediato, a 2ª ocorrência já encontrava a 1ª gravada. Com
+    // lote, as duas linhas iriam juntas no mesmo comando — precisa ser
+    // explícito.
+    const seenCnpj = new Set<string>();
+    const seenEmail = new Set<string>();
+    const seenRazaoPhone = new Set<string>();
+
+    const emailKeyOf = (row: ParsedRow) => row.email?.trim().toLowerCase() || null;
+    const razaoPhoneKeyOf = (row: ParsedRow) =>
+      row.razao_social && row.telefone
+        ? `${row.razao_social.trim().toLowerCase()}|${row.telefone.trim()}`
+        : null;
+
+    for (let offset = 0; offset < rows.length; offset += IMPORT_CHUNK_SIZE) {
+      const chunk = rows.slice(offset, offset + IMPORT_CHUNK_SIZE);
+
+      const cnpjs = [...new Set(chunk.map((r) => r.cnpj).filter((v): v is string => !!v))];
+      const emails = [...new Set(chunk.map(emailKeyOf).filter((v): v is string => !!v))];
+      const phones = [...new Set(chunk.map((r) => r.telefone).filter((v): v is string => !!v))];
+
+      const existingCnpj = new Set<string>();
+      const existingEmail = new Set<string>();
+      const existingRazaoPhone = new Set<string>();
+
+      // Service role pelos mesmos motivos do caminho individual: a checagem
+      // precisa enxergar a org inteira, como os índices únicos.
+      if (cnpjs.length > 0) {
+        const { data } = (await from(dupClient, 'leads')
+          .select('cnpj')
+          .eq('org_id', orgId)
+          .in('cnpj', cnpjs)) as { data: { cnpj: string | null }[] | null };
+        for (const r of data ?? []) if (r.cnpj) existingCnpj.add(r.cnpj);
+      }
+
+      if (emails.length > 0) {
+        // `.in()` compara byte a byte, então mandamos a forma do CSV e a
+        // minúscula. Uma caixa diferente das duas escapa daqui e é pega pelo
+        // índice único lower(email) no INSERT → fallback individual.
+        const variants = [...new Set([...emails, ...chunk.map((r) => r.email).filter((v): v is string => !!v)])];
+        const { data } = (await from(dupClient, 'leads')
+          .select('email')
+          .eq('org_id', orgId)
+          .in('email', variants)) as { data: { email: string | null }[] | null };
+        for (const r of data ?? []) if (r.email) existingEmail.add(r.email.toLowerCase());
+      }
+
+      if (phones.length > 0) {
+        const { data } = (await from(dupClient, 'leads')
+          .select('razao_social, telefone')
+          .eq('org_id', orgId)
+          .in('telefone', phones)) as { data: { razao_social: string | null; telefone: string | null }[] | null };
+        for (const r of data ?? []) {
+          if (r.razao_social && r.telefone) {
+            existingRazaoPhone.add(`${r.razao_social.trim().toLowerCase()}|${r.telefone.trim()}`);
+          }
+        }
+      }
+
+      const pending: Array<{ row: ParsedRow; payload: Record<string, unknown> }> = [];
+
+      for (const row of chunk) {
+        const emailKey = emailKeyOf(row);
+        const razaoPhoneKey = razaoPhoneKeyOf(row);
+
+        const repeatedInFile =
+          (row.cnpj && seenCnpj.has(row.cnpj)) ||
+          (emailKey && seenEmail.has(emailKey)) ||
+          (razaoPhoneKey && seenRazaoPhone.has(razaoPhoneKey));
+
+        if (repeatedInFile) {
+          duplicateCount++;
+          await recordRow('duplicate', row.rowNumber, row.cnpj, 'Linha repetida dentro do próprio arquivo');
+          continue;
+        }
+
+        if (row.cnpj) seenCnpj.add(row.cnpj);
+        if (emailKey) seenEmail.add(emailKey);
+        if (razaoPhoneKey) seenRazaoPhone.add(razaoPhoneKey);
+
+        const alreadyInBase =
+          (row.cnpj && existingCnpj.has(row.cnpj)) ||
+          (emailKey && existingEmail.has(emailKey)) ||
+          (razaoPhoneKey && existingRazaoPhone.has(razaoPhoneKey));
+
+        if (alreadyInBase) {
+          // Restore (soft-deleted/arquivado/desqualificado) tem regra própria
+          // e é minoria — vale pagar as queries individuais.
+          await processRowIndividually(row);
+          continue;
+        }
+
+        pending.push({ row, payload: buildLeadPayload(row) });
+      }
+
+      if (pending.length === 0) continue;
+
+      const { data: inserted, error: insertError } = (await from(supabase, 'leads')
+        .insert(pending.map((p) => p.payload))
+        .select('id')) as { data: { id: string }[] | null; error: { message?: string } | null };
+
+      if (!insertError && inserted) {
+        successCount += inserted.length;
+        importedLeadIds.push(...inserted.map((r) => r.id));
+        continue;
+      }
+
+      // O INSERT em lote é all-or-nothing: uma linha ruim derruba as 100. Sem
+      // saber qual foi, reprocessa o bloco no caminho individual, que isola a
+      // linha problemática e classifica o motivo certo.
+      console.warn(
+        `[importLeads] lote de ${pending.length} recusado (import=${importId}), reprocessando linha a linha:`,
+        insertError?.message,
+      );
+      for (const item of pending) {
+        await processRowIndividually(item.row);
+      }
+    }
+  };
+
+  await importRowsInChunks(parsed.rows);
 
   // Record parse validation errors
   for (const error of parsed.errors) {

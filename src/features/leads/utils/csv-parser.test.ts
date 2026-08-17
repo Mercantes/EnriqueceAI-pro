@@ -102,12 +102,24 @@ describe('csv-parser', () => {
     });
 
     it('should reject rows with no identifying field at all', () => {
-      const csv = 'cnpj,razao_social,email,telefone\n11222333000181,ok,,\n,,,';
+      // Linha com dado, mas nenhum identificador (só o cargo preenchido).
+      const csv = 'cnpj,razao_social,email,telefone,cargo\n11222333000181,ok,,,\n,,,,CEO';
       const result = parseCsv(csv);
 
       expect(result.rows).toHaveLength(1);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]?.errorMessage).toContain('sem identificação');
+    });
+
+    it('should ignore filler rows made only of delimiters', () => {
+      // Excel deixa ";;;" no fim do arquivo. Isso é ruído, não erro — antes
+      // virava "linha sem identificação" e sujava o relatório.
+      const csv = 'cnpj,razao_social\n11222333000181,ok\n,\n,';
+      const result = parseCsv(csv);
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(result.totalRows).toBe(1);
     });
 
     it('should return error for empty file', () => {
@@ -347,6 +359,53 @@ describe('csv-parser', () => {
 
       expect(result.rows[0]?.nome_fantasia).toBe('EmpFantasia');
       expect(result.rows[0]?.decisor).toBe('João Pessoa');
+    });
+  });
+
+  // Casos que o tokenizer artesanal errava e motivaram a troca por Papaparse.
+  describe('formatos de arquivo', () => {
+    it('mantém quebra de linha dentro de campo entre aspas', () => {
+      // Antes: o split por \n cortava o registro no meio e desalinhava TODAS
+      // as linhas seguintes do arquivo.
+      const csv =
+        'cnpj,razao_social,email\n' +
+        '11222333000181,"Empresa Alfa\nRua das Flores, 100",alfa@x.com\n' +
+        '45678901000175,Empresa Beta,beta@x.com';
+      const result = parseCsv(csv);
+
+      expect(result.rows).toHaveLength(2);
+      expect(result.rows[0]?.razao_social).toBe('Empresa Alfa\nRua das Flores, 100');
+      expect(result.rows[1]?.cnpj).toBe('45678901000175');
+      expect(result.rows[1]?.email).toBe('beta@x.com');
+    });
+
+    it('não quebra colunas com vírgula dentro de arquivo separado por ponto e vírgula', () => {
+      // "EMPRESA X, LTDA" num CSV `;` era fatiado porque o parser tratava `,`
+      // e `;` como delimitador ao mesmo tempo.
+      const csv =
+        'cnpj;razao_social;email\n' +
+        '11222333000181;EMPRESA X, LTDA;x@empresa.com.br';
+      const result = parseCsv(csv);
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]?.razao_social).toBe('EMPRESA X, LTDA');
+      expect(result.rows[0]?.email).toBe('x@empresa.com.br');
+    });
+
+    it('aceita arquivo separado por tabulação', () => {
+      const csv = 'cnpj\trazao_social\n11222333000181\tEmpresa Tab';
+      const result = parseCsv(csv);
+
+      expect(result.rows[0]?.razao_social).toBe('Empresa Tab');
+    });
+
+    it('remove o BOM do Excel sem contaminar o primeiro cabeçalho', () => {
+      const csv = '﻿cnpj,razao_social\n11222333000181,Empresa BOM';
+      const result = parseCsv(csv);
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]?.cnpj).toBe('11222333000181');
+      expect(result.rows[0]?.razao_social).toBe('Empresa BOM');
     });
   });
 });

@@ -9,6 +9,8 @@
  * razao_social+telefone).
  */
 
+import Papa from 'papaparse';
+
 import { isValidCnpj, stripCnpj } from './cnpj';
 
 export interface CsvParseResult {
@@ -62,15 +64,21 @@ const CNPJ_COLUMN_NAMES = ['cnpj', 'cnpj_cpf', 'documento', 'document', 'cpf_cnp
  * Parses a CSV string and extracts rows with at least one identifying field.
  */
 export function parseCsv(content: string): CsvParseResult {
-  // Strip UTF-8 BOM (﻿) — Excel and Google Sheets export it on the first
-  // byte, which would otherwise contaminate the first header.
-  const lines = content.replace(/^﻿/, '').trim().split(/\r?\n/);
-  if (lines.length < 2) {
+  // Papaparse detecta o delimitador por arquivo (`,`, `;`, tab, `|`) e respeita
+  // aspas — inclusive campos com quebra de linha dentro, que o tokenizer
+  // anterior (split por \n antes de olhar aspas) desalinhava do resto do
+  // arquivo. O BOM é removido pela própria lib.
+  const parsed = Papa.parse<string[]>(content.trim(), {
+    delimitersToGuess: [',', ';', '\t', '|'],
+    skipEmptyLines: 'greedy',
+  });
+
+  const records = parsed.data;
+  if (records.length < 2) {
     return { rows: [], errors: [{ rowNumber: 0, cnpj: null, errorMessage: 'Arquivo vazio ou sem dados' }], warnings: [], totalRows: 0 };
   }
 
-  const headerLine = lines[0]!;
-  const headers = parseRow(headerLine).map((h) => h.toLowerCase().trim());
+  const headers = (records[0] ?? []).map((h) => h.toLowerCase().trim());
 
   // Detect CNPJ column by header name first.
   let cnpjIndex = headers.findIndex((h) => CNPJ_COLUMN_NAMES.includes(h));
@@ -80,19 +88,19 @@ export function parseCsv(content: string): CsvParseResult {
   // of exactly 14) catches spreadsheets that dropped leading zeros; phone
   // numbers top out at 11 digits, so the window stays unambiguous.
   if (cnpjIndex === -1) {
-    const firstDataRow = lines[1] ? parseRow(lines[1]) : [];
+    const firstDataRow = records[1] ?? [];
     cnpjIndex = firstDataRow.findIndex((cell) => {
       const stripped = stripCnpj(cell);
       return stripped.length >= 12 && stripped.length <= 14 && /^\d+$/.test(stripped);
     });
   }
 
-  return processRows(lines, cnpjIndex, headers);
+  return processRows(records, cnpjIndex, headers);
 }
 
-function processRows(lines: string[], cnpjIndex: number, headers: string[]): CsvParseResult {
-  const dataLines = lines.slice(1);
-  const totalRows = dataLines.length;
+function processRows(records: string[][], cnpjIndex: number, headers: string[]): CsvParseResult {
+  const dataRecords = records.slice(1);
+  const totalRows = dataRecords.length;
 
   if (totalRows > MAX_ROWS) {
     return {
@@ -217,12 +225,15 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
   const errors: ParseError[] = [];
   const warnings: ParseWarning[] = [];
 
-  for (let i = 0; i < dataLines.length; i++) {
-    const line = dataLines[i]!;
-    const rowNumber = i + 2; // 1-indexed, +1 for header
-    // Skip blank lines (Excel often leaves a trailing empty row).
-    if (!line.trim()) continue;
-    const cells = parseRow(line);
+  for (let i = 0; i < dataRecords.length; i++) {
+    const cells = dataRecords[i]!;
+    // Número do REGISTRO (+1 pelo cabeçalho). Com campos multi-linha isso pode
+    // divergir da linha física do arquivo, mas é o que casa com o que o
+    // operador vê na planilha — que é onde ele vai corrigir.
+    const rowNumber = i + 2;
+    // Papaparse já descarta linhas vazias, mas uma linha só de delimitadores
+    // (";;;") vira um registro de células vazias.
+    if (cells.every((c) => !c.trim())) continue;
 
     const cellAt = (idx: number): string | undefined =>
       idx >= 0 ? cells[idx]?.trim() || undefined : undefined;
@@ -337,40 +348,6 @@ function processRows(lines: string[], cnpjIndex: number, headers: string[]): Csv
 function restoreCnpjPadding(digits: string): string {
   if (digits.length >= 12 && digits.length < 14) return digits.padStart(14, '0');
   return digits;
-}
-
-/**
- * Parses a single CSV row, handling quoted fields.
- */
-function parseRow(line: string): string[] {
-  const cells: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line.charAt(i);
-    if (inQuotes) {
-      if (char === '"') {
-        if (i + 1 < line.length && line.charAt(i + 1) === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        current += char;
-      }
-    } else if (char === '"') {
-      inQuotes = true;
-    } else if (char === ',' || char === ';') {
-      cells.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  cells.push(current);
-  return cells;
 }
 
 interface PhoneColumn {
