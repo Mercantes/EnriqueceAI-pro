@@ -11,6 +11,7 @@ import { Progress } from '@/shared/components/ui/progress';
 import { importLeads, type ImportLeadsResult } from '../actions/import-leads';
 import type { CsvParseResult } from '../utils/csv-parser';
 import { parseCsv } from '../utils/csv-parser';
+import { decodeCsvFile } from '../utils/decode-csv';
 import { CsvDropzone } from './CsvDropzone';
 import { CsvPreview } from './CsvPreview';
 import { ImportReport } from './ImportReport';
@@ -46,7 +47,9 @@ export function ImportView() {
     setFile(selectedFile);
     setError(null);
 
-    const content = await selectedFile.text();
+    // decodeCsvFile (e não .text()) para que o preview mostre a acentuação
+    // exatamente como o servidor vai gravar — CSV do Excel BR vem em latin1.
+    const content = await decodeCsvFile(selectedFile);
     const result = parseCsv(content);
 
     // Check for file-level errors

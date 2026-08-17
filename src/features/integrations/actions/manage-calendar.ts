@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { encrypt } from '@/lib/security/encryption';
+import { issueOAuthState } from '@/lib/security/oauth-state';
 import { from } from '@/lib/supabase/from';
 
 import { getAppUrl } from '@/lib/utils/app-url';
@@ -42,6 +43,10 @@ export async function getCalendarAuthUrl(): Promise<ActionResult<{ url: string }
     'https://www.googleapis.com/auth/userinfo.email',
   ];
 
+  // One-shot HttpOnly CSRF token echoed back as `state`; the callback validates
+  // it before exchanging the code (blocks Google account grafting onto the org).
+  const state = await issueOAuthState('google');
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: getGcalRedirectUri(),
@@ -49,6 +54,7 @@ export async function getCalendarAuthUrl(): Promise<ActionResult<{ url: string }
     scope: scopes.join(' '),
     access_type: 'offline',
     prompt: 'consent',
+    state,
   });
 
   return {

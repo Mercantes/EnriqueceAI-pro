@@ -40,6 +40,9 @@ export async function bulkMarkLeadsLost(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
+  if (auth.data.role !== 'manager') {
+    return { success: false, error: 'Apenas gestores podem marcar leads como perdidos em massa' };
+  }
   const { orgId, userId, supabase } = auth.data;
 
   // Validate the loss reason belongs to this org (defense against cross-tenant ids)

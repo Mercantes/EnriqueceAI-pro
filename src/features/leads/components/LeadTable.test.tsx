@@ -23,6 +23,11 @@ vi.mock('../actions/bulk-actions', () => ({
   exportLeadsCsv: vi.fn(),
 }));
 
+// Default to manager so the manager-only bulk buttons render in existing tests.
+vi.mock('@/features/auth/hooks/useOrganization', () => ({
+  useOrganization: () => ({ isManager: true }),
+}));
+
 function createMockLead(overrides: Partial<LeadRow> = {}): LeadRow {
   return {
     id: 'lead-1',

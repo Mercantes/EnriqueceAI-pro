@@ -4,6 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 import { escapeCsvField } from '@/lib/utils/csv';
 import { formatDuration } from '@/lib/utils/format';
 
@@ -74,7 +75,7 @@ export async function exportCallsCsv(
   }
 
   if (filters.search) {
-    const term = filters.search.replace(/[%_]/g, '');
+    const term = sanitizeFilterValue(filters.search.replace(/[%_]/g, ''));
     query = query.or(
       `origin.ilike.%${term}%,destination.ilike.%${term}%,notes.ilike.%${term}%`,
     );

@@ -20,6 +20,9 @@ export async function bulkArchiveLeads(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
+  if (auth.data.role !== 'manager') {
+    return { success: false, error: 'Apenas gestores podem arquivar leads em massa' };
+  }
   const { orgId, userId, supabase } = auth.data;
 
   const archivedAt = new Date().toISOString();

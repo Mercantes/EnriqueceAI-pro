@@ -3,6 +3,8 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
+import { neutralizeCsvFormula } from '@/lib/utils/csv';
 
 import type { LeadFilters } from '../schemas/lead.schemas';
 import { leadFiltersSchema } from '../schemas/lead.schemas';
@@ -36,7 +38,7 @@ export async function exportAllFilteredLeadsCsv(
     }
   }
   if (filters.search) {
-    const term = filters.search.replace(/[%_]/g, '');
+    const term = sanitizeFilterValue(filters.search.replace(/[%_]/g, ''));
     query = query.or(
       `razao_social.ilike.%${term}%,nome_fantasia.ilike.%${term}%,cnpj.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`,
     );
@@ -72,7 +74,7 @@ export async function exportAllFilteredLeadsCsv(
       lead.status as string,
       lead.enrichment_status as string,
       lead.created_at as string,
-    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    ].map((v) => `"${neutralizeCsvFormula(String(v ?? '')).replace(/"/g, '""')}"`).join(',');
   });
 
   const csv = [headers.join(','), ...rows].join('\n');

@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@/shared/components/ui/table';
 
+import { useOrganization } from '@/features/auth/hooks/useOrganization';
 import { listClosers } from '@/features/settings-prospecting/actions/closers-crud';
 import { bulkAssignLeads, bulkChangeStatus, bulkDeleteLeads, bulkEnrichApollo, bulkPauseEnrollments, bulkReopenLeads, bulkResumeEnrollments, exportLeadsCsv } from '../actions/bulk-actions';
 import { fetchFilteredLeadIds } from '../actions/fetch-leads';
@@ -54,6 +55,9 @@ function SortIcon({ column, currentSort, currentDir }: { column: SortColumn; cur
 export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Bulk assign/mark-lost are manager-only server-side; hide the triggers for SDRs
+  // so they don't click into a guaranteed error.
+  const { isManager } = useOrganization();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -375,15 +379,17 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
               <Play className="mr-1 h-3.5 w-3.5" />
               Retomar
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleOpenAssignDialog}
-              disabled={isPending}
-            >
-              <UserCheck className="mr-1 h-3.5 w-3.5" />
-              Atribuir
-            </Button>
+            {isManager && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenAssignDialog}
+                disabled={isPending}
+              >
+                <UserCheck className="mr-1 h-3.5 w-3.5" />
+                Atribuir
+              </Button>
+            )}
             {hasUnqualifiedSelected && (
               <Button
                 variant="outline"
@@ -395,15 +401,17 @@ export function LeadTable({ leads, total, cadenceInfo, userMap }: LeadTableProps
                 Reabrir
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLostLeadIds(Array.from(selected))}
-              disabled={isPending || selected.size === 0}
-            >
-              <ThumbsDown className="mr-1 h-3.5 w-3.5" />
-              Perdido
-            </Button>
+            {isManager && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLostLeadIds(Array.from(selected))}
+                disabled={isPending || selected.size === 0}
+              >
+                <ThumbsDown className="mr-1 h-3.5 w-3.5" />
+                Perdido
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
