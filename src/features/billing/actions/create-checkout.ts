@@ -103,6 +103,18 @@ export async function createCheckoutSession(
       org_id: org.id,
       plan_id: plan.id,
     },
+    // O metadata da sessão só chega em `checkout.session.completed`. Repetindo
+    // na subscription, TODO evento posterior (customer.subscription.*, e as
+    // invoices via parent.subscription_details.metadata) já nasce carregando a
+    // org — o webhook resolve qualquer um deles isoladamente, sem depender de
+    // o `stripe_customer_id` já ter sido gravado. É a defesa contra eventos
+    // fora de ordem, que a Stripe não garante.
+    subscription_data: {
+      metadata: {
+        org_id: org.id,
+        plan_id: plan.id,
+      },
+    },
     success_url: `${getAppUrl()}${returnPath && returnPath.startsWith('/') && !returnPath.includes('://') ? returnPath : '/settings/billing?success=true'}`,
     cancel_url: `${getAppUrl()}${returnPath && returnPath.startsWith('/') && !returnPath.includes('://') ? returnPath.split('?')[0] + '?canceled=true' : '/settings/billing?canceled=true'}`,
   });
