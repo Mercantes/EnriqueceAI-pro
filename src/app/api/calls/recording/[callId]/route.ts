@@ -3,22 +3,42 @@ import { NextResponse } from 'next/server';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { decrypt } from '@/lib/security/encryption';
+import { verifyRecordingToken } from '@/lib/security/recording-token';
 
 import type { Api4ComCallListResponse } from '@/features/integrations/types/api4com';
+
+// Recording hosts we're willing to proxy. recording_url originates from the
+// API4COM webhook payload (external), so without this allowlist proxyAudio would
+// be an SSRF sink fetching arbitrary attacker-supplied URLs.
+const ALLOWED_RECORDING_HOSTS = ['fs5.api4com.com', 'fs4.api4com.com', 'fs3.api4com.com', 'listener.api4com.com'];
+function isAllowedRecordingUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return ALLOWED_RECORDING_HOSTS.includes(hostname) || hostname.endsWith('.api4com.com');
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Proxy endpoint for call recordings.
  * Streams the MP3 from the recording URL, re-fetching from API4COM if the
- * original link is dead. No auth required (used in closer briefing emails).
+ * original link is dead. No session (opened from closer briefing emails), so
+ * access is gated by a signed, expiring token bound to the callId.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ callId: string }> },
 ) {
   const { callId } = await params;
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(callId)) {
     return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+  }
+
+  const token = new URL(request.url).searchParams.get('token');
+  if (!verifyRecordingToken(callId, token)) {
+    return NextResponse.json({ error: 'Link inválido ou expirado' }, { status: 403 });
   }
 
   const supabase = createServiceRoleClient();
@@ -46,14 +66,14 @@ export async function GET(
   }
 
   // Try existing recording URL first
-  if (call.recording_url) {
+  if (call.recording_url && isAllowedRecordingUrl(call.recording_url)) {
     const proxyResult = await proxyAudio(call.recording_url);
     if (proxyResult) return proxyResult;
   }
 
   // Recording URL is dead or missing — try to re-fetch from API4COM
   const newUrl = await refetchFromApi4com(supabase, call);
-  if (newUrl) {
+  if (newUrl && isAllowedRecordingUrl(newUrl)) {
     // Update the stored URL
     await from(supabase, 'calls')
       .update({ recording_url: newUrl, updated_at: new Date().toISOString() })

@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 
 import type { CallRow } from '../types';
 import { callFiltersSchema, type CallFilters } from '../schemas/call.schemas';
@@ -77,7 +78,7 @@ export async function getCalls(
 
   // Search (limited to origin + destination for performance, notes excluded from ILIKE)
   if (filters.search) {
-    const term = filters.search.replace(/[%_]/g, '').substring(0, 50);
+    const term = sanitizeFilterValue(filters.search.replace(/[%_]/g, '')).substring(0, 50);
     if (term.length > 0) {
       query = query.or(
         `origin.ilike.%${term}%,destination.ilike.%${term}%`,

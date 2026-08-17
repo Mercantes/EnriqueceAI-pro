@@ -62,23 +62,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'org_id is required' }, { status: 400 });
   }
 
-  // Token must be HMAC-SHA256(secret, org_id) — binds org_id cryptographically
-  // Also accept legacy plain secret for backward compatibility (will be deprecated)
+  // Token MUST be HMAC-SHA256(secret, org_id) — binds org_id cryptographically so
+  // a valid token can only ever write to the org it was minted for. The legacy
+  // plain-secret path was removed: it accepted the global secret with an
+  // arbitrary org_id, defeating exactly the binding the HMAC provides.
   const expectedHmac = crypto.createHmac('sha256', webhookSecret).update(orgId).digest('hex');
   const hmacBuf = Buffer.from(expectedHmac);
   const tokenBuf = Buffer.from(token);
-  const secretBuf = Buffer.from(webhookSecret);
 
   const isHmacValid = tokenBuf.length === hmacBuf.length && crypto.timingSafeEqual(tokenBuf, hmacBuf);
-  const isLegacyValid = tokenBuf.length === secretBuf.length && crypto.timingSafeEqual(tokenBuf, secretBuf);
 
-  if (!isHmacValid && !isLegacyValid) {
+  if (!isHmacValid) {
     console.warn('[apollo-webhook] Auth failed for org_id=%s', orgId);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (isLegacyValid && !isHmacValid) {
-    console.warn('[apollo-webhook] DEPRECATION: org_id=%s using legacy plain token — migrate to HMAC', orgId);
   }
 
   let payload: ApolloPhoneWebhook;

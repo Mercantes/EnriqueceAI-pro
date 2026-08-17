@@ -3,6 +3,7 @@
 import { from } from '@/lib/supabase/from';
 import { sendPlatformEmail } from '@/lib/email/platform-email';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { signRecordingToken } from '@/lib/security/recording-token';
 import { formatCurrencyBRLCompact } from '@/lib/utils/format';
 import { getAppUrl } from '@/lib/utils/app-url';
 
@@ -123,7 +124,9 @@ export async function sendMeetingBriefingEmail(
       feedbackUrl,
       leadUrl: `${appUrl}/leads/${leadId}`,
       customFields: customFieldsResult.data ?? [],
-      recordingUrl: lastCall?.id ? `${appUrl}/api/calls/recording/${lastCall.id}` : null,
+      recordingUrl: lastCall?.id
+        ? `${appUrl}/api/calls/recording/${lastCall.id}?token=${signRecordingToken(lastCall.id)}`
+        : null,
       recordingDuration: lastCall?.duration_seconds ?? null,
       transcription: lastCall?.transcription ?? null,
     });

@@ -4,6 +4,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { logQueryError } from '@/lib/supabase/log-query-error';
+import { sanitizeFilterValue } from '@/lib/supabase/sanitize-filter';
 
 import type { LeadListResult } from '../leads.contract';
 import type { LeadFilters } from '../schemas/lead.schemas';
@@ -13,7 +14,10 @@ import { leadFiltersSchema } from '../schemas/lead.schemas';
 // digits-only, so a punctuated query like "08.942.835/0001-72" never matches
 // `cnpj.ilike`. We additionally search the normalized digits against cnpj so
 // the SDR can paste a formatted CNPJ and still find the lead.
-function searchClausesForTerm(term: string, fields: readonly string[]): string[] {
+function searchClausesForTerm(rawTerm: string, fields: readonly string[]): string[] {
+  // Strip PostgREST filter metacharacters (comma, parens, backslash) so a term
+  // like "x,status.eq.won" can't inject an extra OR condition into the clause.
+  const term = sanitizeFilterValue(rawTerm);
   const clauses = fields.map((field) => `${field}.ilike.%${term}%`);
   const digits = term.replace(/\D/g, '');
   if (digits.length >= 3 && digits !== term) {

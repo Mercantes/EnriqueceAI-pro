@@ -3,6 +3,7 @@
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { neutralizeCsvFormula } from '@/lib/utils/csv';
 
 import { validateBulkLeadIds } from '../services/bulk-leads.service';
 
@@ -47,7 +48,7 @@ export async function exportLeadsCsv(
       lead.status as string,
       lead.enrichment_status as string,
       lead.created_at as string,
-    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    ].map((v) => `"${neutralizeCsvFormula(String(v ?? '')).replace(/"/g, '""')}"`).join(',');
   });
 
   const csv = [headers.join(','), ...rows].join('\n');
