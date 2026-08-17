@@ -108,7 +108,9 @@ export async function prepareActivityEmail(
     referencia,
   };
 
-  let body = renderTemplate(templateBody, variables);
+  // escapeHtml: lead-sourced values (CSV/API imports) must not inject markup or
+  // links into the HTML email body — same defense as the automatic cadence path.
+  let body = renderTemplate(templateBody, variables, { escapeHtml: true });
   let subject = templateSubject ? renderTemplate(templateSubject, variables) : '';
   let aiPersonalized = false;
 
@@ -180,7 +182,9 @@ export async function prepareActivityWhatsApp(
     referencia,
   };
 
-  let body = renderTemplate(templateBody, variables);
+  // escapeHtml: lead-sourced values (CSV/API imports) must not inject markup or
+  // links into the HTML email body — same defense as the automatic cadence path.
+  let body = renderTemplate(templateBody, variables, { escapeHtml: true });
   let aiPersonalized = false;
 
   if (aiPersonalization && body) {

@@ -25,6 +25,19 @@ export async function addLeadNote(
     return { success: false, error: 'A anotação não pode estar vazia' };
   }
 
+  // Confirm the lead belongs to the caller's org (under RLS) before inserting.
+  // Without this, a forged leadId would attach a note tagged with the attacker's
+  // org — data noise rather than cross-tenant leakage, but still an IDOR.
+  const { data: lead } = (await from(supabase, 'leads')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('id', leadId)
+    .maybeSingle()) as { data: { id: string } | null };
+
+  if (!lead) {
+    return { success: false, error: 'Lead não encontrado' };
+  }
+
   // Fetch user email for note authorship
   const { data: { user } } = await supabase.auth.getUser();
   const authorEmail = user?.email ?? null;

@@ -21,6 +21,9 @@ export async function createApiKeyAction(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
+  if (auth.data.role !== 'manager') {
+    return { success: false, error: 'Apenas gestores podem gerar chaves de API' };
+  }
   const { orgId, userId, supabase } = auth.data;
   const { key, hash, prefix } = generateApiKey();
 
@@ -66,6 +69,9 @@ export async function revokeApiKeyAction(keyId: string): Promise<ActionResult<vo
   if (!UUID_RE.test(keyId)) return { success: false, error: 'ID inválido' };
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
+  if (auth.data.role !== 'manager') {
+    return { success: false, error: 'Apenas gestores podem revogar chaves de API' };
+  }
   const { orgId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'api_keys')
@@ -86,6 +92,9 @@ export async function deleteApiKeyAction(keyId: string): Promise<ActionResult<vo
   if (!UUID_RE.test(keyId)) return { success: false, error: 'ID inválido' };
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
+  if (auth.data.role !== 'manager') {
+    return { success: false, error: 'Apenas gestores podem excluir chaves de API' };
+  }
   const { orgId, supabase } = auth.data;
 
   const { error } = await from(supabase, 'api_keys')

@@ -20,6 +20,9 @@ export async function bulkDeleteLeads(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
+  if (auth.data.role !== 'manager') {
+    return { success: false, error: 'Apenas gestores podem excluir leads em massa' };
+  }
   const { orgId, userId, supabase } = auth.data;
 
   const deletedAt = new Date().toISOString();

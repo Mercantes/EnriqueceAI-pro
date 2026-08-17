@@ -42,6 +42,16 @@ export async function sendManualEmail(
   const qErr = handleQueryError(interactionError, 'Erro ao registrar interação', 'send-email');
   if (qErr || !interaction) return qErr ?? { success: false, error: 'Erro ao registrar interação' };
 
+  // Escape HTML before wrapping so the body is treated as text, not markup
+  // (the composer is plain-text; this prevents accidental/injected HTML).
+  const escapedBody = input.body
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\n/g, '<br/>');
+
   // Send the email
   const result = await EmailService.sendEmail(
     userId,
@@ -49,7 +59,7 @@ export async function sendManualEmail(
     {
       to: input.to,
       subject: input.subject,
-      htmlBody: `<html><body>${input.body.replace(/\n/g, '<br/>')}</body></html>`,
+      htmlBody: `<html><body>${escapedBody}</body></html>`,
       trackOpens: true,
       trackClicks: true,
     },

@@ -32,8 +32,10 @@ import { revalidatePath } from 'next/cache';
 import { bulkArchiveLeads, bulkDeleteLeads, exportLeadsCsv } from './bulk-actions';
 
 // Helper to build a chainable mock for: .from().select().eq().eq().single()
-function makeOrgMemberChain(orgId: string | null) {
-  const singleMock = vi.fn().mockResolvedValue({ data: orgId ? { org_id: orgId } : null });
+function makeOrgMemberChain(orgId: string | null, role: 'manager' | 'sdr' = 'manager') {
+  // Bulk actions are manager-only; default the mocked member to manager so the
+  // existing success/error cases exercise the intended (authorized) path.
+  const singleMock = vi.fn().mockResolvedValue({ data: orgId ? { org_id: orgId, role } : null });
   const eqStatusMock = vi.fn().mockReturnValue({ single: singleMock });
   const eqUserMock = vi.fn().mockReturnValue({ eq: eqStatusMock });
   const selectMock = vi.fn().mockReturnValue({ eq: eqUserMock });
@@ -97,6 +99,17 @@ describe('bulkDeleteLeads', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toBe('Organização não encontrada');
+    }
+  });
+
+  it('rejects an SDR (bulk delete is manager-only)', async () => {
+    mockFrom.mockImplementation(() => makeOrgMemberChain('org-1', 'sdr'));
+
+    const result = await bulkDeleteLeads(['11111111-1111-4111-8111-111111111111']);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('Apenas gestores podem excluir leads em massa');
     }
   });
 

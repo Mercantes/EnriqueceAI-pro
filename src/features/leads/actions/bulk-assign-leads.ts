@@ -22,6 +22,9 @@ export async function bulkAssignLeads(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
+  if (auth.data.role !== 'manager') {
+    return { success: false, error: 'Apenas gestores podem reatribuir leads em massa' };
+  }
   const { orgId, supabase } = auth.data;
 
   // Validate target user is active member of org

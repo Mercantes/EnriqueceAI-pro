@@ -6,6 +6,11 @@
 *.key
 *.pem
 
+# Lead data exports at repo root — never commit lead PII (CNPJ, phones, emails).
+# Scoped to root so intentional fixtures under tests/ etc. are unaffected.
+/*.csv
+/*.pdf
+
 # Dependencies (AIOS)
 node_modules/
 node_modules
