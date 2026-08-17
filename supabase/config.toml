@@ -352,3 +352,10 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # every webhook returns 401 and provider_events stays empty.
 [functions.evolution-webhook]
 verify_jwt = false
+
+# Stripe webhook is authenticated by the `stripe-signature` header, verified
+# with STRIPE_WEBHOOK_SECRET inside the handler. Stripe never sends an
+# Authorization header, so leaving JWT verification on would reject every
+# event with 401 before our signature check ever runs.
+[functions.stripe-webhook]
+verify_jwt = false
