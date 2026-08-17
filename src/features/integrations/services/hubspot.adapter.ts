@@ -88,12 +88,15 @@ async function hubspotFetch<T>(
 export class HubSpotAdapter implements CRMAdapter {
   readonly provider: CrmProvider = 'hubspot';
 
-  getAuthUrl(redirectUri: string): string {
+  getAuthUrl(redirectUri: string, state?: string): string {
     const params = new URLSearchParams({
       client_id: HUBSPOT_CLIENT_ID,
       redirect_uri: redirectUri,
       scope: HUBSPOT_SCOPES.join(' '),
       response_type: 'code',
+      // CSRF state echoed back by HubSpot; the callback validates it against
+      // the HttpOnly cookie issued in getCrmAuthUrl (blocks connection grafting).
+      ...(state ? { state } : {}),
     });
 
     return `${HUBSPOT_AUTH_URL}?${params.toString()}`;

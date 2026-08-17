@@ -93,11 +93,13 @@ async function pipedriveFetch<T>(
 export class PipedriveAdapter implements CRMAdapter {
   readonly provider: CrmProvider = 'pipedrive';
 
-  getAuthUrl(redirectUri: string): string {
+  getAuthUrl(redirectUri: string, state?: string): string {
     const params = new URLSearchParams({
       client_id: getPipedriveClientId(),
       redirect_uri: redirectUri,
-      state: 'pipedrive',
+      // Real per-request CSRF state (validated against the HttpOnly cookie in
+      // the callback). Falls back to a static value only when none is supplied.
+      state: state ?? 'pipedrive',
     });
     return `${PIPEDRIVE_AUTH_URL}?${params.toString()}`;
   }

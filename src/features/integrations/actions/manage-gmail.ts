@@ -7,6 +7,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { decrypt, encrypt } from '@/lib/security/encryption';
+import { issueOAuthState } from '@/lib/security/oauth-state';
 
 import { GOOGLE_TOKEN_URL } from '../constants/oauth-endpoints';
 import type { GmailConnectionSafe } from '../types';
@@ -33,6 +34,13 @@ export async function getGmailAuthUrl(
     'https://www.googleapis.com/auth/userinfo.email',
   ];
 
+  // Issue a one-shot HttpOnly CSRF token and pack it into the state alongside
+  // the post-connect redirect target (format: "<csrf>|<redirect>"). The callback
+  // splits it, validates the CSRF half, and only then trusts the redirect half.
+  // Without this an attacker could graft their Google account onto the org.
+  const csrf = await issueOAuthState('google');
+  const state = redirectAfter ? `${csrf}|${redirectAfter}` : csrf;
+
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: GOOGLE_REDIRECT_URI,
@@ -40,7 +48,7 @@ export async function getGmailAuthUrl(
     scope: scopes.join(' '),
     access_type: 'offline',
     prompt: 'consent',
-    ...(redirectAfter ? { state: redirectAfter } : {}),
+    state,
   });
 
   return {
