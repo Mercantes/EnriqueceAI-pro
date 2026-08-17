@@ -26,6 +26,7 @@ import {
 
 import { getAppUrl } from '@/lib/utils/app-url';
 
+import { useOrganization } from '@/features/auth/hooks/useOrganization';
 import type { ApiKeySafe } from '../types';
 import { revokeApiKeyAction, deleteApiKeyAction } from '../actions/manage-api-keys';
 import { ApiKeyCreateDialog } from './ApiKeyCreateDialog';
@@ -36,6 +37,8 @@ interface Props {
 
 export function ApiKeyManager({ initialKeys }: Props) {
   const router = useRouter();
+  // Create/revoke/delete are manager-only server-side; SDRs get a read-only view.
+  const { isManager } = useOrganization();
   const [showCreate, setShowCreate] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'revoke' | 'delete'; key: ApiKeySafe } | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -93,10 +96,12 @@ export function ApiKeyManager({ initialKeys }: Props) {
             Gerencie chaves para receber leads de plataformas externas.
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Criar Chave
-        </Button>
+        {isManager && (
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Criar Chave
+          </Button>
+        )}
       </div>
 
       {/* Keys table */}
@@ -104,10 +109,12 @@ export function ApiKeyManager({ initialKeys }: Props) {
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-12 text-center">
           <Key className="h-10 w-10 text-[var(--muted-foreground)]" />
           <p className="text-sm text-[var(--muted-foreground)]">Nenhuma chave de API criada.</p>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Criar Primeira Chave
-          </Button>
+          {isManager && (
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Criar Primeira Chave
+            </Button>
+          )}
         </div>
       ) : (
         <div className="rounded-lg border">
@@ -120,7 +127,7 @@ export function ApiKeyManager({ initialKeys }: Props) {
                 <TableHead>Último uso</TableHead>
                 <TableHead>Criada em</TableHead>
                 <TableHead>Expira em</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                {isManager && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -150,28 +157,30 @@ export function ApiKeyManager({ initialKeys }: Props) {
                       ? new Date(key.expires_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
                       : 'Sem expiração'}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {key.is_active && (
+                  {isManager && (
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {key.is_active && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmAction({ type: 'revoke', key })}
+                          >
+                            <XCircle className="mr-1 h-3.5 w-3.5" />
+                            Revogar
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setConfirmAction({ type: 'revoke', key })}
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => setConfirmAction({ type: 'delete', key })}
                         >
-                          <XCircle className="mr-1 h-3.5 w-3.5" />
-                          Revogar
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700"
-                        onClick={() => setConfirmAction({ type: 'delete', key })}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
