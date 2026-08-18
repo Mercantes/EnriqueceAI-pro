@@ -40,7 +40,9 @@ export async function bulkMarkLeadsLost(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  if (auth.data.role !== 'manager') {
+  // SDRs podem dar perdido em UM lead (menu da linha na lista); a ação em
+  // massa (vários selecionados) continua restrita a gestores.
+  if (auth.data.role !== 'manager' && parsed.data.leadIds.length > 1) {
     return { success: false, error: 'Apenas gestores podem marcar leads como perdidos em massa' };
   }
   const { orgId, userId, supabase } = auth.data;
