@@ -427,7 +427,7 @@ export function LeadContactsSection({ leadId, socios, onPrimaryChange }: LeadCon
         {validEmails.length > 0 && (
           <div className="space-y-1">
             {validEmails.map((em, i) => (
-              <div key={`em-${i}`} className="flex items-center gap-1.5 rounded bg-[var(--muted)] px-2 py-1 text-sm">
+              <div key={`em-${i}`} className="flex items-center gap-1.5 rounded bg-[var(--muted)] px-2 py-1 text-base">
                 <span className="shrink-0 rounded bg-[var(--background)] px-1 text-[10px] font-medium text-[var(--muted-foreground)]">
                   {em.tipo === 'pessoal' ? 'Pessoal' : 'Corp.'}
                 </span>
@@ -451,7 +451,7 @@ export function LeadContactsSection({ leadId, socios, onPrimaryChange }: LeadCon
         {validPhones.length > 0 && (
           <div className="space-y-1">
             {validPhones.map((ph, i) => (
-              <div key={`ph-${i}`} className="flex items-center gap-1.5 rounded bg-[var(--muted)] px-2 py-1 text-sm">
+              <div key={`ph-${i}`} className="flex items-center gap-1.5 rounded bg-[var(--muted)] px-2 py-1 text-base">
                 <span className="shrink-0 rounded bg-[var(--background)] px-1 text-[10px] font-medium text-[var(--muted-foreground)]">
                   {PHONE_LABEL[ph.tipo]}
                 </span>
@@ -525,7 +525,7 @@ export function LeadContactsSection({ leadId, socios, onPrimaryChange }: LeadCon
           </summary>
           <div className="mt-2 space-y-1.5">
             {sociosPhones.map((p, i) => (
-              <div key={`socio-phone-${i}`} className="flex items-center gap-1.5 rounded-md bg-[var(--muted)] px-3 py-1.5 text-sm">
+              <div key={`socio-phone-${i}`} className="flex items-center gap-1.5 rounded-md bg-[var(--muted)] px-3 py-1.5 text-base">
                 <a href={p.href} className="shrink-0 text-[var(--primary)] hover:underline">{p.numero}</a>
                 {p.whatsapp && (
                   <span className="shrink-0 rounded bg-green-100 px-1 text-[10px] font-medium text-green-700 dark:bg-green-950 dark:text-green-400">WhatsApp</span>
