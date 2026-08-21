@@ -208,10 +208,27 @@ export async function fetchFilteredLeadIds(
   if (!auth.success) return auth;
   const { orgId, supabase } = auth.data;
 
-  let query = from(supabase, 'leads')
-    .select('id')
+  // Cadence filter mirrors fetchLeads: view for "Sem cadência", embedded inner
+  // join for a specific cadence — never an `.in('id', [uuids])` list, que
+  // estoura o limite de URL do PostgREST em cadências grandes.
+  const hasSearch = !!filters.search?.trim();
+  const sourceTable =
+    !hasSearch && filters.cadence_id === '__none__'
+      ? 'leads_no_active_enrollment'
+      : 'leads';
+  const filterByCadence =
+    !hasSearch && !!filters.cadence_id && filters.cadence_id !== '__none__';
+
+  let query = from(supabase, sourceTable)
+    .select(filterByCadence ? 'id, cadence_enrollments!inner(cadence_id)' : 'id')
     .eq('org_id', orgId)
     .is('deleted_at', null);
+
+  if (filterByCadence) {
+    query = query
+      .eq('cadence_enrollments.cadence_id', filters.cadence_id!)
+      .in('cadence_enrollments.status', ['active', 'paused']);
+  }
 
   if (filters.status) {
     query = query.eq('status', filters.status);
