@@ -8,6 +8,15 @@ export interface AvailableCadence {
   priority: 'high' | 'medium' | 'low';
 }
 
+/** Sentinel for leads without canal (null or empty string). */
+export const NO_SUB_ORIGIN = '__none__';
+
+export interface SubOriginCount {
+  /** Canal value, or NO_SUB_ORIGIN for leads without one. */
+  canal: string;
+  count: number;
+}
+
 export interface ForecastDay {
   dayOffset: number;
   dayLabel: string;

@@ -15,6 +15,7 @@ import {
 import { Input } from '@/shared/components/ui/input';
 
 import { useStartNewLeads } from '../hooks/useStartNewLeads';
+import { NO_SUB_ORIGIN } from '../types/start-new-leads';
 
 interface StartNewLeadsModalProps {
   open: boolean;
@@ -41,6 +42,9 @@ export function StartNewLeadsModal({
     forecast,
     selectedIds,
     toggleCadence,
+    subOrigins,
+    selectedCanais,
+    toggleCanal,
     quantity,
     setQuantity,
     startLeads,
@@ -201,6 +205,38 @@ export function StartNewLeadsModal({
                 +{todayActivities}
               </span>
             </div>
+
+            {/* Zone 3.5 - Sub-origin filter */}
+            {subOrigins.length > 0 && (
+              <div>
+                <p className="text-sm font-medium">Sub-origem</p>
+                <p className="mb-2 text-xs text-[var(--muted-foreground)]">
+                  Filtre quais leads serão iniciados (opcional — sem seleção, todos entram)
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {subOrigins.map((so) => {
+                    const isActive = selectedCanais.has(so.canal);
+                    const label =
+                      so.canal === NO_SUB_ORIGIN ? 'Sem sub-origem' : so.canal;
+                    return (
+                      <button
+                        key={so.canal}
+                        type="button"
+                        onClick={() => toggleCanal(so.canal)}
+                        className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                          isActive
+                            ? 'border-[var(--primary)] bg-[var(--primary)]/10 font-medium text-[var(--primary)]'
+                            : 'border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]/50'
+                        }`}
+                      >
+                        {label}{' '}
+                        <span className="tabular-nums opacity-70">{so.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Zone 4 - Cadence Table */}
             <div>

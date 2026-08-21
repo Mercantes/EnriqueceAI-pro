@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
 
 import { fetchCadencesWithAvailability } from '../actions/fetch-cadences-with-availability';
-import type { AvailableCadence, ForecastDay } from '../types/start-new-leads';
+import type { AvailableCadence, ForecastDay, SubOriginCount } from '../types/start-new-leads';
 
 interface UseStartNewLeadsReturn {
   cadences: AvailableCadence[];
@@ -17,6 +17,9 @@ interface UseStartNewLeadsReturn {
   forecast: ForecastDay[];
   selectedIds: Set<string>;
   toggleCadence: (id: string) => void;
+  subOrigins: SubOriginCount[];
+  selectedCanais: Set<string>;
+  toggleCanal: (canal: string) => void;
   quantity: number;
   setQuantity: (n: number) => void;
   startLeads: () => void;
@@ -69,19 +72,25 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
   const [availableLeadIds, setAvailableLeadIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [subOrigins, setSubOrigins] = useState<SubOriginCount[]>([]);
+  const [selectedCanais, setSelectedCanais] = useState<Set<string>>(new Set());
   const [quantity, setQuantity] = useState(10);
   const [isStarting, setIsStarting] = useState(false);
 
-  // Load data when modal opens
+  // Memoized so the effect only re-runs when the canal filter actually changes
+  // (the Set identity only changes on toggle)
+  const canaisArr = useMemo(() => [...selectedCanais].sort(), [selectedCanais]);
+
+  // Load data when modal opens, and reload when the sub-origin filter changes
   useEffect(() => {
-    if (open && !loaded) {
+    if (open) {
       startTransition(async () => {
-        const result = await fetchCadencesWithAvailability();
+        const result = await fetchCadencesWithAvailability({ canais: canaisArr });
         if (result.success) {
           setCadences(result.data.cadences);
           setTotalAvailable(result.data.totalAvailable);
           setAvailableLeadIds(result.data.availableLeadIds);
-          setSelectedIds(new Set());
+          setSubOrigins(result.data.subOrigins);
         }
         setLoaded(true);
       });
@@ -91,18 +100,29 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
         setLoaded(false);
         setCadences([]);
         setSelectedIds(new Set());
+        setSubOrigins([]);
+        setSelectedCanais(new Set());
         setQuantity(10);
         setTotalAvailable(0);
         setAvailableLeadIds([]);
       });
     }
-  }, [open, loaded]);
+  }, [open, canaisArr]);
 
   const toggleCadence = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleCanal = useCallback((canal: string) => {
+    setSelectedCanais((prev) => {
+      const next = new Set(prev);
+      if (next.has(canal)) next.delete(canal);
+      else next.add(canal);
       return next;
     });
   }, []);
@@ -204,6 +224,9 @@ export function useStartNewLeads(open: boolean): UseStartNewLeadsReturn {
     forecast,
     selectedIds,
     toggleCadence,
+    subOrigins,
+    selectedCanais,
+    toggleCanal,
     quantity,
     setQuantity,
     startLeads,
