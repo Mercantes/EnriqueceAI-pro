@@ -54,9 +54,17 @@ export async function fetchLeads(
       ? 'leads_no_active_enrollment'
       : 'leads';
 
+  // Cadence-specific filter uses an embedded inner join for the same reason:
+  // an `.in('id', [700+ uuids])` list blows past the PostgREST URL limit and
+  // the request fails with 400 (cadências grandes como a Recovery).
+  const filterByCadence =
+    !hasSearch && !!filters.cadence_id && filters.cadence_id !== '__none__';
+
   // Build query
   let query = from(supabase, sourceTable)
-    .select('*', { count: 'exact' })
+    .select(filterByCadence ? '*, cadence_enrollments!inner(cadence_id)' : '*', {
+      count: 'exact',
+    })
     .eq('org_id', orgId)
     .is('deleted_at', null);
 
@@ -94,19 +102,13 @@ export async function fetchLeads(
   }
 
   // Filter by cadence enrollment (skipped when searching).
-  // The "__none__" case is handled at the source-table level (view above), so
-  // we only need to handle a specific cadence here.
-  if (!hasSearch && filters.cadence_id && filters.cadence_id !== '__none__') {
-    // Leads enrolled in a specific cadence
-    const { data: enrolled } = (await from(supabase, 'cadence_enrollments')
-      .select('lead_id')
-      .eq('cadence_id', filters.cadence_id)
-      .in('status', ['active', 'paused'])) as { data: Array<{ lead_id: string }> | null };
-    const enrolledIds = [...new Set((enrolled ?? []).map((e) => e.lead_id))];
-    if (enrolledIds.length === 0) {
-      return { success: true, data: { data: [], total: 0, page: filters.page, per_page: filters.per_page } };
-    }
-    query = query.in('id', enrolledIds);
+  // The "__none__" case is handled at the source-table level (view above);
+  // a specific cadence filters through the embedded inner join declared in the
+  // select above, keeping the whole thing in SQL.
+  if (filterByCadence) {
+    query = query
+      .eq('cadence_enrollments.cadence_id', filters.cadence_id!)
+      .in('cadence_enrollments.status', ['active', 'paused']);
   }
 
   // Full-text search — every term in the query string must appear in some
