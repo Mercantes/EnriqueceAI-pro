@@ -1,11 +1,40 @@
 'use server';
 
+import { z } from 'zod';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
-import type { AvailableCadence } from '../types/start-new-leads';
+import type { AvailableCadence, SubOriginCount } from '../types/start-new-leads';
+import { NO_SUB_ORIGIN } from '../types/start-new-leads';
+
+const filtersSchema = z.object({
+  /** Canal (sub-origem) values to restrict the pool to. NO_SUB_ORIGIN selects leads without canal. */
+  canais: z.array(z.string().max(100)).max(50).default([]),
+});
+
+export type FetchCadencesFilters = z.input<typeof filtersSchema>;
+
+/**
+ * Builds a PostgREST .or() expression matching the selected canais.
+ * NO_SUB_ORIGIN matches leads with canal null or empty string.
+ */
+function buildCanalOrFilter(canais: string[]): string {
+  const parts: string[] = [];
+  const named = canais.filter((c) => c !== NO_SUB_ORIGIN);
+  if (named.length > 0) {
+    const quoted = named
+      .map((c) => `"${c.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`)
+      .join(',');
+    parts.push(`canal.in.(${quoted})`);
+  }
+  if (canais.includes(NO_SUB_ORIGIN)) {
+    parts.push('canal.is.null', 'canal.eq.""');
+  }
+  return parts.join(',');
+}
 
 /**
  * Fetches active cadences with count of available leads.
@@ -18,10 +47,27 @@ import type { AvailableCadence } from '../types/start-new-leads';
  * contacted/qualified leads that were already worked on. Operators expect
  * "Iniciar novos leads" to surface untouched leads, not leads they already
  * lost or closed.
+ *
+ * Optionally filters the pool by canal (sub-origem) so SDRs working multiple
+ * segments don't enroll e.g. "Prospecção Fria" leads into a Recovery cadence.
+ * subOrigins in the result is always computed over the UNFILTERED pool so the
+ * filter chips stay stable while toggling.
  */
-export async function fetchCadencesWithAvailability(): Promise<
-  ActionResult<{ cadences: AvailableCadence[]; totalAvailable: number; availableLeadIds: string[] }>
+export async function fetchCadencesWithAvailability(
+  filters?: FetchCadencesFilters,
+): Promise<
+  ActionResult<{
+    cadences: AvailableCadence[];
+    totalAvailable: number;
+    availableLeadIds: string[];
+    subOrigins: SubOriginCount[];
+  }>
 > {
+  const parsedFilters = filtersSchema.safeParse(filters ?? {});
+  if (!parsedFilters.success) {
+    return { success: false, error: 'Filtros inválidos' };
+  }
+  const { canais } = parsedFilters.data;
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase: rlsSupabase } = auth.data;
@@ -56,7 +102,10 @@ export async function fetchCadencesWithAvailability(): Promise<
     };
 
     if (!cadences || cadences.length === 0) {
-      return { success: true, data: { cadences: [], totalAvailable: 0, availableLeadIds: [] } };
+      return {
+        success: true,
+        data: { cadences: [], totalAvailable: 0, availableLeadIds: [], subOrigins: [] },
+      };
     }
 
     // 2. Count + sample available leads via the leads_no_active_enrollment view.
@@ -70,28 +119,60 @@ export async function fetchCadencesWithAvailability(): Promise<
     // were already-closed leads.
     //
     // The dialog only needs ~200 IDs to enroll, so cap the row read at the same number.
-    const baseCountQuery = from(supabase, 'leads_no_active_enrollment')
+    const canalOrFilter = canais.length > 0 ? buildCanalOrFilter(canais) : '';
+
+    let countQuery = from(supabase, 'leads_no_active_enrollment')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', orgId)
       .eq('status', 'new')
       .is('deleted_at', null);
-    const baseSampleQuery = from(supabase, 'leads_no_active_enrollment')
+    let sampleQuery = from(supabase, 'leads_no_active_enrollment')
       .select('id')
       .eq('org_id', orgId)
       .eq('status', 'new')
       .is('deleted_at', null)
       .limit(200);
+    // Sub-origin breakdown is always over the unfiltered pool (no canal filter)
+    // so the chips don't disappear as the user toggles them.
+    let canalRowsQuery = from(supabase, 'leads_no_active_enrollment')
+      .select('canal')
+      .eq('org_id', orgId)
+      .eq('status', 'new')
+      .is('deleted_at', null)
+      .limit(5000);
 
-    const countQuery = isManager ? baseCountQuery : baseCountQuery.eq('assigned_to', userId);
-    const sampleQuery = isManager ? baseSampleQuery : baseSampleQuery.eq('assigned_to', userId);
+    if (!isManager) {
+      countQuery = countQuery.eq('assigned_to', userId);
+      sampleQuery = sampleQuery.eq('assigned_to', userId);
+      canalRowsQuery = canalRowsQuery.eq('assigned_to', userId);
+    }
+    if (canalOrFilter) {
+      countQuery = countQuery.or(canalOrFilter);
+      sampleQuery = sampleQuery.or(canalOrFilter);
+    }
 
-    const [{ count }, { data: sampleRows }] = await Promise.all([
+    const [{ count }, { data: sampleRows }, { data: canalRows }] = await Promise.all([
       countQuery as Promise<{ count: number | null }>,
       sampleQuery as Promise<{ data: Array<{ id: string }> | null }>,
+      canalRowsQuery as Promise<{ data: Array<{ canal: string | null }> | null }>,
     ]);
 
     const totalAvailable = count ?? 0;
     const availableLeadIds = (sampleRows ?? []).map((r) => r.id);
+
+    const canalCounts = new Map<string, number>();
+    for (const row of canalRows ?? []) {
+      const key = row.canal && row.canal.trim() !== '' ? row.canal : NO_SUB_ORIGIN;
+      canalCounts.set(key, (canalCounts.get(key) ?? 0) + 1);
+    }
+    const subOrigins: SubOriginCount[] = [...canalCounts.entries()]
+      .map(([canal, cnt]) => ({ canal, count: cnt }))
+      .sort((a, b) => {
+        // NO_SUB_ORIGIN always last; others by count DESC then name
+        if (a.canal === NO_SUB_ORIGIN) return 1;
+        if (b.canal === NO_SUB_ORIGIN) return -1;
+        return b.count - a.count || a.canal.localeCompare(b.canal);
+      });
 
     // 3. Map cadences with availability
     const result: AvailableCadence[] = cadences.map((c) => ({
@@ -114,7 +195,7 @@ export async function fetchCadencesWithAvailability(): Promise<
 
     return {
       success: true,
-      data: { cadences: result, totalAvailable, availableLeadIds },
+      data: { cadences: result, totalAvailable, availableLeadIds, subOrigins },
     };
   } catch (err) {
     console.error('[fetch-cadences-with-availability]', err);
