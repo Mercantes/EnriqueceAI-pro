@@ -8,7 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 
 import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
-import { enrichPerson } from '../services/apollo.service';
+import { enrichPerson, apolloPhoneTipo } from '../services/apollo.service';
 import type { LeadPhone } from '../types';
 
 interface BackfillResult {
@@ -36,7 +36,9 @@ export async function backfillApolloSourceIds(): Promise<ActionResult<BackfillRe
   const { data: leads } = (await from(supabase, 'leads')
     .select('id, first_name, last_name, email, linkedin, razao_social, nome_fantasia, telefone, phones, job_title, website, porte')
     .eq('org_id', orgId)
-    .eq('lead_source', 'apollo')
+    // O import grava canal='Apollo' (lead_source='Outbound') — filtrar por
+    // lead_source='apollo' nunca casava nenhuma linha.
+    .eq('canal', 'Apollo')
     .is('source_id', null)
     .is('deleted_at', null)
     .order('created_at', { ascending: true })
@@ -133,7 +135,7 @@ export async function backfillApolloSourceIds(): Promise<ActionResult<BackfillRe
           for (const phone of person.phone_numbers) {
             if (!existingNumbers.has(phone.raw_number)) {
               newPhones.push({
-                tipo: phone.type === 'mobile' ? 'celular' : 'fixo',
+                tipo: apolloPhoneTipo(phone.type),
                 numero: phone.raw_number,
               });
               existingNumbers.add(phone.raw_number);

@@ -6,6 +6,8 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { isEventProcessed, markEventProcessed } from '@/lib/webhooks';
 
+import { apolloPhoneTipo } from '@/features/leads/services/apollo.service';
+
 export const maxDuration = 30;
 
 /**
@@ -99,8 +101,9 @@ export async function POST(request: Request) {
   for (const person of people) {
     if (!person.id) continue;
 
-    // Idempotency check
-    const eventId = `phone_${person.id}`;
+    // Idempotency check — scoped per org: the same Apollo person can be revealed
+    // by two different orgs, and each must receive its own webhook.
+    const eventId = `phone_${orgId}_${person.id}`;
     if (await isEventProcessed(supabase, 'apollo', eventId)) continue;
 
     const phoneNumbers = person.phone_numbers;
@@ -115,43 +118,41 @@ export async function POST(request: Request) {
     const phones: { tipo: string; numero: string }[] = [];
     if (phoneNumbers && phoneNumbers.length > 0) {
       for (const pn of phoneNumbers) {
-        const phoneType = pn.type_cd ?? pn.type ?? '';
-        const tipo = phoneType === 'mobile' || phoneType === 'mobile_phone' ? 'celular' : 'fixo';
-        phones.push({ tipo, numero: pn.raw_number });
+        phones.push({ tipo: apolloPhoneTipo(pn.type_cd ?? pn.type), numero: pn.raw_number });
       }
     } else if (sanitizedPhone) {
       phones.push({ tipo: 'celular', numero: sanitizedPhone });
     }
 
-    const primaryPhone = phones[0]?.numero ?? null;
-
     // Match lead by source_id (Apollo person ID) — most reliable
-    let lead: { id: string; phones: { tipo: string; numero: string }[] | null } | null = null;
+    type LeadRow = { id: string; telefone: string | null; phones: { tipo: string; numero: string }[] | null };
+    let lead: LeadRow | null = null;
 
     const { data: bySourceId } = await from(supabase, 'leads')
-      .select('id, phones')
+      .select('id, telefone, phones')
       .eq('source_id', person.id)
       .eq('org_id', orgId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle() as { data: { id: string; phones: { tipo: string; numero: string }[] | null } | null };
+      .maybeSingle() as { data: LeadRow | null };
 
     lead = bySourceId;
 
     // Fallback: match by email if available (case-insensitive — gmail and most
     // providers treat the local part as case-insensitive, and we still have
-    // legacy rows with mixed-case emails)
+    // legacy rows with mixed-case emails). O import grava canal='Apollo'
+    // (lead_source='Outbound'), então o filtro precisa ser pelo canal.
     if (!lead && person.email) {
       const { data: byEmail } = await from(supabase, 'leads')
-        .select('id, phones')
-        .eq('lead_source', 'apollo')
+        .select('id, telefone, phones')
+        .eq('canal', 'Apollo')
         .ilike('email', person.email)
         .eq('org_id', orgId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle() as { data: { id: string; phones: { tipo: string; numero: string }[] | null } | null };
+        .maybeSingle() as { data: LeadRow | null };
 
       lead = byEmail;
     }
@@ -161,25 +162,43 @@ export async function POST(request: Request) {
       continue;
     }
 
-    // Merge with existing phones (avoid duplicates)
-    const existingNumbers = new Set(
-      (lead.phones ?? []).map((p: { numero: string }) => p.numero),
-    );
-    const mergedPhones = [...(lead.phones ?? [])];
-    for (const p of phones) {
-      if (!existingNumbers.has(p.numero)) {
+    // O painel "Contatos" lê lead_contacts, não as colunas do lead — o telefone
+    // precisa pousar no contato principal. O trg_sync_primary_contact espelha
+    // o contato de volta em leads.phones/telefone, então gravar no contato
+    // cobre os dois; gravar só em leads deixa o contato sem telefone para sempre
+    // (e uma edição posterior do contato apagaria o número revelado).
+    const { data: primaryContact } = await from(supabase, 'lead_contacts')
+      .select('id, phones')
+      .eq('lead_id', lead.id)
+      .eq('is_primary', true)
+      .maybeSingle() as { data: { id: string; phones: { tipo: string; numero: string }[] | null } | null };
+
+    // Merge (dedupe por numero): contato primário + lead (pode ter número que o
+    // contato ainda não tem, por dessincronização antiga) + payload do Apollo.
+    const seenNumbers = new Set<string>();
+    const mergedPhones: { tipo: string; numero: string }[] = [];
+    for (const p of [...(primaryContact?.phones ?? []), ...(lead.phones ?? []), ...phones]) {
+      if (!seenNumbers.has(p.numero)) {
+        seenNumbers.add(p.numero);
         mergedPhones.push(p);
       }
     }
 
-    await from(supabase, 'leads')
-      .update({
-        telefone: primaryPhone,
-        phones: mergedPhones,
-      } as Record<string, unknown>)
-      .eq('id', lead.id);
+    if (primaryContact) {
+      await from(supabase, 'lead_contacts')
+        .update({ phones: mergedPhones } as Record<string, unknown>)
+        .eq('id', primaryContact.id);
+    } else {
+      // Lead antigo sem contato — atualiza direto as colunas do lead.
+      await from(supabase, 'leads')
+        .update({
+          telefone: lead.telefone ?? mergedPhones[0]?.numero ?? null,
+          phones: mergedPhones,
+        } as Record<string, unknown>)
+        .eq('id', lead.id);
+    }
 
-    await markEventProcessed(supabase, 'apollo', eventId, 'phone_reveal');
+    await markEventProcessed(supabase, 'apollo', eventId, 'phone_reveal', undefined, orgId);
     console.warn('[apollo-webhook] Updated lead with %d phones', mergedPhones.length);
     updated++;
   }

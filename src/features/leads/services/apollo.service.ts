@@ -68,6 +68,13 @@ export interface ApolloPhoneNumber {
   type: string;
 }
 
+// Apollo marca celular como 'mobile' na resposta síncrona e 'mobile_phone'
+// (type_cd) no webhook de phone reveal — os dois valores precisam virar 'celular',
+// senão o número certo cai para o fim da fila do discador (que prioriza celular).
+export function apolloPhoneTipo(type: string | null | undefined): 'celular' | 'fixo' {
+  return type === 'mobile' || type === 'mobile_phone' ? 'celular' : 'fixo';
+}
+
 export interface ApolloPersonFull {
   id: string;
   first_name: string | null;

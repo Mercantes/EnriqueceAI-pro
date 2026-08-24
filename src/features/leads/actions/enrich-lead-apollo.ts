@@ -12,7 +12,7 @@ import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispa
 import { logLeadEvent } from './log-lead-event';
 
 import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
-import { enrichPerson } from '../services/apollo.service';
+import { enrichPerson, apolloPhoneTipo } from '../services/apollo.service';
 import type { LeadPhone } from '../types';
 
 export async function enrichLeadWithApollo(leadId: string, force = false): Promise<ActionResult<void>> {
@@ -129,7 +129,7 @@ export async function enrichLeadWithApollo(leadId: string, force = false): Promi
         for (const phone of person.phone_numbers) {
           if (!existingNumbers.has(phone.raw_number)) {
             newPhones.push({
-              tipo: phone.type === 'mobile' ? 'celular' : 'fixo',
+              tipo: apolloPhoneTipo(phone.type),
               numero: phone.raw_number,
             });
             existingNumbers.add(phone.raw_number);
