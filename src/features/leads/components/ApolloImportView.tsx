@@ -200,6 +200,13 @@ export function ApolloImportView() {
                   </div>
                 </div>
 
+                {importResult.imported > 0 && (
+                  <p className="max-w-md text-center text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    Os telefones são revelados pelo Apollo de forma assíncrona e chegam em
+                    alguns instantes — atualize a página do lead se ainda não aparecerem.
+                  </p>
+                )}
+
                 {importResult.errors > 0 && (importResult.errorSamples?.length ?? 0) > 0 && (
                   <div className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-left text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
                     <p className="font-semibold">Motivo do(s) erro(s):</p>

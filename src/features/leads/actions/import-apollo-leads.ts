@@ -9,7 +9,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { from } from '@/lib/supabase/from';
 import { remainingSlots } from '@/lib/utils/plan-limits';
 
-import { enrichPerson, type ApolloPersonFull } from '../services/apollo.service';
+import { enrichPerson, apolloPhoneTipo, type ApolloPersonFull } from '../services/apollo.service';
 import { logLeadEventBulk } from './log-lead-event';
 import { getApolloApiKey, buildApolloWebhookUrl } from '../services/apollo-key.service';
 
@@ -303,8 +303,7 @@ function mapApolloToLead(
   const allPhones: Array<{ tipo: string; numero: string }> = [];
   if (person.phone_numbers && person.phone_numbers.length > 0) {
     for (const pn of person.phone_numbers) {
-      const tipo = pn.type === 'mobile' || pn.type === 'mobile_phone' ? 'celular' : 'fixo';
-      allPhones.push({ tipo, numero: pn.raw_number });
+      allPhones.push({ tipo: apolloPhoneTipo(pn.type), numero: pn.raw_number });
     }
   } else if (phone) {
     // Only sanitized_phone available — default to celular
