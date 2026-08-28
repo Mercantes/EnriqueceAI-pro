@@ -11,6 +11,7 @@ import { createNotificationsForOrgMembers } from '@/features/notifications/servi
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
 import { endActiveEnrollments, revalidateLeadPaths } from '../services/bulk-leads.service';
+import { scheduleInboundRecovery } from '../services/inbound-recovery.service';
 import { logLeadEventBulk } from './log-lead-event';
 
 const bulkMarkLostSchema = z.object({
@@ -91,6 +92,16 @@ export async function bulkMarkLeadsLost(
       .in('lead_id', confirmedIds)
       .eq('status', 'pending');
   }
+
+  // 2b. Recuperação automática de inbound: perda com motivo reativável
+  // redistribui os leads entre os SDRs de outbound e agenda a cadência Recovery
+  // (no-op se a org não tem regra, flag desligado ou nenhum lead é inbound).
+  await scheduleInboundRecovery({
+    orgId,
+    leadIds: confirmedIds,
+    lossReasonName: reason.name,
+    userId,
+  });
 
   // 3. Timeline event per lead
   const lossMessage = `Lead marcado como perdido — Motivo: ${reason.name}${notes ? ` | Obs: ${notes}` : ''}`;
