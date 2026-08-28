@@ -12,6 +12,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { logLeadEvent } from './log-lead-event';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+import { scheduleInboundRecovery } from '../services/inbound-recovery.service';
 
 /** Complete all active/paused enrollments for a lead (uses service role to bypass RLS) */
 async function completeEnrollmentsForLead(leadId: string) {
@@ -163,6 +164,16 @@ export async function markLeadAsLost(
     .update({ status: 'cancelled' } as Record<string, unknown>)
     .eq('lead_id', leadId)
     .eq('status', 'pending');
+
+  // 3c. Recuperação automática de inbound: perda com motivo reativável
+  // redistribui o lead entre os SDRs de outbound e agenda a cadência Recovery
+  // (no-op se a org não tem regra, flag desligado ou lead não é inbound).
+  await scheduleInboundRecovery({
+    orgId,
+    leadIds: [leadId],
+    lossReasonName: reason?.name,
+    userId: auth.data.userId,
+  });
 
   // Notify managers that a lead was lost
   const leadName = (await from(supabase, 'leads').select('nome_fantasia, razao_social').eq('id', leadId).single() as { data: { nome_fantasia: string | null; razao_social: string | null } | null }).data;
