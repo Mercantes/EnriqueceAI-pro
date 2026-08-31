@@ -4,6 +4,8 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { from } from '@/lib/supabase/from';
 
+import { scheduleInboundRecovery } from '@/features/leads/services/inbound-recovery.service';
+
 /**
  * Daily job that expires cadence_enrollments whose lead has been inactive
  * longer than the cadence's auto_loss_after_days threshold. Marks the lead
@@ -83,6 +85,9 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
   const nowIso = new Date().toISOString();
   let enrollmentsExpired = 0;
   let leadsLost = 0;
+  // Leads efetivamente perdidos nesta execução, para o gancho de recuperação
+  // de inbound (agrupados por org + motivo do auto-loss).
+  const lostForRecovery: Array<{ leadId: string; orgId: string; reasonId: string }> = [];
 
   // Stamp the enrollment side first so the cadence completion auto-fires
   // before we mutate the lead.
@@ -164,6 +169,39 @@ export async function expireInactiveLeads(): Promise<ActionResult<{
       continue;
     }
     leadsLost++;
+    lostForRecovery.push({ leadId, orgId: row.org_id, reasonId: row.auto_loss_reason_id });
+  }
+
+  // Recuperação automática de inbound: auto-loss com motivo reativável (ex.:
+  // "Nunca respondeu" nas cadências de Inbound) também redistribui o lead e
+  // agenda a Recovery — mesma regra do perdido manual. Sem loop: o RPC acima
+  // só considera enrollments 'active' de leads não-terminais, então o
+  // enrollment pausado criado aqui nunca vira candidato a auto-loss.
+  if (lostForRecovery.length > 0) {
+    const reasonIds = [...new Set(lostForRecovery.map((l) => l.reasonId))];
+    const { data: reasons } = (await from(supabase, 'loss_reasons')
+      .select('id, name')
+      .in('id', reasonIds)) as { data: Array<{ id: string; name: string }> | null };
+    const reasonNameById = new Map((reasons ?? []).map((r) => [r.id, r.name]));
+
+    const groups = new Map<string, { orgId: string; reasonName: string; leadIds: string[] }>();
+    for (const l of lostForRecovery) {
+      const reasonName = reasonNameById.get(l.reasonId);
+      if (!reasonName) continue;
+      const key = `${l.orgId}:${l.reasonId}`;
+      const group = groups.get(key) ?? { orgId: l.orgId, reasonName, leadIds: [] };
+      group.leadIds.push(l.leadId);
+      groups.set(key, group);
+    }
+
+    for (const group of groups.values()) {
+      await scheduleInboundRecovery({
+        orgId: group.orgId,
+        leadIds: group.leadIds,
+        lossReasonName: group.reasonName,
+        userId: null,
+      });
+    }
   }
 
   console.warn(
