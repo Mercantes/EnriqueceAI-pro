@@ -97,8 +97,8 @@ export async function scheduleInboundRecovery(params: {
   orgId: string;
   leadIds: string[];
   lossReasonName: string | null | undefined;
-  /** Quem deu o perdido — vira enrolled_by do novo enrollment */
-  userId: string;
+  /** Quem deu o perdido — vira enrolled_by do novo enrollment (null = cron/auto-loss) */
+  userId: string | null;
 }): Promise<{ scheduled: number }> {
   const { orgId, leadIds, lossReasonName, userId } = params;
   const none = { scheduled: 0 };

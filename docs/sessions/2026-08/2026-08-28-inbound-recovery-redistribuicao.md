@@ -36,3 +36,18 @@ Quando o Ismael der perdido em lead de **inbound** (Leadbroker/Blackbox) com mot
 - Config da regra (SDRs/cadência/dias) está hardcoded no serviço por org; se mudar o
   time, editar `RULES` em `inbound-recovery.service.ts`.
 - SDR desativado na org é ignorado automaticamente na distribuição.
+
+## Adendo 31/ago — Retroativo aplicado ✅
+
+- **202 leads** Leadbroker/Blackbox perdidos nos últimos 60 dias (jul+ago) com os 3 motivos,
+  sem enrollment aberto, redistribuídos round-robin entre os 4 SDRs e agendados na Recovery.
+- **Ondas semanais** para não afogar a fila: 10/set, 17/set, 24/set (15 por SDR cada) e
+  01/out (5-6 por SDR). `scheduled_start_at` 08:00 BRT; o motor ativa e volta o lead p/ `new`.
+- **Backup/staging**: tabela `_bkp_inbound_recovery_retro_20260831` (lead_id, prev_assigned_to,
+  motivo, onda, applied). NÃO dropar antes de ~08/out — é o caminho de reversão.
+- Timeline por lead (`inbound_recovery_scheduled`, `retroactive:true`) + 1 notificação
+  agregada por SDR. Verificação: 202 enrollments, 0 sem next_step_due, 202 eventos, 4 SDRs.
+- ⭐ Lição SQL: CTE modificadora não enxerga linhas inseridas por outra CTE no mesmo
+  statement — o `next_step_due` do piloto precisou de UPDATE separado.
+- ⚠️ Gap conhecido (proposital por ora): auto-loss por inatividade (cron) não passa por
+  `markLeadAsLost`, então perda AUTOMÁTICA com "Nunca respondeu" não dispara a redistribuição.
