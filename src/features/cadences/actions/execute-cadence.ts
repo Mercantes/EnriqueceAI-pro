@@ -211,23 +211,31 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
   // Pre-step: activate scheduled prospections whose date has arrived
   const { data: scheduledEnrollments } = (await from(supabase, 'cadence_enrollments')
-    .select('id, lead_id, cadence_id, lead:leads!inner(org_id)')
+    .select('id, lead_id, cadence_id, pending_assigned_to, lead:leads!inner(org_id)')
     .eq('status', 'paused')
     .not('scheduled_start_at', 'is', null)
     .lte('scheduled_start_at', new Date().toISOString())
-    .limit(50)) as { data: Array<{ id: string; lead_id: string; cadence_id: string; lead: { org_id: string } }> | null };
+    .limit(50)) as {
+    data: Array<{ id: string; lead_id: string; cadence_id: string; pending_assigned_to: string | null; lead: { org_id: string } }> | null;
+  };
 
   for (const scheduled of scheduledEnrollments ?? []) {
-    // Reactivate lead if still unqualified
+    // Reactivate lead if still unqualified. A troca de dono pendente
+    // (recuperação de inbound) é aplicada aqui — só se o lead ainda estiver
+    // perdido: se alguém o reviveu nesse meio-tempo, o dono atual prevalece.
+    const reactivatePatch: Record<string, unknown> = { status: 'new' };
+    if (scheduled.pending_assigned_to) {
+      reactivatePatch.assigned_to = scheduled.pending_assigned_to;
+    }
     const { error: reactivateErr } = await from(supabase, 'leads')
-      .update({ status: 'new' } as Record<string, unknown>)
+      .update(reactivatePatch)
       .eq('id', scheduled.lead_id)
       .eq('status', 'unqualified');
     if (reactivateErr) console.error(`[cadence-engine] Failed to reactivate lead=${scheduled.lead_id}:`, reactivateErr);
 
     // Activate enrollment — DB trigger recalculates next_step_due
     const { error: activateErr } = await from(supabase, 'cadence_enrollments')
-      .update({ status: 'active', scheduled_start_at: null } as Record<string, unknown>)
+      .update({ status: 'active', scheduled_start_at: null, pending_assigned_to: null } as Record<string, unknown>)
       .eq('id', scheduled.id);
     if (activateErr) console.error(`[cadence-engine] Failed to activate enrollment=${scheduled.id}:`, activateErr);
 

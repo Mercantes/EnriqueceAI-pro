@@ -9,10 +9,12 @@ import { createNotification } from '@/features/notifications/services/notificati
  *
  * Quando um lead inbound (Blackbox/Leadbroker) é dado como perdido com um
  * motivo "reativável" (Nunca respondeu / Sem interesse / Sem timing), o lead é
- * redistribuído entre os SDRs de outbound configurados e inscrito na cadência
- * Recovery com início agendado (enrollment pausado + scheduled_start_at).
- * O motor de cadência (execute-cadence.ts) ativa o enrollment na data e volta o
- * lead de 'unqualified' para 'new' sozinho — nenhuma infra nova é necessária.
+ * inscrito na cadência Recovery com início agendado (enrollment pausado +
+ * scheduled_start_at) e um SDR de outbound é sorteado por menor carga. A troca
+ * de dono fica PENDENTE (pending_assigned_to): o motor de cadência
+ * (execute-cadence.ts) ativa o enrollment na data, volta o lead de
+ * 'unqualified' para 'new' e só então transfere para o SDR — a perda continua
+ * atribuída ao SDR original e as métricas mensais do funil não são poluídas.
  *
  * Liga/desliga sem deploy via app_flags (key abaixo), mesmo padrão do webhook
  * de reunião. A regra em si é por org (RULES).
@@ -44,7 +46,9 @@ const RULES: Record<string, InboundRecoveryRule> = {
       { id: '5769812d-c562-437f-8259-987c2c2dbecd', name: 'Giovanni Olivieri' },
       { id: '3e0deabd-e491-48a1-8c9b-92423b0f55b7', name: 'João Fogaça' },
     ],
-    delayDays: 10,
+    // 30d (era 10d): lead perdido no mês entrava no funil do outro SDR ainda
+    // dentro do mesmo mês e distorcia as métricas mensais do funil.
+    delayDays: 30,
     reasonNames: ['Nunca respondeu', 'Sem interesse', 'Sem timing'],
   },
 };
@@ -57,6 +61,25 @@ export function isRecoverableLossReason(reasonName: string | null | undefined, r
 
 export function isInboundLeadSource(leadSource: string | null | undefined): boolean {
   return !!leadSource && INBOUND_LEAD_SOURCES.includes(leadSource);
+}
+
+/**
+ * Conta a carga por SDR nos enrollments abertos da cadência de destino.
+ * A reatribuição é adiada para a ativação, então um enrollment agendado conta
+ * para o SDR pendente (pending_assigned_to); sem pendência, conta para o dono
+ * atual do lead.
+ */
+export function countOpenEnrollmentsBySdr(
+  rows: Array<{ pending_assigned_to: string | null; lead: { assigned_to: string | null } | null }>,
+  sdrIds: string[],
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const id of sdrIds) counts[id] = 0;
+  for (const row of rows) {
+    const owner = row.pending_assigned_to ?? row.lead?.assigned_to;
+    if (owner && owner in counts) counts[owner] = (counts[owner] ?? 0) + 1;
+  }
+  return counts;
 }
 
 /**
@@ -144,20 +167,15 @@ export async function scheduleInboundRecovery(params: {
       return none;
     }
 
-    // Carga atual: enrollments abertos na cadência de destino por SDR dono do lead
+    // Carga atual: enrollments abertos na cadência de destino, contando o SDR
+    // pendente quando houver (a troca de dono só acontece na ativação)
     const { data: openEnrollments } = (await from(serviceClient, 'cadence_enrollments')
-      .select('id, lead:leads!inner(assigned_to)')
+      .select('id, pending_assigned_to, lead:leads(assigned_to)')
       .eq('cadence_id', rule.cadenceId)
-      .in('status', ['active', 'paused'])
-      .in('lead.assigned_to', activeSdrIds)) as {
-      data: Array<{ id: string; lead: { assigned_to: string | null } }> | null;
+      .in('status', ['active', 'paused'])) as {
+      data: Array<{ id: string; pending_assigned_to: string | null; lead: { assigned_to: string | null } | null }> | null;
     };
-    const counts: Record<string, number> = {};
-    for (const id of activeSdrIds) counts[id] = 0;
-    for (const e of openEnrollments ?? []) {
-      const owner = e.lead?.assigned_to;
-      if (owner && owner in counts) counts[owner] = (counts[owner] ?? 0) + 1;
-    }
+    const counts = countOpenEnrollmentsBySdr(openEnrollments ?? [], activeSdrIds);
 
     const startAt = new Date(Date.now() + rule.delayDays * 24 * 60 * 60 * 1000).toISOString();
     const startLabel = new Date(startAt).toLocaleDateString('pt-BR', {
@@ -171,14 +189,10 @@ export async function scheduleInboundRecovery(params: {
       counts[sdrId] = (counts[sdrId] ?? 0) + 1;
       const sdrName = rule.sdrs.find((s) => s.id === sdrId)?.name ?? 'SDR';
 
-      const { error: assignError } = await from(serviceClient, 'leads')
-        .update({ assigned_to: sdrId } as Record<string, unknown>)
-        .eq('id', lead.id)
-        .eq('org_id', orgId);
-      if (assignError) {
-        console.error(`[inbound-recovery] lead=${lead.id} falha ao reatribuir:`, assignError.message);
-        continue;
-      }
+      // A troca de dono NÃO acontece aqui: o SDR escolhido fica pendente no
+      // enrollment e o motor aplica na ativação. Assim a perda continua
+      // atribuída ao SDR original e o lead só entra na carteira do novo SDR
+      // no mês em que volta a ser trabalhável (métricas mensais do funil).
 
       // Fecha um eventual enrollment aberto na própria Recovery antes de inserir
       // (mesma proteção de scheduleNewProspection contra enrollment duplicado)
@@ -197,6 +211,7 @@ export async function scheduleInboundRecovery(params: {
           status: 'paused',
           enrolled_by: userId,
           scheduled_start_at: startAt,
+          pending_assigned_to: sdrId,
         } as Record<string, unknown>)
         .select('id')
         .single()) as { data: { id: string } | null; error: { message: string } | null };
@@ -215,10 +230,10 @@ export async function scheduleInboundRecovery(params: {
         leadId: lead.id,
         userId: null,
         event: 'inbound_recovery_scheduled',
-        message: `Perda reativável de lead inbound — redistribuído para ${sdrName} e agendado na cadência ${cadence.name} para ${startLabel}`,
+        message: `Perda reativável de lead inbound — agendado na cadência ${cadence.name} para ${startLabel}, quando será transferido para ${sdrName}`,
         metadata: {
           cadence_id: rule.cadenceId,
-          assigned_to: sdrId,
+          pending_assigned_to: sdrId,
           scheduled_start_at: startAt,
           loss_reason_name: lossReasonName,
         },
@@ -229,8 +244,8 @@ export async function scheduleInboundRecovery(params: {
         org_id: orgId,
         user_id: sdrId,
         type: 'lead_inbound',
-        title: `Lead inbound recebido para Recovery: ${displayName}`,
-        body: `Perdido por "${lossReasonName}" — entra na cadência ${cadence.name} em ${startLabel}`,
+        title: `Lead inbound reservado para você na Recovery: ${displayName}`,
+        body: `Perdido por "${lossReasonName}" — entra na cadência ${cadence.name} e passa para a sua carteira em ${startLabel}`,
         resource_type: 'lead',
         resource_id: lead.id,
       }).catch((err) => console.error('[inbound-recovery] notificação falhou:', err));
