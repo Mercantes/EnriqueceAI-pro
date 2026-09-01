@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  countOpenEnrollmentsBySdr,
   isInboundLeadSource,
   isRecoverableLossReason,
   pickLeastLoadedSdr,
@@ -41,6 +42,25 @@ describe('isInboundLeadSource', () => {
     expect(isInboundLeadSource('Outbound')).toBe(false);
     expect(isInboundLeadSource(null)).toBe(false);
     expect(isInboundLeadSource(undefined)).toBe(false);
+  });
+});
+
+describe('countOpenEnrollmentsBySdr', () => {
+  it('pendência de reatribuição conta para o SDR pendente, não para o dono atual', () => {
+    const rows = [
+      { pending_assigned_to: 'a', lead: { assigned_to: 'ismael' } },
+      { pending_assigned_to: null, lead: { assigned_to: 'b' } },
+    ];
+    expect(countOpenEnrollmentsBySdr(rows, ['a', 'b', 'c'])).toEqual({ a: 1, b: 1, c: 0 });
+  });
+
+  it('ignora donos fora da lista e leads sem dono', () => {
+    const rows = [
+      { pending_assigned_to: null, lead: { assigned_to: 'fora-da-lista' } },
+      { pending_assigned_to: null, lead: { assigned_to: null } },
+      { pending_assigned_to: null, lead: null },
+    ];
+    expect(countOpenEnrollmentsBySdr(rows, ['a', 'b'])).toEqual({ a: 0, b: 0 });
   });
 });
 

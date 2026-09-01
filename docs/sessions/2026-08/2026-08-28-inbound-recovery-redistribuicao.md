@@ -51,3 +51,14 @@ Quando o Ismael der perdido em lead de **inbound** (Leadbroker/Blackbox) com mot
   statement — o `next_step_due` do piloto precisou de UPDATE separado.
 - ⚠️ Gap conhecido (proposital por ora): auto-loss por inatividade (cron) não passa por
   `markLeadAsLost`, então perda AUTOMÁTICA com "Nunca respondeu" não dispara a redistribuição.
+
+## Adendo 01/set — 30 dias + reatribuição adiada para a ativação ✅
+
+- Prazo de entrada na Recovery: **10 → 30 dias** (lead perdido no mês entrava no funil do
+  outro SDR no mesmo mês e distorcia as métricas mensais).
+- **Troca de dono adiada**: o serviço agora grava o SDR sorteado em
+  `cadence_enrollments.pending_assigned_to` (migration `20260901090000`, aplicada em prod)
+  e o motor (`execute-cadence.ts`) aplica a transferência na ativação, junto com
+  `unqualified → new` — só se o lead ainda estiver perdido (lead revivido mantém o dono).
+- Sorteio por menor carga conta também as reservas pendentes (`countOpenEnrollmentsBySdr`).
+- Retroativo (ondas 10/set → 01/out) inalterado: enrollments sem pendência seguem o fluxo antigo.
