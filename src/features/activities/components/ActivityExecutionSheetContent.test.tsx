@@ -35,6 +35,13 @@ vi.mock('../actions/fetch-whatsapp-templates', () => ({
   }),
 }));
 
+vi.mock('../actions/fetch-email-templates', () => ({
+  fetchEmailTemplates: vi.fn().mockResolvedValue({
+    success: true,
+    data: [],
+  }),
+}));
+
 vi.mock('@/features/cadences/actions/fetch-vendor-variables', () => ({
   fetchVendorVariables: vi.fn().mockResolvedValue({
     success: true,

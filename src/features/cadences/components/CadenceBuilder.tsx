@@ -97,7 +97,7 @@ function daysToStepInputs(days: DayData[]) {
   return inputs;
 }
 
-export function CadenceBuilder({ cadence, templates: _templates, metrics, enrollments = [], lossReasons = [] }: CadenceBuilderProps) {
+export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], lossReasons = [] }: CadenceBuilderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(cadence?.name ?? '');
@@ -180,12 +180,12 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
     setStepEditorOpen(true);
   }
 
-  function handleStepEditorSave(stepId: string, activityName: string | null, instructions: string | null) {
+  function handleStepEditorSave(stepId: string, activityName: string | null, instructions: string | null, templateId: string | null) {
     setDays((prev) =>
       prev.map((d) => ({
         ...d,
         steps: d.steps.map((s) =>
-          s.id === stepId ? { ...s, activityName, instructions } : s,
+          s.id === stepId ? { ...s, activityName, instructions, templateId } : s,
         ),
       })),
     );
@@ -197,6 +197,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
         cadenceId: cadence.id,
         activity_name: activityName,
         instructions,
+        template_id: templateId,
       }).then((result) => {
         if (result.success) {
           toast.success('Atividade atualizada');
@@ -407,6 +408,7 @@ export function CadenceBuilder({ cadence, templates: _templates, metrics, enroll
         open={stepEditorOpen}
         onOpenChange={setStepEditorOpen}
         step={editingStep}
+        templates={templates}
         onSave={handleStepEditorSave}
       />
 

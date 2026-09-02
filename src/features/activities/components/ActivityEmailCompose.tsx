@@ -33,6 +33,14 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import type { EmailTemplateOption } from '../actions/fetch-email-templates';
+import {
   AVAILABLE_TEMPLATE_VARIABLES,
   VENDOR_TEMPLATE_VARIABLES,
 } from '@/features/cadences/cadence.schemas';
@@ -46,6 +54,9 @@ interface ActivityEmailComposeProps {
   isLoading: boolean;
   isSending: boolean;
   draftKey?: string;
+  templates?: EmailTemplateOption[];
+  currentTemplateId?: string | null;
+  onTemplateChange?: (templateId: string) => void;
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
   onSend: () => void;
@@ -61,6 +72,9 @@ export function ActivityEmailCompose({
   isLoading,
   isSending,
   draftKey,
+  templates = [],
+  currentTemplateId,
+  onTemplateChange,
   onSubjectChange,
   onBodyChange,
   onSend,
@@ -307,6 +321,30 @@ export function ActivityEmailCompose({
                 placeholder={!to ? 'Lead sem email cadastrado' : undefined}
               />
             </div>
+
+            {/* Template selector — above subject */}
+            {templates.length > 0 && onTemplateChange && (
+              <div className="space-y-1">
+                <Label className="text-xs">Template</Label>
+                <Select
+                  value={currentTemplateId ?? 'none'}
+                  onValueChange={(val) => {
+                    if (val !== 'none') onTemplateChange(val);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((tpl) => (
+                      <SelectItem key={tpl.id} value={tpl.id}>
+                        {tpl.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Subject */}
             <div className="space-y-1">

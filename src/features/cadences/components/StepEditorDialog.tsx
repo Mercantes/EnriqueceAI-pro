@@ -30,6 +30,13 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 import { Separator } from '@/shared/components/ui/separator';
 import {
   Tooltip,
@@ -39,7 +46,7 @@ import {
 } from '@/shared/components/ui/tooltip';
 
 import { TEMPLATE_VARIABLES } from '@/features/activity-templates/constants/template-variables';
-import type { ChannelType } from '../types';
+import type { ChannelType, MessageTemplateRow } from '../types';
 import { channelConfig } from './ActivityTypeSidebar';
 import type { TimelineStep } from './CadenceTimeline';
 
@@ -63,19 +70,35 @@ interface StepEditorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   step: TimelineStep | null;
-  onSave: (stepId: string, activityName: string | null, instructions: string | null) => void;
+  templates?: MessageTemplateRow[];
+  onSave: (stepId: string, activityName: string | null, instructions: string | null, templateId: string | null) => void;
 }
+
+const NO_TEMPLATE = 'none';
 
 function StepEditorForm({
   step,
+  templates,
   onSave,
   onCancel,
 }: {
   step: TimelineStep;
-  onSave: (stepId: string, activityName: string | null, instructions: string | null) => void;
+  templates: MessageTemplateRow[];
+  onSave: (stepId: string, activityName: string | null, instructions: string | null, templateId: string | null) => void;
   onCancel: () => void;
 }) {
   const [activityName, setActivityName] = useState(step.activityName ?? '');
+  const [templateId, setTemplateId] = useState<string>(step.templateId ?? NO_TEMPLATE);
+
+  // Templates do canal do passo (canais de mensagem: e-mail e WhatsApp).
+  const channelTemplates = templates.filter((t) => t.channel === step.channel);
+  // Garante que um template já vinculado apareça no Select mesmo se sair da lista.
+  const currentTemplate =
+    templateId !== NO_TEMPLATE && !channelTemplates.some((t) => t.id === templateId)
+      ? templates.find((t) => t.id === templateId)
+      : undefined;
+  const isMessageChannel = step.channel === 'email' || step.channel === 'whatsapp';
+  const showTemplateSelect = isMessageChannel && (channelTemplates.length > 0 || !!currentTemplate);
 
   const config = channelConfig[step.channel];
   const Icon = config.icon;
@@ -134,6 +157,7 @@ function StepEditorForm({
       step.id,
       activityName.trim() || null,
       plainText || null,
+      templateId === NO_TEMPLATE ? null : templateId,
     );
   }
 
@@ -169,6 +193,36 @@ function StepEditorForm({
             maxLength={200}
           />
         </div>
+
+        {/* Template da mensagem — preenche o e-mail/WhatsApp na fila de atividades */}
+        {showTemplateSelect && (
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold">
+              {step.channel === 'email' ? 'Template de e-mail:' : 'Template de WhatsApp:'}
+            </Label>
+            <Select value={templateId} onValueChange={setTemplateId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Nenhum template" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_TEMPLATE}>Nenhum template</SelectItem>
+                {currentTemplate && (
+                  <SelectItem value={currentTemplate.id}>{currentTemplate.name}</SelectItem>
+                )}
+                {channelTemplates.map((tpl) => (
+                  <SelectItem key={tpl.id} value={tpl.id}>
+                    {tpl.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-xs">
+              {step.channel === 'email'
+                ? 'O assunto e o corpo do template preenchem o e-mail automaticamente quando o SDR executa esta atividade.'
+                : 'O template preenche a mensagem automaticamente quando o SDR executa esta atividade (ele ainda pode trocar na hora).'}
+            </p>
+          </div>
+        )}
 
         <Separator />
 
@@ -318,11 +372,11 @@ function StepEditorForm({
   );
 }
 
-export function StepEditorDialog({ open, onOpenChange, step, onSave }: StepEditorDialogProps) {
+export function StepEditorDialog({ open, onOpenChange, step, templates = [], onSave }: StepEditorDialogProps) {
   if (!step) return null;
 
-  function handleSave(stepId: string, activityName: string | null, instructions: string | null) {
-    onSave(stepId, activityName, instructions);
+  function handleSave(stepId: string, activityName: string | null, instructions: string | null, templateId: string | null) {
+    onSave(stepId, activityName, instructions, templateId);
     onOpenChange(false);
   }
 
@@ -331,6 +385,7 @@ export function StepEditorDialog({ open, onOpenChange, step, onSave }: StepEdito
       <StepEditorForm
         key={step.id}
         step={step}
+        templates={templates}
         onSave={handleSave}
         onCancel={() => onOpenChange(false)}
       />
