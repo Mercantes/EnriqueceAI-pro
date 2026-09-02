@@ -11,6 +11,7 @@ import { fetchVendorVariables } from '@/features/cadences/actions/fetch-vendor-v
 import { fetchGmailSignature } from '../actions/fetch-gmail-signature';
 import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepare-activity-email';
 import { fetchWhatsAppTemplates, type WhatsAppTemplateOption } from '../actions/fetch-whatsapp-templates';
+import { fetchEmailTemplates, type EmailTemplateOption } from '../actions/fetch-email-templates';
 import { checkWhatsAppConnected } from '../actions/check-whatsapp-status';
 import { resolveWhatsAppPhone, buildContactPhones } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity } from '../types';
@@ -110,6 +111,9 @@ export function ActivityExecutionSheetContent({
 
   // WhatsApp templates
   const [waTemplates, setWaTemplates] = useState<WhatsAppTemplateOption[]>([]);
+  // Email templates — permite ao SDR escolher/trocar o template na hora de
+  // executar, inclusive quando o passo da cadência não tem template vinculado.
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplateOption[]>([]);
   const [currentTemplateId, setCurrentTemplateId] = useState<string | null>(activity.templateId);
   const [vendorVars, setVendorVars] = useState<Record<string, string | null>>({});
 
@@ -160,6 +164,13 @@ export function ActivityExecutionSheetContent({
       // Fetch signature in parallel with preparing the email
       fetchGmailSignature().then((r) => {
         if (!cancelled && r.success && r.data) setSignature(r.data);
+      });
+
+      // Fetch email templates in parallel — used by the template selector
+      fetchEmailTemplates().then((result) => {
+        if (!cancelled && result.success) {
+          setEmailTemplates(result.data);
+        }
       });
 
       prepareActivityEmail({
@@ -217,6 +228,30 @@ export function ActivityExecutionSheetContent({
     // Render variables immediately so the textarea shows resolved text
     setBody(renderTemplate(tpl.body, templateVariables));
     setAiPersonalized(false);
+  }
+
+  function handleEmailTemplateChange(templateId: string) {
+    const tpl = emailTemplates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    setCurrentTemplateId(templateId);
+    setAiPersonalized(false);
+
+    // Render no servidor (mesmo caminho do carregamento inicial) para resolver
+    // variáveis de vendedor/{{referencia}} com escaping dos valores do lead.
+    prepareActivityEmail({
+      lead: activity.lead,
+      templateSubject: tpl.subject,
+      templateBody: tpl.body,
+      aiPersonalization: false,
+      channel: 'email',
+    }).then((result) => {
+      if (result.success) {
+        setSubject(result.data.subject);
+        setBody(result.data.body);
+      } else {
+        toast.error(result.error);
+      }
+    });
   }
 
   // LinkedIn / Social Point
@@ -334,6 +369,9 @@ export function ActivityExecutionSheetContent({
       isLoading={isLoading}
       isSending={isSending}
       draftKey={`${activity.enrollmentId}:${activity.stepId}`}
+      templates={emailTemplates}
+      currentTemplateId={currentTemplateId}
+      onTemplateChange={handleEmailTemplateChange}
       onSubjectChange={setSubject}
       onBodyChange={setBody}
       onSend={() => onSend(renderedSubject, renderedPreview, aiPersonalized)}
