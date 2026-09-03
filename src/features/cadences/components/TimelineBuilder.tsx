@@ -10,7 +10,7 @@ import { Button } from '@/shared/components/ui/button';
 import type { CadenceDetail, CadenceStepWithTemplate } from '../cadences.contract';
 import type { ChannelType } from '../types';
 import { activateCadence } from '../actions/manage-cadences';
-import { saveTimelineSteps } from '../actions/save-timeline-steps';
+import { saveTimelineSteps, type TimelineStepInput } from '../actions/save-timeline-steps';
 import { ActivityTypeSidebar, channelConfig } from './ActivityTypeSidebar';
 import { CadenceTimeline, type DayData, type TimelineStep } from './CadenceTimeline';
 
@@ -51,15 +51,17 @@ function stepsTodays(steps: CadenceStepWithTemplate[]): DayData[] {
   }));
 }
 
-// Convert DayData back to flat step inputs for saving
-function daysToStepInputs(days: DayData[]) {
-  const inputs: { channel: ChannelType; delay_days: number; step_order: number; template_id?: string | null; ai_personalization?: boolean }[] = [];
+// Convert DayData back to flat step inputs for saving.
+// O `id` viaja junto para o passo existente ser atualizado no lugar (ID preservado).
+function daysToStepInputs(days: DayData[]): TimelineStepInput[] {
+  const inputs: TimelineStepInput[] = [];
   let globalOrder = 1;
 
   for (const day of days) {
     const delayDays = day.day - 1; // Dia 1 → delay_days=0
     for (const step of day.steps) {
       inputs.push({
+        id: step.id,
         channel: step.channel,
         delay_days: delayDays,
         step_order: globalOrder,

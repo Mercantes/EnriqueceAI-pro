@@ -2,10 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowDown, ArrowLeft, ChevronDown, Mail, Pencil, Play, Plus, Save, Timer } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowLeft, ChevronDown, Mail, Pencil, Play, Plus, Save, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -23,11 +24,13 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { CadenceDetail, CadenceMetrics } from '../cadences.contract';
 import type { AutoEmailStep } from '../cadence.schemas';
+import { ACTIVE_ENROLLMENTS_CODE } from '../types';
 import type { CadenceOrigin, CadencePriority } from '../types';
 import type { LossReasonOption } from '../actions/fetch-loss-reasons';
 import { activateCadence, createCadence, updateCadence } from '../actions/manage-cadences';
 import { saveAutoEmailSteps } from '../actions/save-auto-email-steps';
 import { updateStepContent } from '../actions/update-step-content';
+import { ActiveEnrollmentsConfirmDialog } from './ActiveEnrollmentsConfirmDialog';
 import { AutoEmailStepEditor } from './AutoEmailStepEditor';
 
 interface AutoEmailBuilderProps {
@@ -82,9 +85,13 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
   const [generalCollapsed, setGeneralCollapsed] = useState(false);
   const [steps, setSteps] = useState<AutoEmailStep[]>(buildInitialSteps(cadence));
   const [editingDelayIndex, setEditingDelayIndex] = useState<number | null>(null);
+  // A action recusou mudar o número de passos porque há leads em andamento;
+  // guardamos a mensagem para pedir confirmação e repetir o salvamento.
+  const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
 
   const isEditing = !!cadence;
   const isEditable = !cadence || cadence.status === 'draft' || cadence.status === 'paused';
+  const hasEnrollments = !!cadence && cadence.enrollment_count > 0;
   const _isContentEditable = isEditable || cadence?.status === 'active'; // Can edit templates even when active
   const statusCfg = cadence ? statusConfig[cadence.status] : null;
 
@@ -116,7 +123,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
     ]);
   }
 
-  function handleSave() {
+  function handleSave(confirmActiveEnrollments = false) {
     if (!name.trim()) {
       toast.error('Nome da cadência é obrigatório');
       return;
@@ -181,10 +188,15 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
       const saveResult = await saveAutoEmailSteps({
         cadence_id: cadenceId!,
         steps,
+        confirm_active_enrollments: confirmActiveEnrollments,
       });
 
       if (!saveResult.success) {
-        toast.error(saveResult.error);
+        if (saveResult.code === ACTIVE_ENROLLMENTS_CODE) {
+          setConfirmMessage(saveResult.error);
+        } else {
+          toast.error(saveResult.error);
+        }
         return;
       }
 
@@ -234,6 +246,29 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
           </Badge>
         )}
       </div>
+
+      {/* Aviso: mudar o número de passos com leads inscritos reposiciona quem está na régua */}
+      {isEditing && isEditable && hasEnrollments && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertTitle>Esta cadência já tem {cadence.enrollment_count} {cadence.enrollment_count === 1 ? 'inscrição' : 'inscrições'}</AlertTitle>
+          <AlertDescription>
+            Adicionar ou remover passos muda a posição dos leads em andamento e será pedida confirmação ao salvar.
+            Editar assunto, corpo ou intervalo de um passo existente é seguro.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <ActiveEnrollmentsConfirmDialog
+        open={confirmMessage !== null}
+        message={confirmMessage}
+        pending={isPending}
+        onCancel={() => setConfirmMessage(null)}
+        onConfirm={() => {
+          setConfirmMessage(null);
+          handleSave(true);
+        }}
+      />
 
       {/* Configuração — table-style horizontal rows */}
       <Card>
@@ -389,7 +424,7 @@ export function AutoEmailBuilder({ cadence, metrics, lossReasons = [] }: AutoEma
           {/* Actions */}
           <div className="flex items-center gap-2 pt-4">
             {isEditable && (
-              <Button onClick={handleSave} disabled={isPending}>
+              <Button onClick={() => handleSave()} disabled={isPending}>
                 <Save className="mr-2 h-4 w-4" />
                 {isPending ? 'Salvando...' : 'Salvar'}
               </Button>

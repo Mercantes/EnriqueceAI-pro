@@ -1,10 +1,13 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
+
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
 import { saveAutoEmailCadenceSchema } from '../cadence.schemas';
+import { ACTIVE_ENROLLMENTS_CODE } from '../types';
 import { extractVariables } from '../utils/render-template';
 
 interface SaveResult {
@@ -12,6 +15,22 @@ interface SaveResult {
   template_ids: string[];
 }
 
+interface ExistingStep {
+  id: string;
+  step_order: number;
+  template_id: string | null;
+  template_id_b: string | null;
+}
+
+/**
+ * Salva os passos de uma cadência de e-mail automático.
+ *
+ * Os passos existentes são atualizados NO LUGAR (ID preservado, por posição):
+ * o motor `execute-cadence` usa `interactions.step_id` como trava de
+ * idempotência — recriar os passos com IDs novos zerava esse vínculo (FK ON
+ * DELETE SET NULL) e permitia reenviar e-mails já enviados. Os templates
+ * inline são recriados a cada salvamento (o conteúdo é do passo, não do lead).
+ */
 export async function saveAutoEmailSteps(
   input: Record<string, unknown>,
 ): Promise<ActionResult<SaveResult>> {
@@ -20,7 +39,7 @@ export async function saveAutoEmailSteps(
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
   }
 
-  const { cadence_id, steps } = parsed.data;
+  const { cadence_id, steps, confirm_active_enrollments } = parsed.data;
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
@@ -45,34 +64,43 @@ export async function saveAutoEmailSteps(
     return { success: false, error: 'Cadência precisa estar em rascunho ou pausada para editar passos' };
   }
 
-  // Delete existing steps and their inline templates
-  const { data: existingSteps } = (await from(supabase, 'cadence_steps')
-    .select('template_id, template_id_b')
-    .eq('cadence_id', cadence_id)) as { data: Array<{ template_id: string | null; template_id_b: string | null }> | null };
+  // Passos atuais (ordenados) — a posição i reaproveita o ID do passo i.
+  const { data: existingRows, error: existingError } = (await from(supabase, 'cadence_steps')
+    .select('id, step_order, template_id, template_id_b')
+    .eq('cadence_id', cadence_id)
+    .order('step_order', { ascending: true })) as { data: ExistingStep[] | null; error: { message: string } | null };
 
-  // Delete existing steps
-  const { error: deleteStepsError } = await from(supabase, 'cadence_steps')
-    .delete()
-    .eq('cadence_id', cadence_id);
-
-  if (deleteStepsError) {
-    return { success: false, error: 'Erro ao limpar passos existentes' };
+  if (existingError) {
+    return { success: false, error: 'Erro ao ler passos existentes' };
   }
 
-  // Delete orphaned inline templates (both A and B variants)
-  const templateIds = (existingSteps ?? [])
+  const existing = existingRows ?? [];
+
+  // Mudar a QUANTIDADE de passos com leads em andamento reposiciona quem está
+  // no fim da régua (current_step é posicional). Só com confirmação.
+  if (steps.length !== existing.length) {
+    const { count } = (await from(supabase, 'cadence_enrollments')
+      .select('id', { count: 'exact', head: true })
+      .eq('cadence_id', cadence_id)
+      .in('status', ['active', 'paused'])) as { count: number | null };
+
+    const inProgress = count ?? 0;
+    if (inProgress > 0 && !confirm_active_enrollments) {
+      return {
+        success: false,
+        code: ACTIVE_ENROLLMENTS_CODE,
+        error:
+          `Esta cadência tem ${inProgress} lead${inProgress === 1 ? '' : 's'} em andamento. ` +
+          'Adicionar ou remover passos muda a posição desses leads na régua de e-mails.',
+      };
+    }
+  }
+
+  const oldTemplateIds = existing
     .flatMap((s) => [s.template_id, s.template_id_b])
     .filter((id): id is string => id != null);
 
-  if (templateIds.length > 0) {
-    const { error: orphanErr } = await from(supabase, 'message_templates')
-      .delete()
-      .in('id', templateIds)
-      .eq('org_id', orgId);
-    if (orphanErr) console.error('[saveAutoEmailSteps] Failed to delete orphaned templates:', orphanErr);
-  }
-
-  // Create templates and steps for each new step
+  // Create templates and upsert steps for each new step
   const newTemplateIds: string[] = [];
 
   for (let i = 0; i < steps.length; i++) {
@@ -125,22 +153,26 @@ export async function saveAutoEmailSteps(
       newTemplateIds.push(templateB.id);
     }
 
-    // Create cadence step
+    // Upsert cadence step — reaproveita o ID da posição i quando existe.
     const { error: stepError } = await from(supabase, 'cadence_steps')
-      .insert({
-        cadence_id,
-        step_order: i + 1,
-        channel: 'email',
-        template_id: template.id,
-        template_id_b: templateBId,
-        ab_enabled: step.ab_enabled ?? false,
-        ab_distribution: step.ab_distribution ?? 50,
-        ab_enabled_at: step.ab_enabled ? new Date().toISOString() : null,
-        delay_days: i === 0 ? 0 : step.delay_days,
-        delay_hours: i === 0 ? 0 : step.delay_hours,
-        ai_personalization: step.ai_personalization,
-        reply_type: i === 0 ? 'new_conversation' : (step.reply_type ?? 'new_conversation'),
-      } as Record<string, unknown>);
+      .upsert(
+        {
+          id: existing[i]?.id ?? randomUUID(),
+          cadence_id,
+          step_order: i + 1,
+          channel: 'email',
+          template_id: template.id,
+          template_id_b: templateBId,
+          ab_enabled: step.ab_enabled ?? false,
+          ab_distribution: step.ab_distribution ?? 50,
+          ab_enabled_at: step.ab_enabled ? new Date().toISOString() : null,
+          delay_days: i === 0 ? 0 : step.delay_days,
+          delay_hours: i === 0 ? 0 : step.delay_hours,
+          ai_personalization: step.ai_personalization,
+          reply_type: i === 0 ? 'new_conversation' : (step.reply_type ?? 'new_conversation'),
+        } as Record<string, unknown>,
+        { onConflict: 'id' },
+      );
 
     if (stepError) {
       // Clean up orphaned templates
@@ -152,8 +184,29 @@ export async function saveAutoEmailSteps(
           .delete()
           .eq('id', templateBId);
       }
-      return { success: false, error: `Erro ao criar step ${i + 1}` };
+      return { success: false, error: `Erro ao salvar step ${i + 1}` };
     }
+  }
+
+  // Remove only the steps beyond the new length
+  const extraIds = existing.slice(steps.length).map((s) => s.id);
+  if (extraIds.length > 0) {
+    const { error: deleteStepsError } = await from(supabase, 'cadence_steps')
+      .delete()
+      .in('id', extraIds);
+
+    if (deleteStepsError) {
+      return { success: false, error: 'Erro ao remover passos excedentes' };
+    }
+  }
+
+  // Delete the previous inline templates (steps already point to the new ones)
+  if (oldTemplateIds.length > 0) {
+    const { error: orphanErr } = await from(supabase, 'message_templates')
+      .delete()
+      .in('id', oldTemplateIds)
+      .eq('org_id', orgId);
+    if (orphanErr) console.error('[saveAutoEmailSteps] Failed to delete orphaned templates:', orphanErr);
   }
 
   // Update total_steps

@@ -4,47 +4,50 @@ vi.mock('@/lib/auth/require-auth', () => ({
   requireAuth: vi.fn().mockResolvedValue({ id: 'user-1', email: 'test@test.com' }),
 }));
 
-function createChainMock() {
-  const chain: Record<string, unknown> = {};
-  chain.select = vi.fn().mockReturnValue(chain);
-  chain.eq = vi.fn().mockReturnValue(chain);
-  chain.is = vi.fn().mockReturnValue(chain);
-  chain.single = vi.fn().mockReturnValue(chain);
-  chain.insert = vi.fn().mockReturnValue(chain);
-  chain.delete = vi.fn().mockReturnValue(chain);
-  chain.update = vi.fn().mockReturnValue(chain);
-  return chain;
-}
+type Resolved = { data?: unknown; error?: unknown; count?: number | null };
 
-let orgMemberChain: ReturnType<typeof createChainMock>;
-let cadenceChain: ReturnType<typeof createChainMock>;
-let stepsChain: ReturnType<typeof createChainMock>;
+/**
+ * Cadeia PostgREST fake: todo método devolve a própria cadeia e `await` resolve
+ * no valor configurado. Cada chamada a `from(table)` consome a próxima cadeia
+ * da fila daquela tabela, na ordem em que a action executa as queries.
+ */
+const CHAIN_METHODS = ['select', 'eq', 'is', 'in', 'order', 'single', 'maybeSingle', 'insert', 'delete', 'update', 'upsert'] as const;
+type Chain = Record<(typeof CHAIN_METHODS)[number], ReturnType<typeof vi.fn>> & { then: unknown };
+
+function chain(resolved: Resolved = { data: null, error: null }): Chain {
+  const c: Record<string, unknown> = {};
+  for (const m of CHAIN_METHODS) {
+    c[m] = vi.fn().mockReturnValue(c);
+  }
+  c.then = (onFulfilled: (v: Resolved) => unknown, onRejected?: (e: unknown) => unknown) =>
+    Promise.resolve(resolved).then(onFulfilled, onRejected);
+  return c as unknown as Chain;
+}
+let queues: Record<string, Chain[]>;
 
 vi.mock('@/lib/supabase/server', () => ({
-  createServerSupabaseClient: vi.fn().mockImplementation(() => {
-    return Promise.resolve({
-      from: (table: string) => {
-        if (table === 'organization_members') return orgMemberChain;
-        if (table === 'cadences') return cadenceChain;
-        if (table === 'cadence_steps') return stepsChain;
-        return createChainMock();
-      },
-    });
-  }),
+  createServerSupabaseClient: vi.fn().mockImplementation(() =>
+    Promise.resolve({
+      from: (table: string) => queues[table]?.shift() ?? chain(),
+    }),
+  ),
 }));
 
+import { ACTIVE_ENROLLMENTS_CODE } from '../types';
 import { saveTimelineSteps } from './save-timeline-steps';
+
+const member = () => chain({ data: { org_id: 'org-1', role: 'manager' } });
+const draftCadence = () => chain({ data: { id: 'cad-1', status: 'draft' } });
+const pausedCadence = () => chain({ data: { id: 'cad-1', status: 'paused' } });
 
 describe('saveTimelineSteps', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    orgMemberChain = createChainMock();
-    cadenceChain = createChainMock();
-    stepsChain = createChainMock();
+    queues = {};
   });
 
   it('should return error when user has no org', async () => {
-    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: null });
+    queues = { organization_members: [chain({ data: null })] };
 
     const result = await saveTimelineSteps('cad-1', []);
     expect(result.success).toBe(false);
@@ -54,8 +57,7 @@ describe('saveTimelineSteps', () => {
   });
 
   it('should return error when cadence not found', async () => {
-    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
-    (cadenceChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: null });
+    queues = { organization_members: [member()], cadences: [chain({ data: null })] };
 
     const result = await saveTimelineSteps('cad-999', []);
     expect(result.success).toBe(false);
@@ -65,8 +67,7 @@ describe('saveTimelineSteps', () => {
   });
 
   it('should return error when cadence is active', async () => {
-    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
-    (cadenceChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'cad-1', status: 'active' } });
+    queues = { organization_members: [member()], cadences: [chain({ data: { id: 'cad-1', status: 'active' } })] };
 
     const result = await saveTimelineSteps('cad-1', [{ channel: 'email', delay_days: 0, step_order: 1 }]);
     expect(result.success).toBe(false);
@@ -75,58 +76,184 @@ describe('saveTimelineSteps', () => {
     }
   });
 
-  it('should save steps successfully for draft cadence', async () => {
-    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
-    (cadenceChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'cad-1', status: 'draft' } });
-    (stepsChain.delete as ReturnType<typeof vi.fn>).mockReturnValue(stepsChain);
-    (stepsChain.eq as ReturnType<typeof vi.fn>).mockResolvedValue({ error: null });
-    (stepsChain.insert as ReturnType<typeof vi.fn>).mockResolvedValue({ error: null });
-    (cadenceChain.update as ReturnType<typeof vi.fn>).mockReturnValue(cadenceChain);
+  it('should create steps for a draft cadence without existing steps', async () => {
+    const existing = chain({ data: [], error: null });
+    const enrollmentsCount = chain({ count: 0 });
+    const upsert = chain({ error: null });
+    const totalSteps = chain();
+    queues = {
+      organization_members: [member()],
+      cadences: [draftCadence(), totalSteps],
+      cadence_steps: [existing, upsert],
+      cadence_enrollments: [enrollmentsCount],
+    };
 
-    const steps = [
-      { channel: 'email' as const, delay_days: 0, step_order: 1 },
-      { channel: 'phone' as const, delay_days: 1, step_order: 2 },
-    ];
+    const result = await saveTimelineSteps('cad-1', [
+      { channel: 'phone', delay_days: 0, step_order: 1, call_provider: 'whatsapp' },
+      { channel: 'phone', delay_days: 1, step_order: 2 },
+    ]);
 
-    const result = await saveTimelineSteps('cad-1', steps);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.saved).toBe(2);
+      expect(result.data).toEqual({ saved: 2, preserved: 0, created: 2, removed: 0 });
     }
+    const rows = upsert.upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.id).toEqual(expect.any(String));
+    expect(rows[0]?.step_order).toBe(1);
+    expect(rows[0]?.call_provider).toBe('whatsapp');
+    expect(rows[1]?.step_order).toBe(2);
+    expect(rows[1]?.call_provider).toBeNull();
+    expect(upsert.upsert.mock.calls[0]?.[1]).toEqual({ onConflict: 'id' });
+    expect(totalSteps.update).toHaveBeenCalledWith({ total_steps: 2 });
   });
 
-  it('should persist call_provider on WhatsApp-call steps and null otherwise', async () => {
-    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
-    (cadenceChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'cad-1', status: 'draft' } });
-    (stepsChain.delete as ReturnType<typeof vi.fn>).mockReturnValue(stepsChain);
-    (stepsChain.eq as ReturnType<typeof vi.fn>).mockResolvedValue({ error: null });
-    (stepsChain.insert as ReturnType<typeof vi.fn>).mockResolvedValue({ error: null });
-    (cadenceChain.update as ReturnType<typeof vi.fn>).mockReturnValue(cadenceChain);
+  it('should preserve IDs and skip the enrollment guard when only content changes (same structure)', async () => {
+    const existing = chain({ data: [{ id: 's1', step_order: 1 }, { id: 's2', step_order: 2 }], error: null });
+    const upsert = chain({ error: null });
+    const enrollmentsCount = chain({ count: 300 });
+    queues = {
+      organization_members: [member()],
+      cadences: [pausedCadence(), chain()],
+      cadence_steps: [existing, upsert],
+      cadence_enrollments: [enrollmentsCount],
+    };
 
-    const steps = [
-      { channel: 'phone' as const, delay_days: 0, step_order: 1, call_provider: 'whatsapp' as const },
-      { channel: 'phone' as const, delay_days: 0, step_order: 2 },
-    ];
+    const result = await saveTimelineSteps('cad-1', [
+      { id: 's1', channel: 'phone', delay_days: 0, step_order: 1, instructions: 'Ligar 2x' },
+      { id: 's2', channel: 'whatsapp', delay_days: 2, step_order: 2 },
+    ]);
 
-    const result = await saveTimelineSteps('cad-1', steps);
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ saved: 2, preserved: 2, created: 0, removed: 0 });
+    }
+    // Sem mudança estrutural não consulta inscrições nem passa pela ordem temporária.
+    expect(enrollmentsCount.select).not.toHaveBeenCalled();
+    expect(upsert.delete).not.toHaveBeenCalled();
+    expect(upsert.upsert).toHaveBeenCalledTimes(1);
+    const rows = upsert.upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(rows.map((r) => r.id)).toEqual(['s1', 's2']);
+    expect(rows[0]?.instructions).toBe('Ligar 2x');
+    expect(rows[1]?.delay_days).toBe(2);
+  });
 
-    const insertArg = (stepsChain.insert as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Array<Record<string, unknown>>;
-    expect(insertArg[0]?.call_provider).toBe('whatsapp');
-    expect(insertArg[1]?.call_provider).toBeNull();
+  it('should refuse a structural change with leads in progress until confirmed', async () => {
+    const existing = chain({ data: [{ id: 's1', step_order: 1 }, { id: 's2', step_order: 2 }], error: null });
+    const enrollmentsCount = chain({ count: 42 });
+    const neverUsed = chain({ error: null });
+    queues = {
+      organization_members: [member()],
+      cadences: [pausedCadence()],
+      cadence_steps: [existing, neverUsed],
+      cadence_enrollments: [enrollmentsCount],
+    };
+
+    const result = await saveTimelineSteps('cad-1', [
+      { id: 's1', channel: 'phone', delay_days: 0, step_order: 1 },
+      { channel: 'email', delay_days: 0, step_order: 2 }, // novo no meio
+      { id: 's2', channel: 'whatsapp', delay_days: 1, step_order: 3 },
+    ]);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe(ACTIVE_ENROLLMENTS_CODE);
+      expect(result.error).toContain('42 leads em andamento');
+    }
+    expect(neverUsed.upsert).not.toHaveBeenCalled();
+    expect(neverUsed.delete).not.toHaveBeenCalled();
+  });
+
+  it('should apply a confirmed structural change preserving kept IDs and deleting only removed steps', async () => {
+    const existing = chain({
+      data: [{ id: 's1', step_order: 1 }, { id: 's2', step_order: 2 }, { id: 's3', step_order: 3 }],
+      error: null,
+    });
+    const enrollmentsCount = chain({ count: 42 });
+    const del = chain({ error: null });
+    const tempUpsert = chain({ error: null });
+    const finalUpsert = chain({ error: null });
+    queues = {
+      organization_members: [member()],
+      cadences: [pausedCadence(), chain()],
+      cadence_steps: [existing, del, tempUpsert, finalUpsert],
+      cadence_enrollments: [enrollmentsCount],
+    };
+
+    // s2 removido, novo passo no meio e s1/s3 trocados de lugar (reordenação real).
+    const result = await saveTimelineSteps(
+      'cad-1',
+      [
+        { id: 's3', channel: 'whatsapp', delay_days: 0, step_order: 1 },
+        { channel: 'email', delay_days: 0, step_order: 2 },
+        { id: 's1', channel: 'phone', delay_days: 1, step_order: 3 },
+      ],
+      { confirmActiveEnrollments: true },
+    );
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ saved: 3, preserved: 2, created: 1, removed: 1 });
+    }
+    expect(del.delete).toHaveBeenCalled();
+    expect(del.in).toHaveBeenCalledWith('id', ['s2']);
+
+    // Fase temporária: só os mantidos, fora do intervalo real de ordens.
+    const tempRows = tempUpsert.upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(tempRows.map((r) => r.id)).toEqual(['s3', 's1']);
+    expect(tempRows.map((r) => r.step_order)).toEqual([10001, 10003]);
+
+    const finalRows = finalUpsert.upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(finalRows.map((r) => r.step_order)).toEqual([1, 2, 3]);
+    expect(finalRows[0]?.id).toBe('s3');
+    expect(finalRows[1]?.id).not.toBe('s2');
+    expect(finalRows[2]?.id).toBe('s1');
+  });
+
+  it('should skip the temporary reorder phase when kept steps keep their positions', async () => {
+    const existing = chain({ data: [{ id: 's1', step_order: 1 }, { id: 's2', step_order: 2 }], error: null });
+    const enrollmentsCount = chain({ count: 0 });
+    const finalUpsert = chain({ error: null });
+    queues = {
+      organization_members: [member()],
+      cadences: [draftCadence(), chain()],
+      cadence_steps: [existing, finalUpsert],
+      cadence_enrollments: [enrollmentsCount],
+    };
+
+    // Só acrescenta um passo no fim: s1 e s2 não mudam de posição.
+    const result = await saveTimelineSteps('cad-1', [
+      { id: 's1', channel: 'phone', delay_days: 0, step_order: 1 },
+      { id: 's2', channel: 'whatsapp', delay_days: 0, step_order: 2 },
+      { channel: 'email', delay_days: 3, step_order: 3 },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(finalUpsert.upsert).toHaveBeenCalledTimes(1);
+    const rows = finalUpsert.upsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(rows.map((r) => r.step_order)).toEqual([1, 2, 3]);
+    expect(rows.slice(0, 2).map((r) => r.id)).toEqual(['s1', 's2']);
   });
 
   it('should save empty steps (clear all) for draft cadence', async () => {
-    (orgMemberChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { org_id: 'org-1' } });
-    (cadenceChain.single as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: 'cad-1', status: 'draft' } });
-    (stepsChain.delete as ReturnType<typeof vi.fn>).mockReturnValue(stepsChain);
-    (stepsChain.eq as ReturnType<typeof vi.fn>).mockResolvedValue({ error: null });
-    (cadenceChain.update as ReturnType<typeof vi.fn>).mockReturnValue(cadenceChain);
+    const existing = chain({ data: [{ id: 's1', step_order: 1 }], error: null });
+    const enrollmentsCount = chain({ count: 0 });
+    const del = chain({ error: null });
+    const totalSteps = chain();
+    queues = {
+      organization_members: [member()],
+      cadences: [draftCadence(), totalSteps],
+      cadence_steps: [existing, del],
+      cadence_enrollments: [enrollmentsCount],
+    };
 
     const result = await saveTimelineSteps('cad-1', []);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.saved).toBe(0);
+      expect(result.data).toEqual({ saved: 0, preserved: 0, created: 0, removed: 1 });
     }
+    expect(del.in).toHaveBeenCalledWith('id', ['s1']);
+    expect(del.upsert).not.toHaveBeenCalled();
+    expect(totalSteps.update).toHaveBeenCalledWith({ total_steps: 0 });
   });
 });

@@ -249,6 +249,8 @@ export const autoEmailStepSchema = z.object({
 export const saveAutoEmailCadenceSchema = z.object({
   cadence_id: z.string().uuid('ID da cadência inválido'),
   steps: z.array(autoEmailStepSchema).min(1, 'Adicione pelo menos 1 step'),
+  // Confirma mudança no número de passos mesmo com leads em andamento.
+  confirm_active_enrollments: z.boolean().optional(),
 });
 
 // Inferred types
