@@ -98,7 +98,7 @@ export async function fetchOpportunityKpi(
   // Query won leads in the month (status='won' is set by the trigger when
   // meeting_held_at is stamped, i.e. closer confirmed result=meeting_done).
   let leadsQuery = from(supabase, 'leads')
-    .select('id, won_at, assigned_to, won_by')
+    .select('id, won_at, assigned_to')
     .eq('org_id', orgId)
     .eq('status', 'won')
     .is('deleted_at', null)
@@ -108,7 +108,7 @@ export async function fetchOpportunityKpi(
     .limit(10000);
 
   const { data: leads } = (await leadsQuery) as {
-    data: Array<{ id: string; won_at: string; assigned_to: string | null; won_by: string | null }> | null;
+    data: Array<{ id: string; won_at: string; assigned_to: string | null }> | null;
   };
 
   let qualifiedLeads = leads ?? [];
@@ -131,12 +131,14 @@ export async function fetchOpportunityKpi(
     }
   }
 
-  // Filter by user: attribute via won_by (who marked as won), fallback to assigned_to
+  // Filter by user: atribuição pelo SDR responsável do lead (assigned_to) — a
+  // mesma regra do ranking "Reuniões Realizadas", do card "Reuniões marcadas",
+  // do guia de cards e do Sales Hub. (Antes usava won_by ?? assigned_to, o que
+  // fazia KPI e ranking divergirem sob filtro de SDR — 03/set/2026.)
   if (filters.userIds.length > 0) {
-    qualifiedLeads = qualifiedLeads.filter((l) => {
-      const sdr = l.won_by ?? l.assigned_to;
-      return sdr && filters.userIds.includes(sdr);
-    });
+    qualifiedLeads = qualifiedLeads.filter(
+      (l) => l.assigned_to !== null && filters.userIds.includes(l.assigned_to),
+    );
   }
   const totalOpportunities = qualifiedLeads.length;
 

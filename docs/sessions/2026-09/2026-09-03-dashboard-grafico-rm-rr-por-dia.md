@@ -105,9 +105,15 @@ enquanto o ranking "Reuniões Realizadas" atribui por `assigned_to`
 Sem filtro os dois dão 7. O gráfico segue o KPI (3). Decidir uma regra única
 se incomodar — não faz parte deste trabalho.
 
+## Entrega 3 — atribuição de RR unificada
+`fetchOpportunityKpi` (card KPI "Reuniões realizadas") passa a atribuir por
+`assigned_to` sob filtro de vendedor, igual ao ranking, ao card RM, ao guia e
+ao Sales Hub. `won_by` deixou de ser lido. Sem filtro nada muda (total do mês).
+Teste novo em `dashboard-metrics.service.test.ts`; tooltip do card e
+`docs/guides/dashboard-cards.md` atualizados.
+
 ## Pendências / próximos passos
-- Unificar a atribuição de RR entre KPI (`won_by ?? assigned_to`) e ranking
-  (`assigned_to`) — hoje divergem sob filtro de SDR.
+- Nenhuma.
 - Se aparecer de novo RM "sumindo" no mesmo dia, ver quem altera
   `meeting_scheduled_at` fora do fluxo de agendamento.
 - Ideias não pedidas (não implementar sem pedido): quebra por SDR no gráfico,
