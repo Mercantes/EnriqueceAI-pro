@@ -69,9 +69,31 @@ renderizam; sem redirecionamento.
   `https://app.enriqueceai.com.br/demo` responde HTTP 200 deslogado, sem
   redirecionar para `/login`.
 
+## Validação em produção (03/set, ~14h BRT)
+Dashboard real lido pelo Chrome logado do usuário + recálculo no banco com as
+regras dos cards (RM = `meeting_scheduled_at`, RR = `won_at` + `status='won'`,
+dias em America/Sao_Paulo, SDRs ativos/convidados):
+
+| Dia   | RM | RR |
+|-------|----|----|
+| 01/09 | 4  | 3  |
+| 02/09 | 9  | 3  |
+| 03/09 | 1  | 1  |
+| Total | 14 | 7  |
+
+Cards: RM 14, RR 7. Barras: 4+9+1 e 3+3+1. Banco: idêntico. ✅
+
+Observação: um print do usuário mais cedo mostrava RM 2 em 03/09; no momento
+da validação havia só 1 lead com marcação hoje (`aec054d0…`, 11:55). Nenhum
+lead perdido/arquivado/excluído hoje tinha marcação em 03/09, então o segundo
+registro sumiu ou mudou de data entre o print e a validação — não identificado.
+Não é bug do gráfico (reflete o dado atual). Investigar por nome/CNPJ se o
+usuário lembrar qual reunião era.
+
 ## Pendências / próximos passos
-- Validar em produção: soma das barras RM = total do card "Reuniões marcadas";
-  soma das barras RR = total de "Reuniões realizadas"; trocar filtro de SDR.
+- Filtro de SDR no gráfico não foi testado em produção (só o total).
+- Se aparecer de novo RM "sumindo" no mesmo dia, ver quem altera
+  `meeting_scheduled_at` fora do fluxo de agendamento.
 - Ideias não pedidas (não implementar sem pedido): quebra por SDR no gráfico,
   meta diária como linha de referência.
 
