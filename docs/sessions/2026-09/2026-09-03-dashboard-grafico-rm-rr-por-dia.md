@@ -111,6 +111,10 @@ se incomodar — não faz parte deste trabalho.
 ao Sales Hub. `won_by` deixou de ser lido. Sem filtro nada muda (total do mês).
 Teste novo em `dashboard-metrics.service.test.ts`; tooltip do card e
 `docs/guides/dashboard-cards.md` atualizados.
+PR [#350](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/350): CI verde,
+squash → `164ad579`, deploy confirmado ~3 min depois. Em produção:
+`?userIds=<Ismael>` → KPI RR 4 = ranking 4, barras RR 1+2+1 = 4; sem filtro
+RR continua 7 (barras 3+3+1). ✅
 
 ## Pendências / próximos passos
 - Nenhuma.
