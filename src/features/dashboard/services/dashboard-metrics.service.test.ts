@@ -53,9 +53,9 @@ describe('fetchOpportunityKpi', () => {
 
   it('should count won leads as opportunities', async () => {
     const leads = [
-      { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null, won_by: null },
-      { id: 'l2', won_at: '2026-01-10T10:00:00Z', assigned_to: null, won_by: null },
-      { id: 'l3', won_at: '2026-01-10T14:00:00Z', assigned_to: null, won_by: null },
+      { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null },
+      { id: 'l2', won_at: '2026-01-10T10:00:00Z', assigned_to: null },
+      { id: 'l3', won_at: '2026-01-10T14:00:00Z', assigned_to: null },
     ];
     const leadsChain = createChainMock({ data: leads });
     const goalsChain = createChainMock({
@@ -77,9 +77,9 @@ describe('fetchOpportunityKpi', () => {
 
   it('should compute cumulative daily data correctly', async () => {
     const leads = [
-      { id: 'l1', won_at: '2026-02-01T10:00:00Z', assigned_to: null, won_by: null },
-      { id: 'l2', won_at: '2026-02-01T14:00:00Z', assigned_to: null, won_by: null },
-      { id: 'l3', won_at: '2026-02-03T10:00:00Z', assigned_to: null, won_by: null },
+      { id: 'l1', won_at: '2026-02-01T10:00:00Z', assigned_to: null },
+      { id: 'l2', won_at: '2026-02-01T14:00:00Z', assigned_to: null },
+      { id: 'l3', won_at: '2026-02-03T10:00:00Z', assigned_to: null },
     ];
     const leadsChain = createChainMock({ data: leads });
     const goalsChain = createChainMock({
@@ -130,8 +130,8 @@ describe('fetchOpportunityKpi', () => {
     // Two won leads; only l1 is enrolled in the filtered cadence.
     const leadsChain = createChainMock({
       data: [
-        { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null, won_by: null },
-        { id: 'l2', won_at: '2026-01-06T10:00:00Z', assigned_to: null, won_by: null },
+        { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null },
+        { id: 'l2', won_at: '2026-01-06T10:00:00Z', assigned_to: null },
       ],
     });
     const enrollmentChain = createChainMock({ data: [{ lead_id: 'l1' }] });
@@ -153,6 +153,32 @@ describe('fetchOpportunityKpi', () => {
     expect(enrollmentChain.in).toHaveBeenCalledWith('cadence_id', ['cad-1']);
   });
 
+  it('atribui reuniões realizadas ao SDR responsável (assigned_to) sob filtro de vendedor', async () => {
+    // l1 é do SDR filtrado; l2 é de outro SDR; l3 não tem responsável.
+    // Mesma regra do ranking "Reuniões Realizadas" — não usa won_by.
+    const leadsChain = createChainMock({
+      data: [
+        { id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: 'sdr-a' },
+        { id: 'l2', won_at: '2026-01-06T10:00:00Z', assigned_to: 'sdr-b' },
+        { id: 'l3', won_at: '2026-01-07T10:00:00Z', assigned_to: null },
+      ],
+    });
+    const goalsChain = createChainMock({ data: null });
+
+    const supabase = createMockSupabase((table) => {
+      if (table === 'leads') return leadsChain;
+      if (table === 'goals') return goalsChain;
+      return createChainMock();
+    });
+
+    const filters = { ...baseFilters, userIds: ['sdr-a'] };
+    const result = await fetchOpportunityKpi(supabase as never, ORG_ID, filters);
+
+    expect(result.totalOpportunities).toBe(1);
+    const last = result.dailyData.filter((d) => d.actual !== null).at(-1);
+    expect(last?.actual).toBe(1);
+  });
+
   it('should handle February with 28 days', async () => {
     const leadsChain = createChainMock({ data: [] });
     const goalsChain = createChainMock({ data: null });
@@ -172,7 +198,7 @@ describe('fetchOpportunityKpi', () => {
 
   it('should compute percentOfTarget as 0 when no target set', async () => {
     const leadsChain = createChainMock({
-      data: [{ id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null, won_by: null }],
+      data: [{ id: 'l1', won_at: '2026-01-05T10:00:00Z', assigned_to: null }],
     });
     const goalsChain = createChainMock({ data: null });
 
@@ -195,9 +221,9 @@ describe('fetchOpportunityKpi', () => {
     vi.setSystemTime(new Date('2026-08-13T12:00:00Z')); // 09:00 BRT do dia 13
     try {
       const leads = [
-        { id: 'a', won_at: '2026-08-05T10:00:00Z', assigned_to: null, won_by: null },
-        { id: 'b', won_at: '2026-08-12T10:00:00Z', assigned_to: null, won_by: null },
-        { id: 'c', won_at: '2026-08-13T10:00:00Z', assigned_to: null, won_by: null }, // hoje
+        { id: 'a', won_at: '2026-08-05T10:00:00Z', assigned_to: null },
+        { id: 'b', won_at: '2026-08-12T10:00:00Z', assigned_to: null },
+        { id: 'c', won_at: '2026-08-13T10:00:00Z', assigned_to: null }, // hoje
       ];
       const leadsChain = createChainMock({ data: leads });
       const goalsChain = createChainMock({

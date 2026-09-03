@@ -154,7 +154,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
         kpi={data.kpi}
         month={filters.month}
         label="Reuniões realizadas"
-        labelTooltip="Reuniões realizadas no mês — leads marcados como ganho (status='won')."
+        labelTooltip="Reuniões realizadas no mês — leads marcados como ganho (status='won'). Com filtro de vendedor, cada lead conta para o SDR responsável (mesma regra do ranking)."
       />
 
       {/* RM e RR por dia — detalhe diário dos dois cards de reunião acima */}

@@ -18,7 +18,7 @@ período** (mês ou intervalo de datas), salvo os *snapshots* indicados.
 |---|---|---|
 | **Leads abertos** | Leads que tiveram o **1º contato humano** no mês | 1ª interação humana do lead (e-mail, WhatsApp, telefone, LinkedIn ou **pesquisa**) cai no período |
 | **Reuniões marcadas** | Leads com reunião **agendada** | `meeting_scheduled_at` cai no período |
-| **Reuniões realizadas** | Reuniões que **aconteceram** (= oportunidade/ganho) | `status = 'won'` e `won_at` no período |
+| **Reuniões realizadas** | Reuniões que **aconteceram** (= oportunidade/ganho) | `status = 'won'` e `won_at` no período. Com filtro de vendedor, conta para o **SDR responsável** (`assigned_to`), igual ao ranking |
 
 ### Gráfico "Reuniões marcadas (RM) e realizadas (RR) por dia"
 
