@@ -44,11 +44,21 @@ RM `#6366f1` (indigo), RR `#16a34a` (verde-600).
   `next-env.d.ts`, `src/features/billing/actions/create-checkout.ts`,
   `.aios/handoffs/`, `.claude/launch.json` e os handoffs de agosto não versionados.
 
+## Fix da `/demo` (mesma sessão, depois do merge)
+Causas: (1) `LeadTable` chama `useOrganization()` e a `/demo` não tem
+`OrganizationProvider` → hook lança no render do servidor; (2) a seção de
+contatos do `LeadInfoPanel` chama `listLeadContacts('demo-lead-1')` ao montar →
+`requireAuth` redireciona a página pública para `/login`.
+Correção: `OrgContext.Provider` com `demoOrgContext` fictício em
+`src/app/demo/page.tsx` (+ `demo-data.ts`), e guarda `isUuid(leadId)` em
+`LeadContactsSection.refresh` (sem UUID não há fetch — regra que já vale para
+qualquer `.eq` com id vindo de fora). Teste: `LeadContactsSection.test.tsx`.
+Conferido no navegador: dashboard, cadência, lead enriquecido e lista de leads
+renderizam; sem redirecionamento.
+
 ## Pendências / próximos passos
 - Validar em produção: soma das barras RM = total do card "Reuniões marcadas";
   soma das barras RR = total de "Reuniões realizadas"; trocar filtro de SDR.
-- `/demo` continua quebrada (pré-existente) — se quiser a vitrine funcionando,
-  é um fix separado no `LeadTable`/provider.
 - Ideias não pedidas (não implementar sem pedido): quebra por SDR no gráfico,
   meta diária como linha de referência.
 
