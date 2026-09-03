@@ -65,7 +65,19 @@ fica, porque `completed` conta `meeting_scheduled` de propósito.
 3. Timeline do lead mostra a mensagem como enviada; card "Progresso diário" soma +1.
 4. Estatísticas → Controle Diário: "Pular esta atividade" (menu da linha) não deve mais somar em Concluídas.
 
-## Pendente
+## Status
 
-- Commit/PR (não feito — aguarda pedido).
-- Opcional: badge "manual" na timeline do lead usando `metadata.manual_send`.
+- PR [#351](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/351) mergeado (squash `638d5340`) e **no ar** em 03/set ~18:03 UTC (`/api/version` confirmado).
+
+## 3. Selo "Manual" na timeline (follow-up, mesma sessão)
+
+Interações com `metadata.manual_send = true` mostram um badge "Manual" ao lado
+do título, nas duas timelines:
+- `src/features/cadences/components/LeadTimeline.tsx` (página `/leads/[id]`)
+- `src/features/leads/components/LeadTimelineTab.tsx` (aba do painel do lead e
+  contexto do lead na execução de atividades)
+
+Teste: `LeadTimeline.test.tsx` (+2). Typecheck/lint/vitest ✅.
+
+## Pendente
+- Commit/PR do selo "Manual" (aguarda pedido).
