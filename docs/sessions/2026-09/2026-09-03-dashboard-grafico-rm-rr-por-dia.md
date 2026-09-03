@@ -90,8 +90,24 @@ registro sumiu ou mudou de data entre o print e a validação — não identific
 Não é bug do gráfico (reflete o dado atual). Investigar por nome/CNPJ se o
 usuário lembrar qual reunião era.
 
+### Filtro de SDR (`?userIds=<uuid>`) — testado em produção
+| SDR | Card RM | Barras RM | Card RR | Barras RR | Banco |
+|---|---|---|---|---|---|
+| Ismael | 6 | 2+3+1 = 6 | 3 | 0+2+1 = 3 | igual |
+| Guilherme | 2 | 0+2+0 = 2 | 2 | 2+0+0 = 2 | igual |
+
+✅ O gráfico acompanha o filtro e bate com os cards KPI e com o banco.
+
+⚠️ Divergência PRÉ-EXISTENTE que o filtro expõe: o card KPI "Reuniões
+realizadas" atribui por `won_by ?? assigned_to` (`fetchOpportunityKpi`),
+enquanto o ranking "Reuniões Realizadas" atribui por `assigned_to`
+(`fetchMeetingsHeldRanking`). Com o filtro no Ismael: KPI = 3, ranking = 4.
+Sem filtro os dois dão 7. O gráfico segue o KPI (3). Decidir uma regra única
+se incomodar — não faz parte deste trabalho.
+
 ## Pendências / próximos passos
-- Filtro de SDR no gráfico não foi testado em produção (só o total).
+- Unificar a atribuição de RR entre KPI (`won_by ?? assigned_to`) e ranking
+  (`assigned_to`) — hoje divergem sob filtro de SDR.
 - Se aparecer de novo RM "sumindo" no mesmo dia, ver quem altera
   `meeting_scheduled_at` fora do fluxo de agendamento.
 - Ideias não pedidas (não implementar sem pedido): quebra por SDR no gráfico,
