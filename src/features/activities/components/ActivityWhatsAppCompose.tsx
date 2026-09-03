@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 
-import { Clock, Eye, Loader2, Send, Sparkles, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Eye, Loader2, Send, Sparkles, XCircle } from 'lucide-react';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -36,6 +36,8 @@ interface ActivityWhatsAppComposeProps {
   onBodyChange: (value: string) => void;
   onTemplateChange: (templateId: string) => void;
   onSend: () => void;
+  /** SDR já enviou a mensagem pelo próprio WhatsApp — só registra e avança. */
+  onManualSend?: () => void;
   onSkip: () => void;
   onReportInvalid: () => void;
 }
@@ -54,11 +56,15 @@ export function ActivityWhatsAppCompose({
   onBodyChange,
   onTemplateChange,
   onSend,
+  onManualSend,
   onSkip,
   onReportInvalid,
 }: ActivityWhatsAppComposeProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const canSend = !isSending && !isLoading && to && body.trim();
+  // Envio manual não depende do telefone (o SDR pode ter mandado pra outro
+  // número), só de haver uma mensagem para registrar no histórico.
+  const canMarkManual = !isSending && !isLoading && !!body.trim();
 
   function handleInsertVariable(variable: string) {
     const el = textareaRef.current;
@@ -194,6 +200,17 @@ export function ActivityWhatsAppCompose({
                 <Clock className="mr-2 h-4 w-4" />
                 Pular
               </Button>
+              {onManualSend && (
+                <Button
+                  variant="outline"
+                  onClick={onManualSend}
+                  disabled={!canMarkManual}
+                  title="Já enviei esta mensagem pelo meu WhatsApp — registra como enviada e avança a cadência, sem disparar pela plataforma"
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Enviado manualmente
+                </Button>
+              )}
               <Button onClick={onSend} disabled={!canSend} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 {isSending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

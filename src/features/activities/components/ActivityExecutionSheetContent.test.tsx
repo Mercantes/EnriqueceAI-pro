@@ -258,6 +258,52 @@ describe('ActivityExecutionSheetContent', () => {
     expect(screen.getByText('Marcar como feita')).toBeInTheDocument();
   });
 
+  it('should show "Enviado manualmente" for whatsapp when onManualSend is provided', async () => {
+    render(
+      <ActivityExecutionSheetContent
+        activity={makeActivity('whatsapp')}
+        isSending={false}
+        onSend={noop}
+        onManualSend={noop}
+        onSkip={noop}
+        onMarkDone={noop}
+      />,
+    );
+
+    expect(await screen.findByText('Enviado manualmente')).toBeInTheDocument();
+    expect(screen.getByText('Enviar WhatsApp')).toBeInTheDocument();
+  });
+
+  it('should show "Enviado manualmente" for email when onManualSend is provided', async () => {
+    render(
+      <ActivityExecutionSheetContent
+        activity={makeActivity('email')}
+        isSending={false}
+        onSend={noop}
+        onManualSend={noop}
+        onSkip={noop}
+        onMarkDone={noop}
+      />,
+    );
+
+    expect(await screen.findByText('Enviado manualmente')).toBeInTheDocument();
+  });
+
+  it('should hide "Enviado manualmente" when onManualSend is not provided', async () => {
+    render(
+      <ActivityExecutionSheetContent
+        activity={makeActivity('whatsapp')}
+        isSending={false}
+        onSend={noop}
+        onSkip={noop}
+        onMarkDone={noop}
+      />,
+    );
+
+    expect(await screen.findByText('Enviar WhatsApp')).toBeInTheDocument();
+    expect(screen.queryByText('Enviado manualmente')).not.toBeInTheDocument();
+  });
+
   it('should show "Enviar Email" button for email channel', async () => {
     render(
       <ActivityExecutionSheetContent

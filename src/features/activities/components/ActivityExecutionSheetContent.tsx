@@ -33,6 +33,8 @@ interface ActivityExecutionSheetContentProps {
   activity: PendingActivity;
   isSending: boolean;
   onSend: (subject: string, body: string, aiGenerated: boolean, phone?: string, contactId?: string | null) => void;
+  /** SDR já enviou por fora — registra como enviado sem disparar pela API. */
+  onManualSend?: (subject: string, body: string, phone?: string, contactId?: string | null) => void;
   onSkip: () => void;
   onMarkDone: (notes: string) => void;
   onLeadLost?: () => void;
@@ -46,6 +48,7 @@ export function ActivityExecutionSheetContent({
   activity,
   isSending,
   onSend,
+  onManualSend,
   onSkip,
   onMarkDone,
   onLeadLost,
@@ -351,6 +354,9 @@ export function ActivityExecutionSheetContent({
         onBodyChange={setBody}
         onTemplateChange={handleTemplateChange}
         onSend={() => onSend('', renderedPreview, aiPersonalized, to, phones.find((p) => p.formatted === to)?.contactId ?? null)}
+        onManualSend={onManualSend
+          ? () => onManualSend('', renderedPreview, to, phones.find((p) => p.formatted === to)?.contactId ?? null)
+          : undefined}
         onSkip={onSkip}
         onReportInvalid={onReportWhatsAppInvalid ?? (() => undefined)}
       />
@@ -375,6 +381,7 @@ export function ActivityExecutionSheetContent({
       onSubjectChange={setSubject}
       onBodyChange={setBody}
       onSend={() => onSend(renderedSubject, renderedPreview, aiPersonalized)}
+      onManualSend={onManualSend ? () => onManualSend(renderedSubject, renderedPreview) : undefined}
       onSkip={onSkip}
     />
   );

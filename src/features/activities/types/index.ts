@@ -93,6 +93,12 @@ export interface ExecuteActivityInput {
   body: string;
   aiGenerated: boolean;
   templateId: string | null;
+  /**
+   * SDR já enviou a mensagem por fora (WhatsApp pessoal, Gmail direto). Grava a
+   * interaction como enviada no canal do passo e avança a cadência, mas NÃO
+   * dispara nada pela API nem debita crédito.
+   */
+  manualSend?: boolean;
 }
 
 // Timeline entry for mini-timeline in execution sheet

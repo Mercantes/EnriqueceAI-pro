@@ -39,6 +39,7 @@ const executeActivitySchema = z.object({
   body: z.string(),
   aiGenerated: z.boolean(),
   templateId: z.string().uuid().nullable(),
+  manualSend: z.boolean().optional(),
 });
 
 export async function executeActivity(
@@ -47,9 +48,14 @@ export async function executeActivity(
   const parsed = executeActivitySchema.safeParse(input);
   if (!parsed.success) return { success: false, error: 'Dados inválidos' };
 
+  // "Enviado manualmente": o SDR já mandou a mensagem por fora (WhatsApp
+  // pessoal, Gmail direto). Registramos como enviada no canal do passo — conta
+  // nos painéis como qualquer envio — mas sem disparar nada pela API.
+  const manualSend = input.manualSend === true;
+
   // Channels that send external messages require a recipient
   const sendChannels = ['email', 'whatsapp'];
-  if (sendChannels.includes(input.channel) && !input.to?.trim()) {
+  if (!manualSend && sendChannels.includes(input.channel) && !input.to?.trim()) {
     return { success: false, error: 'Destinatário é obrigatório para este canal' };
   }
 
@@ -143,6 +149,7 @@ export async function executeActivity(
         metadata: {
           ...(subject ? { subject } : {}),
           ...(body ? { html_body: body } : {}),
+          ...(manualSend ? { manual_send: true } : {}),
         },
         ai_generated: aiGenerated,
         original_template_id: templateId,
@@ -157,8 +164,10 @@ export async function executeActivity(
     return { success: false, error: 'Falha ao registrar interação' };
   }
 
-  // Send via appropriate channel
-  if (channel === 'whatsapp') {
+  // Send via appropriate channel (pulado quando foi enviado manualmente)
+  if (manualSend) {
+    // nada a disparar — interaction já registrada acima
+  } else if (channel === 'whatsapp') {
     // Check and deduct credit (only for Meta API — Evolution doesn't use credits)
     const { data: hasMetaConnection } = (await from(supabase, 'whatsapp_connections')
       .select('id')

@@ -181,6 +181,62 @@ export function ActivityExecutionSheet({
     );
   };
 
+  // "Enviado manualmente" (email/whatsapp): o SDR já mandou a mensagem por fora
+  // — ex.: WhatsApp restringindo contatos novos, então ele envia do celular.
+  // Registra a interaction no canal do passo (conta nos painéis como envio) e
+  // avança a cadência, mas sem disparar nada pela API nem debitar crédito.
+  const handleManualSend = (subject: string, body: string, phone?: string, contactId?: string | null) => {
+    if (!activity) return;
+    const act = activity;
+
+    const isWhatsApp = act.channel === 'whatsapp';
+    const resolvedEmail = (act.lead.socios ?? [])
+      .flatMap((s) => s.emails ?? [])
+      .sort((a, b) => a.ranking - b.ranking)[0]?.email
+      ?? act.lead.email
+      ?? '';
+    const to = phone
+      ?? (isWhatsApp
+        ? (resolveWhatsAppPhone(act.lead)?.formatted ?? '')
+        : resolvedEmail);
+
+    toast.success(
+      isWhatsApp ? 'WhatsApp registrado como enviado' : 'Email registrado como enviado',
+      { icon: '✅' },
+    );
+    advanceOrClose(act.enrollmentId, act.stepId);
+
+    const persist = isScheduled
+      ? () => executeScheduledActivity({
+          scheduledActivityId: act.stepId,
+          leadId: act.lead.id,
+          channel: act.channel,
+          to,
+          subject,
+          body,
+          aiGenerated: false,
+          manualSend: true,
+        })
+      : () => executeActivity({
+          enrollmentId: act.enrollmentId,
+          cadenceId: act.cadenceId,
+          stepId: act.stepId,
+          leadId: act.lead.id,
+          orgId: act.lead.org_id,
+          cadenceCreatedBy: act.cadenceCreatedBy ?? '',
+          channel: act.channel,
+          to,
+          contactId: contactId ?? null,
+          subject,
+          body,
+          aiGenerated: false,
+          templateId: act.templateId,
+          manualSend: true,
+        });
+
+    persistInBackground(act, persist);
+  };
+
   const handleMarkDone = (notes: string) => {
     if (!activity) return;
     const act = activity;
@@ -366,6 +422,7 @@ export function ActivityExecutionSheet({
                 activity={activity}
                 isSending={false}
                 onSend={handleSend}
+                onManualSend={handleManualSend}
                 onSkip={handleSkip}
                 onMarkDone={handleMarkDone}
                 onLeadLost={onLeadLost ? () => onLeadLost(activity) : undefined}

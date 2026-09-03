@@ -9,6 +9,7 @@ import { sanitizeHtml } from '@/lib/security/sanitize-html';
 import {
   Bold,
   Braces,
+  CheckCircle2,
   Clock,
   Eye,
   Heading,
@@ -60,6 +61,8 @@ interface ActivityEmailComposeProps {
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
   onSend: () => void;
+  /** SDR já enviou o e-mail por fora (Gmail direto) — só registra e avança. */
+  onManualSend?: () => void;
   onSkip: () => void;
 }
 
@@ -78,6 +81,7 @@ export function ActivityEmailCompose({
   onSubjectChange,
   onBodyChange,
   onSend,
+  onManualSend,
   onSkip,
 }: ActivityEmailComposeProps) {
   // Track last body value set from parent to avoid editor ↔ state loops
@@ -129,6 +133,15 @@ export function ActivityEmailCompose({
     setDraftStatus(null);
     originalOnSend();
   }, [draftKey, originalOnSend]);
+
+  // Mesmo tratamento de rascunho para o envio manual — o passo foi concluído.
+  const handleManualSendAndClearDraft = useCallback(() => {
+    if (draftKey) {
+      try { localStorage.removeItem(`email-draft:${draftKey}`); } catch {}
+    }
+    setDraftStatus(null);
+    onManualSend?.();
+  }, [draftKey, onManualSend]);
   // Save cursor position so we can restore it when inserting variables from the dropdown
   const savedSelection = useRef<{ from: number; to: number } | null>(null);
 
@@ -215,6 +228,20 @@ export function ActivityEmailCompose({
 
   const bodyHasContent = editor ? !editor.isEmpty : body.replace(/<[^>]*>/g, '').trim().length > 0;
   const canSend = !isSending && !isLoading && to && subject.trim() && bodyHasContent;
+  // Envio manual só precisa de conteúdo para registrar no histórico.
+  const canMarkManual = !isSending && !isLoading && bodyHasContent;
+
+  const manualSendButton = onManualSend ? (
+    <Button
+      variant="outline"
+      onClick={handleManualSendAndClearDraft}
+      disabled={!canMarkManual}
+      title="Já enviei este e-mail por fora — registra como enviado e avança a cadência, sem disparar pela plataforma"
+    >
+      <CheckCircle2 className="mr-2 h-4 w-4" />
+      Enviado manualmente
+    </Button>
+  ) : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -298,6 +325,7 @@ export function ActivityEmailCompose({
               <Clock className="mr-2 h-4 w-4" />
               Pular
             </Button>
+            {manualSendButton}
             <Button onClick={handleSendAndClearDraft} disabled={!canSend}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -499,6 +527,7 @@ export function ActivityEmailCompose({
               <Clock className="mr-2 h-4 w-4" />
               Pular
             </Button>
+            {manualSendButton}
             <Button onClick={handleSendAndClearDraft} disabled={!canSend}>
               {isSending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
