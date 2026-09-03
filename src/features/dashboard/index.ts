@@ -32,6 +32,7 @@ export { OpportunityChart } from './components/OpportunityChart';
 export { RankingCard } from './components/RankingCard';
 export { LossReasonsChart } from './components/LossReasonsChart';
 export { ConversionByOriginChart } from './components/ConversionByOriginChart';
+export { MeetingsByDayChart } from './components/MeetingsByDayChart';
 export { EmptyDashboard } from './components/EmptyDashboard';
 export { MetricCard } from './components/MetricCard';
 export { RecentImports } from './components/RecentImports';

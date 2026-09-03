@@ -8,6 +8,7 @@ import type {
 import type { StepPerformanceMetrics } from '@/features/cadences/cadences.contract';
 import type { LeadInfoPanelData } from '@/features/leads/components/lead-info-panel.utils';
 import type { LeadCadenceInfo, LeadRow } from '@/features/leads/types';
+import { buildMeetingsByDay } from '@/features/dashboard/utils/meetings-by-day';
 
 // ---------------------------------------------------------------------------
 // Dashboard — KPI de Oportunidades
@@ -41,6 +42,34 @@ export const opportunityKpi: OpportunityKpiData = {
 };
 
 export const demoMonth = '2026-03';
+
+// ---------------------------------------------------------------------------
+// Dashboard — RM e RR por dia (séries acumuladas até o dia 20, null depois)
+// ---------------------------------------------------------------------------
+
+function buildCumulative(perDay: number[], lastDay = 20): DailyDataPoint[] {
+  const points: DailyDataPoint[] = [];
+  let cumulative = 0;
+  for (let d = 1; d <= 30; d++) {
+    cumulative += perDay[d - 1] ?? 0;
+    points.push({
+      date: `2026-03-${String(d).padStart(2, '0')}`,
+      day: d,
+      actual: d <= lastDay ? cumulative : null,
+      target: 0,
+    });
+  }
+  return points;
+}
+
+const rmPerDay = [0, 4, 5, 4, 2, 0, 0, 3, 5, 5, 5, 8, 0, 0, 5, 6, 5, 5, 4, 2];
+const rrPerDay = [0, 4, 3, 2, 4, 0, 0, 3, 3, 6, 5, 9, 0, 0, 1, 5, 5, 5, 3, 2];
+
+export const meetingsByDay = buildMeetingsByDay(
+  buildCumulative(rmPerDay),
+  buildCumulative(rrPerDay),
+  demoMonth,
+);
 
 // ---------------------------------------------------------------------------
 // Dashboard — Rankings

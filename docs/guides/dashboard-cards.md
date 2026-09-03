@@ -20,6 +20,22 @@ período** (mês ou intervalo de datas), salvo os *snapshots* indicados.
 | **Reuniões marcadas** | Leads com reunião **agendada** | `meeting_scheduled_at` cai no período |
 | **Reuniões realizadas** | Reuniões que **aconteceram** (= oportunidade/ganho) | `status = 'won'` e `won_at` no período |
 
+### Gráfico "Reuniões marcadas (RM) e realizadas (RR) por dia"
+
+Logo abaixo dos 3 KPIs. Barras lado a lado por dia + duas retas de tendência
+tracejadas (regressão linear sobre os dias já ocorridos).
+
+| Série | Conta no dia em que |
+|---|---|
+| **RM** (marcadas) | o SDR marcou a reunião (`meeting_scheduled_at`) |
+| **RR** (realizadas) | o lead virou Ganho (`won_at`). Some da barra se o closer marcar no-show depois |
+
+- É **derivado das séries diárias dos dois cards acima** (diferença do
+  acumulado), então a soma das barras bate com o número grande de cada card e
+  o filtro de mês/SDR/cadência é o mesmo. Dias futuros não têm barra.
+- Expandir (ícone no canto) abre o gráfico maior com a tabela dia a dia.
+- Código: `MeetingsByDayChart.tsx` + `utils/meetings-by-day.ts`.
+
 ---
 
 ## 2) Grid do funil (ranking por SDR)
