@@ -2,10 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ArrowLeft, ChevronDown, Save, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronDown, Save, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -22,12 +23,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { CadenceDetail, CadenceMetrics, CadenceStepWithTemplate, EnrollmentWithLead } from '../cadences.contract';
-import type { CadenceOrigin, CadencePriority, CallProvider, ChannelType, MessageTemplateRow } from '../types';
+import { ACTIVE_ENROLLMENTS_CODE } from '../types';
+import type { CadenceOrigin, CadencePriority, ChannelType, MessageTemplateRow } from '../types';
 import type { LossReasonOption } from '../actions/fetch-loss-reasons';
 import { activateCadence, updateCadence } from '../actions/manage-cadences';
 import { createCadence } from '../actions/manage-cadences';
-import { saveTimelineSteps } from '../actions/save-timeline-steps';
+import { saveTimelineSteps, type TimelineStepInput } from '../actions/save-timeline-steps';
 import { updateStepContent } from '../actions/update-step-content';
+import { ActiveEnrollmentsConfirmDialog } from './ActiveEnrollmentsConfirmDialog';
 import { ActivityTypeSidebar, channelConfig } from './ActivityTypeSidebar';
 import { CadenceTimeline, type DayData, type TimelineStep } from './CadenceTimeline';
 import { EnrollmentsList } from './EnrollmentsList';
@@ -72,15 +75,19 @@ function stepsToDays(steps: CadenceStepWithTemplate[]): DayData[] {
   return sortedDays.map(([day, daySteps]) => ({ day, steps: daySteps }));
 }
 
-// Convert DayData back to flat step inputs for saving
-function daysToStepInputs(days: DayData[]) {
-  const inputs: { channel: ChannelType; delay_days: number; step_order: number; template_id?: string | null; ai_personalization?: boolean; activity_name?: string | null; instructions?: string | null; call_provider?: CallProvider | null }[] = [];
+// Convert DayData back to flat step inputs for saving.
+// O `id` viaja junto: passo que já existe no banco é atualizado no lugar
+// (preserva o vínculo com as atividades já feitas); passo arrastado da
+// sidebar tem id local e vira inserção.
+function daysToStepInputs(days: DayData[]): TimelineStepInput[] {
+  const inputs: TimelineStepInput[] = [];
   let globalOrder = 1;
 
   for (const day of days) {
     const delayDays = day.day - 1;
     for (const step of day.steps) {
       inputs.push({
+        id: step.id,
         channel: step.channel,
         delay_days: delayDays,
         step_order: globalOrder,
@@ -111,12 +118,16 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
   const [days, setDays] = useState<DayData[]>(() => stepsToDays(cadence?.steps ?? []));
   const [editingStep, setEditingStep] = useState<TimelineStep | null>(null);
   const [stepEditorOpen, setStepEditorOpen] = useState(false);
+  // Pedido de confirmação pendente: a action recusou uma mudança estrutural
+  // porque há leads em andamento; guardamos qual operação repetir com confirmação.
+  const [confirmRequest, setConfirmRequest] = useState<{ kind: 'save' | 'activate'; message: string } | null>(null);
 
   const isEditing = !!cadence;
   const isEditable = !cadence || cadence.status === 'draft' || cadence.status === 'paused';
   const totalSteps = days.reduce((sum, d) => sum + d.steps.length, 0);
+  const hasEnrollments = !!cadence && cadence.enrollment_count > 0;
 
-  function handleSave() {
+  function handleSave(confirmActiveEnrollments = false) {
     startTransition(async () => {
       const metadata = {
         name,
@@ -136,10 +147,12 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
 
         // Save timeline steps
         const stepInputs = daysToStepInputs(days);
-        const stepsResult = await saveTimelineSteps(cadence.id, stepInputs);
+        const stepsResult = await saveTimelineSteps(cadence.id, stepInputs, { confirmActiveEnrollments });
         if (stepsResult.success) {
           toast.success('Cadência atualizada');
           router.refresh();
+        } else if (stepsResult.code === ACTIVE_ENROLLMENTS_CODE) {
+          setConfirmRequest({ kind: 'save', message: stepsResult.error });
         } else {
           toast.error(stepsResult.error);
         }
@@ -155,14 +168,18 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
     });
   }
 
-  function handleActivate() {
+  function handleActivate(confirmActiveEnrollments = false) {
     if (!cadence) return;
     startTransition(async () => {
       // Save steps first
       const stepInputs = daysToStepInputs(days);
-      const saveResult = await saveTimelineSteps(cadence.id, stepInputs);
+      const saveResult = await saveTimelineSteps(cadence.id, stepInputs, { confirmActiveEnrollments });
       if (!saveResult.success) {
-        toast.error(saveResult.error);
+        if (saveResult.code === ACTIVE_ENROLLMENTS_CODE) {
+          setConfirmRequest({ kind: 'activate', message: saveResult.error });
+        } else {
+          toast.error(saveResult.error);
+        }
         return;
       }
       const result = await activateCadence(cadence.id);
@@ -225,6 +242,31 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
           </Badge>
         )}
       </div>
+
+      {/* Aviso: editar a estrutura com leads inscritos muda a posição deles na cadência */}
+      {isEditing && isEditable && hasEnrollments && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertTitle>Esta cadência já tem {cadence.enrollment_count} {cadence.enrollment_count === 1 ? 'inscrição' : 'inscrições'}</AlertTitle>
+          <AlertDescription>
+            Inserir, remover ou reordenar passos muda a posição dos leads em andamento e será pedida confirmação ao salvar.
+            Ajustar texto, instruções ou template de um passo existente é seguro.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <ActiveEnrollmentsConfirmDialog
+        open={confirmRequest !== null}
+        message={confirmRequest?.message ?? null}
+        pending={isPending}
+        onCancel={() => setConfirmRequest(null)}
+        onConfirm={() => {
+          const kind = confirmRequest?.kind;
+          setConfirmRequest(null);
+          if (kind === 'save') handleSave(true);
+          else if (kind === 'activate') handleActivate(true);
+        }}
+      />
 
       {/* Cadence info — table-style horizontal rows */}
       <Card>
@@ -358,13 +400,13 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
           {/* Actions */}
           <div className="flex gap-2 pt-4">
             {isEditable && (
-              <Button onClick={handleSave} disabled={isPending || !name}>
+              <Button onClick={() => handleSave()} disabled={isPending || !name}>
                 <Save className="mr-2 h-4 w-4" />
                 {isPending ? 'Salvando...' : isEditing ? 'Salvar' : 'Criar Cadência'}
               </Button>
             )}
             {cadence && cadence.status === 'draft' && totalSteps >= 2 && (
-              <Button variant="outline" onClick={handleActivate} disabled={isPending}>
+              <Button variant="outline" onClick={() => handleActivate()} disabled={isPending}>
                 <Zap className="mr-2 h-4 w-4" />
                 Ativar
               </Button>

@@ -1,3 +1,8 @@
+// Código de erro devolvido pelos editores de passos quando a mudança estrutural
+// (inserir/remover/reordenar) atinge leads em andamento e precisa de confirmação
+// explícita do gestor — ver save-timeline-steps.ts e save-auto-email-steps.ts.
+export const ACTIVE_ENROLLMENTS_CODE = 'ACTIVE_ENROLLMENTS';
+
 // Cadence status enum matching database
 export type CadenceStatus = 'draft' | 'active' | 'paused' | 'archived';
 
