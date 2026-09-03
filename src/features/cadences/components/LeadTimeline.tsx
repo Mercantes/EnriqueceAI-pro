@@ -17,6 +17,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 
+import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { leadFieldLabel } from '@/features/leads/constants/lead-field-labels';
 
@@ -304,6 +305,10 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                     ? `${entry.performed_by_name}`
                     : systemTitles[systemEvent ?? ''] ?? 'Atividade do sistema')
                   : entry.step_activity_name || `${channel.label}${stepLabel}`;
+                // "Enviado manualmente": SDR mandou por fora (WhatsApp pessoal /
+                // Gmail direto) e só registrou aqui — vale marcar para o gestor
+                // saber que não passou pela plataforma.
+                const isManualSend = (entry.metadata as Record<string, unknown> | null)?.manual_send === true;
 
                 return (
                   <div key={entry.id} className="relative flex gap-4">
@@ -318,8 +323,17 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                     <div className="flex-1 min-w-0 pb-1">
                       {/* Header: title + date */}
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-sm font-semibold text-[var(--foreground)]">
+                        <span className="flex items-center gap-2 text-sm font-semibold text-[var(--foreground)]">
                           {title}
+                          {isManualSend && (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1 text-[10px] font-medium border-sky-500/50 text-sky-600 dark:text-sky-400"
+                              title="Enviado manualmente pelo SDR, fora da plataforma"
+                            >
+                              Manual
+                            </Badge>
+                          )}
                         </span>
                         <span
                           className="shrink-0 text-xs text-[var(--muted-foreground)] dark:text-[var(--foreground)]"

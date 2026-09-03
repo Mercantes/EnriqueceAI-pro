@@ -70,6 +70,21 @@ describe('LeadTimeline', () => {
     expect(screen.getByText('Assunto do email')).toBeInTheDocument();
   });
 
+  it('should show "Manual" badge for manually sent messages', () => {
+    render(
+      <LeadTimeline
+        entries={[createEntry({ channel: 'whatsapp', metadata: { manual_send: true } })]}
+      />,
+    );
+    expect(screen.getByText('WhatsApp')).toBeInTheDocument();
+    expect(screen.getByText('Manual')).toBeInTheDocument();
+  });
+
+  it('should not show "Manual" badge for regular sends', () => {
+    render(<LeadTimeline entries={[createEntry({ channel: 'whatsapp' })]} />);
+    expect(screen.queryByText('Manual')).not.toBeInTheDocument();
+  });
+
   it('should show "Anotação" for note entries', () => {
     render(
       <LeadTimeline
