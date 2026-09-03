@@ -60,6 +60,15 @@ qualquer `.eq` com id vindo de fora). Teste: `LeadContactsSection.test.tsx`.
 Conferido no navegador: dashboard, cadência, lead enriquecido e lista de leads
 renderizam; sem redirecionamento.
 
+## Entrega 2 — fix da `/demo` + cor vermelha V4 no gráfico
+- Branch `fix/demo-page-org-context`: commits `7026259d` (fix `/demo`) e
+  `2696130d` (RM em `var(--primary)`, RR `#059669`).
+- PR [#349](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/349): CI verde,
+  merge por squash → `98f48afa` na main. Branch apagada, main local alinhada.
+- Deploy automático confirmado ~3 min após o merge: `/api/version` = `98f48afa`;
+  `https://app.enriqueceai.com.br/demo` responde HTTP 200 deslogado, sem
+  redirecionar para `/login`.
+
 ## Pendências / próximos passos
 - Validar em produção: soma das barras RM = total do card "Reuniões marcadas";
   soma das barras RR = total de "Reuniões realizadas"; trocar filtro de SDR.
