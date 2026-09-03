@@ -24,11 +24,13 @@ import {
 
 import type { MeetingsByDayPoint } from '../utils/meetings-by-day';
 
-// Paleta validada (claro e escuro) pelo validador do skill dataviz.
-// Indigo = mesma família do ícone do ranking "Reuniões Marcadas";
-// verde = mesma família do card "Reuniões realizadas".
-const RM_COLOR = '#6366f1';
-const RR_COLOR = '#16a34a';
+// RM usa o vermelho da V4 (token --primary do tema: #d8151e claro / #e6443d
+// escuro); RR usa verde emerald-600, mesma família do card "Reuniões
+// realizadas". Par validado para daltonismo nos dois temas pelo validador do
+// skill dataviz (ΔE deutan ≈ 8.9 claro / 8.8 escuro). Verdes mais escuros ou
+// mais claros que este falham contra o vermelho no tema escuro.
+const RM_COLOR = 'var(--primary)';
+const RR_COLOR = '#059669';
 
 const TITLE = 'Reuniões marcadas (RM) e realizadas (RR) por dia';
 const HELP =

@@ -17,7 +17,11 @@ As séries acumuladas que os cards "Reuniões marcadas"
 bate com o número grande dos cards, com o mesmo filtro e a mesma régua BRT.
 
 Cores validadas (claro e escuro) com o validador do skill dataviz:
-RM `#6366f1` (indigo), RR `#16a34a` (verde-600).
+RM = vermelho da V4 via `var(--primary)` (#d8151e claro / #e6443d escuro),
+RR = verde `#059669`. (Primeira versão usava indigo `#6366f1` + `#16a34a`;
+trocada a pedido do usuário para o vermelho da marca. Vermelho × verde é o
+par crítico para deutan: `#16a34a`/`#15803d`/`#047857` falham no escuro,
+`#059669` passa nos dois temas.)
 
 ## Arquivos
 - `src/features/dashboard/utils/meetings-by-day.ts` (+ `.test.ts`)
