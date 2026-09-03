@@ -26,6 +26,8 @@ const schema = z.object({
   subject: z.string(),
   body: z.string(),
   aiGenerated: z.boolean(),
+  /** SDR já enviou por fora — registra como enviado sem disparar pela API. */
+  manualSend: z.boolean().optional(),
 });
 
 type ExecuteScheduledInput = z.infer<typeof schema>;
@@ -36,8 +38,10 @@ export async function executeScheduledActivity(
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { success: false, error: 'Dados inválidos' };
 
+  const manualSend = input.manualSend === true;
+
   const sendChannels = ['email', 'whatsapp'];
-  if (sendChannels.includes(input.channel) && !input.to?.trim()) {
+  if (!manualSend && sendChannels.includes(input.channel) && !input.to?.trim()) {
     return { success: false, error: 'Destinatário é obrigatório para este canal' };
   }
 
@@ -59,6 +63,7 @@ export async function executeScheduledActivity(
         ...(subject ? { subject } : {}),
         ...(body ? { html_body: body } : {}),
         scheduled_activity_id: scheduledActivityId,
+        ...(manualSend ? { manual_send: true } : {}),
       },
       ai_generated: aiGenerated,
       performed_by: userId,
@@ -70,8 +75,10 @@ export async function executeScheduledActivity(
     return { success: false, error: 'Falha ao registrar interação' };
   }
 
-  // Send via appropriate channel
-  if (channel === 'whatsapp') {
+  // Send via appropriate channel (pulado quando foi enviado manualmente)
+  if (manualSend) {
+    // nada a disparar — interaction já registrada acima
+  } else if (channel === 'whatsapp') {
     const { data: hasMetaConnection } = (await from(supabase, 'whatsapp_connections')
       .select('id')
       .eq('org_id', orgId)

@@ -330,6 +330,62 @@ describe('executeActivity — whatsapp channel', () => {
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
+  it('manualSend: registra como enviado sem disparar pela API nem debitar crédito', async () => {
+    wireMocks({
+      // idempotency → null, insert → { id }
+      interactions: [{ data: null }, { data: { id: 'int-wa-manual' } }],
+      whatsappConnection: { data: { id: 'wac-1' } },
+    });
+
+    const result = await executeActivity({ ...whatsappInput, manualSend: true });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.interactionId).toBe('int-wa-manual');
+    }
+    expect(mockCheckAndDeductCredit).not.toHaveBeenCalled();
+    expect(mockSendWhatsApp).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    // Avança a cadência normalmente
+    expect(mockSupabase.rpc).toHaveBeenCalledWith(
+      'advance_enrollment_after_step',
+      expect.objectContaining({ p_enrollment_id: ENROLLMENT_ID, p_executed_step_id: STEP_ID }),
+    );
+  });
+
+  it('manualSend: grava metadata.manual_send=true na interaction do canal do passo', async () => {
+    const insertChain = createChainMock({ data: { id: 'int-wa-manual-2' } });
+    let interactionsCall = 0;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'organization_members') return orgMemberChain();
+      if (table === 'interactions') {
+        interactionsCall += 1;
+        return interactionsCall === 1 ? createChainMock({ data: null }) : insertChain;
+      }
+      return createChainMock({ data: null });
+    });
+
+    const result = await executeActivity({ ...whatsappInput, manualSend: true });
+
+    expect(result.success).toBe(true);
+    expect(insertChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: 'whatsapp',
+        type: 'sent',
+        metadata: expect.objectContaining({ manual_send: true }),
+      }),
+    );
+  });
+
+  it('manualSend: não exige destinatário', async () => {
+    wireMocks({ interactions: [{ data: null }, { data: { id: 'int-wa-manual-3' } }] });
+
+    const result = await executeActivity({ ...whatsappInput, to: '', manualSend: true });
+
+    expect(result.success).toBe(true);
+    expect(mockSendWhatsApp).not.toHaveBeenCalled();
+  });
+
   it('should return error and mark interaction failed when WhatsApp send fails', async () => {
     mockCheckAndDeductCredit.mockResolvedValue({
       allowed: true,

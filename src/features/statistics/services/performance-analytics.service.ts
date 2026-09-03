@@ -40,10 +40,16 @@ export async function fetchPerformanceAnalyticsData(
     ? userIds
     : memberIds.map((m) => m.user_id);
 
-  // Fetch interactions
+  // Fetch interactions.
+  // `channel='system'` são linhas de auditoria (passo pulado, cadência encerrada,
+  // avanço automático) gravadas como type='sent'. O Dashboard e o Progresso
+  // diário já as excluem; sem este filtro o Controle Diário contava "Pular esta
+  // atividade" como atividade concluída. `calendar` (reunião agendada) fica —
+  // `completed` conta meeting_scheduled de propósito.
   let intQuery = from(supabase, 'interactions')
     .select('type, channel, lead_id, performed_by, cadence_id, created_at')
     .eq('org_id', orgId)
+    .neq('channel', 'system')
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd)
     .in('performed_by', filteredIds);
