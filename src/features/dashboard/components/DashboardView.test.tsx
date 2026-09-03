@@ -44,6 +44,7 @@ vi.mock('recharts', () => ({
   Bar: () => <div data-testid="bar" />,
   Area: () => <div data-testid="area" />,
   Scatter: () => <div data-testid="scatter" />,
+  LabelList: () => <div data-testid="label-list" />,
   XAxis: () => <div />,
   YAxis: () => <div />,
   CartesianGrid: () => <div />,
@@ -273,6 +274,47 @@ describe('DashboardView', () => {
     expect(screen.getByText('Reuniões Realizadas')).toBeInTheDocument();
     expect(screen.getByText('Atividades Realizadas')).toBeInTheDocument();
     expect(screen.getByText('Taxa de Comparecimento')).toBeInTheDocument();
+  });
+
+  it('should render meetings-by-day chart when meetingsScheduled has dailyData', () => {
+    const base = {
+      total: 0,
+      monthTarget: 0,
+      percentOfTarget: 0,
+      averagePerSdr: 0,
+      sdrBreakdown: [],
+    };
+    const ranking: RankingData = {
+      leadsFinished: base,
+      activitiesDone: base,
+      attendanceRate: base,
+      leadsOpened: base,
+      meetingsScheduled: {
+        ...base,
+        dailyData: [
+          { date: '2026-02-01', day: 1, actual: 1, target: 0 },
+          { date: '2026-02-02', day: 2, actual: 3, target: 0 },
+        ],
+      },
+      meetingsHeld: base,
+      hitRate: base,
+      leadsToOpen: base,
+      overdueActivities: base,
+    };
+    const { container } = render(
+      <DashboardView data={createData()} filters={defaultFilters} ranking={ranking} />,
+    );
+    expect(container.querySelector('[data-slot="meetings-by-day"]')).toBeInTheDocument();
+    expect(
+      screen.getByText('Reuniões marcadas (RM) e realizadas (RR) por dia'),
+    ).toBeInTheDocument();
+  });
+
+  it('should not render meetings-by-day chart when ranking prop is absent', () => {
+    const { container } = render(
+      <DashboardView data={createData()} filters={defaultFilters} />,
+    );
+    expect(container.querySelector('[data-slot="meetings-by-day"]')).not.toBeInTheDocument();
   });
 
   it('should not render ranking section when ranking prop is absent', () => {

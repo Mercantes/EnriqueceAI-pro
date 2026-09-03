@@ -10,10 +10,12 @@ import { Skeleton } from '@/shared/components/ui/skeleton';
 
 import type { DashboardData, DashboardFilters, DashboardResponseTimeData, InsightsData, OpportunityKpiData, RankingData } from '../types';
 import { currentDayOfMonthBrt } from '../utils/brt-now';
+import { buildMeetingsByDay } from '../utils/meetings-by-day';
 import { ConversionByOriginChart } from './ConversionByOriginChart';
 import { DashboardFilters as DashboardFiltersComponent } from './DashboardFilters';
 import { GoalsModal } from './GoalsModal';
 import { LossReasonsChart } from './LossReasonsChart';
+import { MeetingsByDayChart } from './MeetingsByDayChart';
 import { OpportunityKpiCard } from './OpportunityKpiCard';
 import { RankingCard } from './RankingCard';
 import { ResponseTimeCard } from './ResponseTimeCard';
@@ -71,6 +73,14 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
     }
     return count || 1;
   }, [filters.dateFrom, filters.dateTo]);
+
+  // RM/RR por dia — derivado das séries acumuladas dos dois cards KPI acima,
+  // então a soma das barras bate com o número grande de cada card.
+  const meetingsByDay = useMemo(() => {
+    const scheduled = ranking?.meetingsScheduled?.dailyData;
+    if (!scheduled || data.kpi.dailyData.length === 0) return null;
+    return buildMeetingsByDay(scheduled, data.kpi.dailyData, filters.month);
+  }, [ranking?.meetingsScheduled?.dailyData, data.kpi.dailyData, filters.month]);
 
   return (
     <div className="space-y-6">
@@ -146,6 +156,13 @@ export function DashboardView({ data, filters, ranking, insights, responseTime }
         label="Reuniões realizadas"
         labelTooltip="Reuniões realizadas no mês — leads marcados como ganho (status='won')."
       />
+
+      {/* RM e RR por dia — detalhe diário dos dois cards de reunião acima */}
+      {meetingsByDay && meetingsByDay.length > 0 && (
+        <div data-slot="meetings-by-day">
+          <MeetingsByDayChart data={meetingsByDay} />
+        </div>
+      )}
 
       {/* Ranking Cards — funnel order: Abertos → Marcadas → Realizadas → Hit Rate */}
       {ranking && (

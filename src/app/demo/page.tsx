@@ -6,6 +6,7 @@ import { Activity, CheckCircle2, Mail, MessageSquareReply, AlertTriangle, Calend
 import { OpportunityKpiCard } from '@/features/dashboard/components/OpportunityKpiCard';
 import { RankingCard } from '@/features/dashboard/components/RankingCard';
 import { LossReasonsChart } from '@/features/dashboard/components/LossReasonsChart';
+import { MeetingsByDayChart } from '@/features/dashboard/components/MeetingsByDayChart';
 import { ConversionByOriginChart } from '@/features/dashboard/components/ConversionByOriginChart';
 import { StepRatesBarChart } from '@/features/cadences/components/StepRatesBarChart';
 import { StepPerformanceTable } from '@/features/cadences/components/StepPerformanceTable';
@@ -15,6 +16,7 @@ import { LeadTable } from '@/features/leads/components/LeadTable';
 import {
   opportunityKpi,
   demoMonth,
+  meetingsByDay,
   leadsFinalizadosRanking,
   atividadesRanking,
   conversaoRanking,
@@ -78,6 +80,9 @@ export default function DemoPage() {
           <div className="space-y-6">
             {/* KPI de Oportunidades */}
             <OpportunityKpiCard kpi={opportunityKpi} month={demoMonth} />
+
+            {/* RM e RR por dia */}
+            <MeetingsByDayChart data={meetingsByDay} />
 
             {/* Rankings */}
             <div className="grid gap-4 md:grid-cols-3">
