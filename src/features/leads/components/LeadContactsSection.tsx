@@ -15,6 +15,7 @@ import {
 } from '@/shared/components/ui/select';
 
 import { normalizePhone } from '@/lib/utils/phone';
+import { isUuid } from '@/lib/utils/uuid';
 
 import type { LeadContact, LeadEmail, LeadPhone, LeadSocio } from '../types';
 import {
@@ -103,6 +104,12 @@ export function LeadContactsSection({ leadId, socios, onPrimaryChange }: LeadCon
   // DB, so there's no need to push the mirror up (which would fire a spurious
   // 'lead:updated'). Mutations pass true so the header/dialer follow the change.
   const refresh = useCallback(async (emitMirror: boolean) => {
+    // Sem UUID válido (ex.: lead fictício da /demo) não há o que buscar — e a
+    // action exige sessão, o que redirecionaria a página pública para /login.
+    if (!isUuid(leadId)) {
+      setContacts([]);
+      return;
+    }
     const result = await listLeadContacts(leadId);
     if (result.success) {
       setContacts(result.data);

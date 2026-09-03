@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { Activity, CheckCircle2, Mail, MessageSquareReply, AlertTriangle, CalendarCheck } from 'lucide-react';
 
+import { OrgContext } from '@/features/auth/components/OrganizationProvider';
 import { OpportunityKpiCard } from '@/features/dashboard/components/OpportunityKpiCard';
 import { RankingCard } from '@/features/dashboard/components/RankingCard';
 import { LossReasonsChart } from '@/features/dashboard/components/LossReasonsChart';
@@ -28,6 +29,7 @@ import {
   demoLeads,
   demoCadenceInfo,
   demoUserMap,
+  demoOrgContext,
 } from './demo-data';
 
 function CadenceKpiCard({ label, value, icon: Icon }: { label: string; value: string; icon: React.ComponentType<{ className?: string }> }) {
@@ -55,6 +57,9 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
 
 export default function DemoPage() {
   return (
+    // Provider fictício: LeadTable/LeadInfoPanel leem o OrgContext e a /demo não
+    // tem sessão. Sem isto o hook useOrganization lança e a página cai no login.
+    <OrgContext.Provider value={demoOrgContext}>
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card">
@@ -224,5 +229,6 @@ export default function DemoPage() {
         </p>
       </footer>
     </div>
+    </OrgContext.Provider>
   );
 }

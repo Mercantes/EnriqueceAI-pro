@@ -8,6 +8,8 @@ import type {
 import type { StepPerformanceMetrics } from '@/features/cadences/cadences.contract';
 import type { LeadInfoPanelData } from '@/features/leads/components/lead-info-panel.utils';
 import type { LeadCadenceInfo, LeadRow } from '@/features/leads/types';
+import type { OrgContextValue } from '@/features/auth/components/OrganizationProvider';
+import type { OrganizationMemberRow } from '@/features/auth/types';
 import { buildMeetingsByDay } from '@/features/dashboard/utils/meetings-by-day';
 
 // ---------------------------------------------------------------------------
@@ -464,4 +466,51 @@ export const demoUserMap: Record<string, string> = {
   u1: 'Ana Silva',
   u2: 'Bruno Costa',
   u3: 'Carla Mendes',
+};
+
+// ---------------------------------------------------------------------------
+// Organização fictícia — a /demo é pública (sem sessão), mas componentes como
+// LeadTable/LeadInfoPanel leem o OrgContext. Este valor alimenta o provider.
+// ---------------------------------------------------------------------------
+
+const DEMO_TS = '2026-03-01T12:00:00.000Z';
+
+function demoMember(userId: string, role: OrganizationMemberRow['role']): OrganizationMemberRow {
+  return {
+    id: `member-${userId}`,
+    org_id: 'demo-org',
+    user_id: userId,
+    role,
+    status: 'active',
+    invited_at: DEMO_TS,
+    accepted_at: DEMO_TS,
+    invited_expires_at: null,
+    created_at: DEMO_TS,
+    updated_at: DEMO_TS,
+    name: demoUserMap[userId],
+  };
+}
+
+const demoMembers: OrganizationMemberRow[] = [
+  demoMember('u0', 'manager'),
+  demoMember('u1', 'sdr'),
+  demoMember('u2', 'sdr'),
+  demoMember('u3', 'sdr'),
+];
+
+export const demoOrgContext: OrgContextValue = {
+  organization: {
+    id: 'demo-org',
+    name: 'Empresa Demo',
+    slug: 'empresa-demo',
+    owner_id: 'u0',
+    onboarding_step: null,
+    logo_url: null,
+    created_at: DEMO_TS,
+    updated_at: DEMO_TS,
+  },
+  members: demoMembers,
+  currentMember: demoMembers[0] as OrganizationMemberRow,
+  isManager: true,
+  loading: false,
 };
