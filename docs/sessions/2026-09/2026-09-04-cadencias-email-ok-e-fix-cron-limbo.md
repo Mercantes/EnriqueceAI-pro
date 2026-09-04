@@ -44,13 +44,49 @@ Os 189 da Recovery foram **pausados pelo Guilherme em massa** (19 em 21/ago, 170
 ## Comunicação
 - E-mail enviado (Gmail do Vini) para Guilherme em 04/set: 189 leads pausados, 3 opções (retomar Recovery / "Novo sem cadência" / Perdido), como filtrar na tela Leads. **Aguardando resposta** para ajuste em massa com backup.
 
+## Tarde: Guilherme pediu "retomar" → descoberta de 2ª edição da Recovery
+
+Antes de retomar, conferi `cadence_steps`: a Recovery tinha **10 passos**, não os 11 do remap de 03/set.
+Edge logs (`request.path LIKE '%cadence_steps%'`, `request.sb.auth_user`):
+
+| Quando (BRT) | Quem | O quê |
+|---|---|---|
+| 03/set 14:24 | Vinicius | 8 → 11 passos (e-mails + cadência maior) |
+| 03/set 15:10–15:30 | remap via MCP | mapeou leads para numeração de **11** |
+| 03/set 16:51 | **Julio Mendes** (manager) | removeu o passo 3 (e-mail dia 0) → **10 passos**; todo cs≥4 deslocou |
+| 04/set 14:13 | Guilherme (SDR) | salvou sem mudar estrutura (SDR consegue editar cadência) |
+
+Estrutura atual: 1 phone0 · 2 WA0 · 3 phone1d · 4 WA1d · 5 email1d · 6 phone3d · 7 email3d · 8 phone6d · 9 email6d · 10 WA6d.
+
+Impacto antes da correção: 217 leads em e-mail (5) no lugar de WA; **175 em cs 11/12 (passos inexistentes, invisíveis)**; 397 skips sintéticos do e-mail 3 com `step_id` NULL.
+
+### Parte A — realinhamento (backup `_bkp_recovery_realign_20260904`) ✅
+- 407 enrollments do backup de 03/set que **não se moveram** desde o remap → `cs − 1` (11→10; 12→8 = nova cauda). Vencimento original preservado (trigger é `OF current_step, status`; 2º UPDATE só em `next_step_due`).
+- Quem executou algo após 16:51 ficou como está (já coerente com 10 passos).
+- "Destrava" iterativo (+1): WA inválido em passo WA (115) e e-mail com skip sintético (130).
+- Depois: ninguém em passo inexistente, ninguém em e-mail suprimido. Residual: **66 leads em cs=10 (WA 6d, último) com WA inválido** = invisíveis até auto-loss.
+
+### Parte B — retomada dos 189 do Guilherme (backup `_bkp_recovery_resume_guilherme_20260904`) ✅
+- Estavam na numeração **antiga de 8 passos** (nunca remapeados). Mapa 8→10: 1→1, 2→2, 3→3, 4→4, 5→6, 6→10, 7→8, 8→8 (nova cauda, decisão do Vini). WA inválido em passo WA → próximo (2→3, 4→5, 6→8).
+- Todos os 60 do passo antigo 8 e os 13 do 2 tinham WhatsApp inválido (por isso travaram e foram pausados).
+- Evento `cadence_resumed` na timeline (`performed_by` = Vini, reason "Retomada em massa (limbo 04/set, a pedido do SDR)").
+- Vencimentos: 1 hoje · **114 seg 07/set** · 74 qui 10/set.
+- Limbo depois: Guilherme 207 → **18**; total 299 → 111 (Ismael 71 = Inbound E-mail concluída).
+
 ## Lições
 - ⭐⭐ Cron novo SEMPRE com URL fixa; **nunca** `current_setting('app.settings.app_url')`. Só `cron_secret` pode usar `current_setting(..., true)` com fallback.
 - ⭐ `"1 row"` em `cron.job_run_details` NÃO prova que a rota respondeu (só que o `net.http_post` foi enfileirado). Conferir `net._http_response` (status_code / error_msg).
 - Timeouts de 5000 ms no `net._http_response` de outros crons são normais: o app continua processando; a resposta só não volta ao banco.
 
+- ⭐⭐ **Sempre re-conferir `cadence_steps` antes de remap/retomada** — outra pessoa pode ter editado no meio.
+- ⭐ SDR consegue editar passos de cadência (Guilherme salvou a Recovery). Avaliar restringir a manager.
+
 ## Pendências
-- [ ] Resposta do Guilherme → ajuste em massa dos 189 (com backup `_bkp_*`).
+- [x] Resposta do Guilherme → 189 retomados (backup `_bkp_recovery_resume_guilherme_20260904`).
+- [ ] Avisar Guilherme: 114 tarefas caem na fila dele segunda 07/set + 74 na quinta 10/set.
+- [ ] 66 leads em cs=10 (WA 6d) com WA inválido: invisíveis; motor deveria pular passo WA (pendente antigo) ou dar Perdido/Novo.
+- [ ] Falar com Julio Mendes: editar estrutura de cadência ativa desloca leads (mesmo com o hardening).
+- [ ] Restringir edição de passos a manager?
 - [ ] Política de fim de cadência: 70 leads da "Inbound — E-mail (auto)" concluída ficam "Contatado" sem próximo passo (residual conhecido desde 13/ago).
 - [ ] 13 leads "sem dono" em limbo.
 
