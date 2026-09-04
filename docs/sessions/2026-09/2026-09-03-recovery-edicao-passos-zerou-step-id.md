@@ -40,7 +40,7 @@ Mesmo DO-block com `v_sdrs` array (Guilherme, João Fogaça, Matheus) + destrava
 | João Fogaça | 121 | 95 | 355 | 108 | 101 → 50 (08:00 dizia 67; trabalhou de manhã) |
 | Matheus | 266 | 236 | 457 | 364 | 66 → 41 WA vencidos <4h (painel 4h: 0) |
 
-## Hardening do editor ✅ (código, sem commit — branch `fix/dashboard-rr-attribution-assigned-to`)
+## Hardening do editor ✅ NO AR — PR [#353](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/353) (squash `87d9d7ad`, CI verde, deploy confirmado via `/api/version` às 16:29 BRT)
 - `save-timeline-steps.ts`: recebe `id` por passo; passo existente é **atualizado no lugar (upsert por id)**, só os removidos são apagados; renumeração passa por ordem temporária (+10000) por causa do UNIQUE `(cadence_id, step_order)`. Mudança **estrutural** (inserir/remover/reordenar) com inscrições `active/paused` devolve `code = ACTIVE_ENROLLMENTS` sem gravar; só grava com `confirmActiveEnrollments: true`. Mudança só de conteúdo/delay passa direto.
 - `save-auto-email-steps.ts`: mesma ideia por posição (o motor usa `interactions.step_id` como trava de idempotência — recriar IDs podia **reenviar e-mails**). Guarda quando muda o número de passos; `confirm_active_enrollments` no schema.
 - UI: `ActiveEnrollmentsConfirmDialog` (novo) + aviso `Alert` no `CadenceBuilder` e `AutoEmailBuilder` quando a cadência tem inscrições; `daysToStepInputs` passa `id`. Constante `ACTIVE_ENROLLMENTS_CODE` em `types/index.ts` (arquivo `'use server'` não pode exportar const).
