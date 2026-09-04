@@ -70,7 +70,8 @@ Impacto antes da correção: 217 leads em e-mail (5) no lugar de WA; **175 em cs
 - Estavam na numeração **antiga de 8 passos** (nunca remapeados). Mapa 8→10: 1→1, 2→2, 3→3, 4→4, 5→6, 6→10, 7→8, 8→8 (nova cauda, decisão do Vini). WA inválido em passo WA → próximo (2→3, 4→5, 6→8).
 - Todos os 60 do passo antigo 8 e os 13 do 2 tinham WhatsApp inválido (por isso travaram e foram pausados).
 - Evento `cadence_resumed` na timeline (`performed_by` = Vini, reason "Retomada em massa (limbo 04/set, a pedido do SDR)").
-- Vencimentos: 1 hoje · **114 seg 07/set** · 74 qui 10/set.
+- Vencimentos: 1 hoje · 114 seg 07/set · 74 qui 10/set.
+- **Espalhamento (backup `_bkp_recovery_spread_guilherme_20260904`):** as 114 de segunda viraram **38 seg / 38 ter / 38 qua**, mesmo horário (round-robin por passo). Quinta segue com 74. Guilherme avisado por e-mail (mesma thread).
 - Limbo depois: Guilherme 207 → **18**; total 299 → 111 (Ismael 71 = Inbound E-mail concluída).
 
 ## Lições
