@@ -85,7 +85,7 @@ Impacto antes da correção: 217 leads em e-mail (5) no lugar de WA; **175 em cs
 
 ## Pendências
 - [x] Resposta do Guilherme → 189 retomados (backup `_bkp_recovery_resume_guilherme_20260904`).
-- [ ] Avisar Guilherme: 114 tarefas caem na fila dele segunda 07/set + 74 na quinta 10/set.
+- [x] Guilherme avisado por e-mail (mesma thread) da distribuição final: 1 · 38 · 38 · 38 · 25 · 25 · 24 (04/09 → 14/09).
 - [ ] 66 leads em cs=10 (WA 6d) com WA inválido: invisíveis; motor deveria pular passo WA (pendente antigo) ou dar Perdido/Novo.
 - [ ] Falar com Julio Mendes: editar estrutura de cadência ativa desloca leads (mesmo com o hardening).
 - [ ] Restringir edição de passos a manager?
