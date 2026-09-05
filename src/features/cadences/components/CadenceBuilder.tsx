@@ -114,6 +114,9 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
   const [autoLossEnabled, setAutoLossEnabled] = useState(cadence?.auto_loss_after_days != null);
   const [autoLossAfterDays, setAutoLossAfterDays] = useState(cadence?.auto_loss_after_days ?? 30);
   const [autoLossReasonId, setAutoLossReasonId] = useState(cadence?.auto_loss_reason_id ?? '');
+  // Story activity-skip-guardrails: o gestor decide para onde o SDR pode mover
+  // leads pelo "Trocar cadência". Default true (nada muda até o gestor mexer).
+  const [sdrSwitchAllowed, setSdrSwitchAllowed] = useState(cadence?.sdr_switch_allowed ?? true);
   const [generalCollapsed, setGeneralCollapsed] = useState(false);
   const [days, setDays] = useState<DayData[]>(() => stepsToDays(cadence?.steps ?? []));
   const [editingStep, setEditingStep] = useState<TimelineStep | null>(null);
@@ -136,6 +139,7 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
         origin,
         auto_loss_after_days: autoLossEnabled ? autoLossAfterDays : null,
         auto_loss_reason_id: autoLossEnabled && autoLossReasonId ? autoLossReasonId : null,
+        sdr_switch_allowed: sdrSwitchAllowed,
       };
 
       if (isEditing) {
@@ -395,6 +399,29 @@ export function CadenceBuilder({ cadence, templates, metrics, enrollments = [], 
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Troca pelo SDR — só o gestor consegue salvar (o servidor ignora o campo para SDR) */}
+          <div className="grid grid-cols-[180px_1fr] items-center gap-4 py-4">
+            <Label className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">Troca pelo SDR:</Label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={sdrSwitchAllowed}
+                aria-label="SDR pode mover leads para esta cadência"
+                onClick={() => setSdrSwitchAllowed(!sdrSwitchAllowed)}
+                disabled={!isEditable}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${sdrSwitchAllowed ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'}`}
+              >
+                <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${sdrSwitchAllowed ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </button>
+              <span className="text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                {sdrSwitchAllowed
+                  ? 'SDR pode mover leads para esta cadência'
+                  : 'Só o gestor move leads para esta cadência'}
+              </span>
+            </div>
           </div>
 
           {/* Actions */}

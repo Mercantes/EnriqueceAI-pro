@@ -116,6 +116,7 @@ function makeActivity(channel: string, overrides: Partial<PendingActivity> = {})
     stepId: 'step-1',
     stepOrder: 1,
     totalSteps: 5,
+    snoozeCount: 0,
     channel: channel as PendingActivity['channel'],
     templateId: null,
     templateSubject: 'Template Subject',

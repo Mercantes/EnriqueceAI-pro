@@ -27,6 +27,7 @@ function createMockActivity(overrides: Partial<PendingActivity> = {}): PendingAc
     stepId: 'step-1',
     stepOrder: 1,
     totalSteps: 5,
+    snoozeCount: 0,
     channel: 'email',
     templateId: null,
     templateSubject: null,

@@ -7,6 +7,9 @@ import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 
+import { z } from 'zod';
+
+import { SKIP_NOTE_MAX, SWITCH_REASON_VALUES } from '@/features/activities/constants/skip-reasons';
 import { logLeadEvent, logLeadEventBulk } from '@/features/leads/actions/log-lead-event';
 
 import { createCadenceSchema, createCadenceStepSchema, updateCadenceSchema } from '../cadence.schemas';
@@ -22,7 +25,7 @@ export async function createCadence(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, userId, supabase } = auth.data;
+  const { orgId, userId, role, supabase } = auth.data;
 
   const { data, error } = (await from(supabase, 'cadences')
     .insert({
@@ -34,6 +37,11 @@ export async function createCadence(
       origin: parsed.data.origin,
       auto_loss_after_days: parsed.data.auto_loss_after_days ?? null,
       auto_loss_reason_id: parsed.data.auto_loss_reason_id ?? null,
+      // Só manager decide para onde o SDR pode mover leads; SDR criando
+      // cadência fica com o default (true) do banco.
+      ...(role === 'manager' && parsed.data.sdr_switch_allowed !== undefined
+        ? { sdr_switch_allowed: parsed.data.sdr_switch_allowed }
+        : {}),
       status: 'draft',
       total_steps: 0,
       created_by: userId,
@@ -58,10 +66,15 @@ export async function updateCadence(
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { orgId, role, supabase } = auth.data;
+
+  // `sdr_switch_allowed` é decisão do gestor: SDR editando a cadência não
+  // consegue liberar a própria troca.
+  const patch: Record<string, unknown> = { ...parsed.data };
+  if (role !== 'manager') delete patch.sdr_switch_allowed;
 
   const { data, error } = (await from(supabase, 'cadences')
-    .update(parsed.data as Record<string, unknown>)
+    .update(patch)
     .eq('id', cadenceId)
     .eq('org_id', orgId)
     .is('deleted_at', null)
@@ -375,24 +388,58 @@ export async function enrollLeads(
  * Switch leads from any active cadence to a new one.
  * Completes ALL active/paused enrollments across all cadences, then enrolls in the target.
  */
+export interface SwitchCadenceOptions {
+  /** Motivo de 1 clique (obrigatório na UI da fila; opcional em fluxos legados/bulk). */
+  reason?: string;
+  note?: string;
+}
+
+// Motivo restrito à lista fixa e observação com teto — o valor vai para
+// message_content/metadata, então não pode ser string livre (QA SEC-001).
+const switchOptionsSchema = z.object({
+  reason: z.enum(SWITCH_REASON_VALUES).optional(),
+  note: z.string().trim().max(SKIP_NOTE_MAX).optional(),
+});
+
 export async function switchLeadsCadence(
   targetCadenceId: string,
   leadIds: string[],
+  options: SwitchCadenceOptions = {},
 ): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
+  const parsedOptions = switchOptionsSchema.safeParse(options);
+  if (!parsedOptions.success) {
+    return { success: false, error: parsedOptions.error.issues[0]?.message ?? 'Motivo inválido' };
+  }
+
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, userId, supabase } = auth.data;
+  const { orgId, userId, role, supabase } = auth.data;
 
   // Verify target cadence is active
   const { data: cadence } = (await from(supabase, 'cadences')
-    .select('id, status, name')
+    .select('id, status, name, sdr_switch_allowed')
     .eq('id', targetCadenceId)
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .single()) as { data: { id: string; status: string; name: string } | null };
+    .single()) as {
+    data: { id: string; status: string; name: string; sdr_switch_allowed: boolean | null } | null;
+  };
 
   if (!cadence) return { success: false, error: 'Cadência não encontrada' };
   if (cadence.status !== 'active') return { success: false, error: 'Cadência precisa estar ativa' };
+
+  // Gestor decide para onde o SDR pode mover leads. O diálogo já esconde as
+  // cadências bloqueadas; aqui é a trava de verdade (chamada direta).
+  if (role !== 'manager' && cadence.sdr_switch_allowed === false) {
+    return {
+      success: false,
+      error: 'Só o gestor pode mover leads para esta cadência',
+      code: 'FORBIDDEN',
+    };
+  }
+
+  const reason = parsedOptions.data.reason ?? null;
+  const note = parsedOptions.data.note || null;
 
   // Capture which leads currently have active/paused enrollments BEFORE closing
   // them, so the switch-out leaves a timeline trace. Without this, the lead's
@@ -423,8 +470,8 @@ export async function switchLeadsCadence(
       leadIds: switchedLeadIds,
       userId,
       event: 'cadence_switched',
-      message: `Cadência anterior encerrada — lead movido para "${cadence.name}"`,
-      metadata: { cadence_id: targetCadenceId },
+      message: `Cadência anterior encerrada — lead movido para "${cadence.name}"${reason ? ` | Motivo: ${reason}` : ''}${note ? ` | Obs: ${note}` : ''}`,
+      metadata: { cadence_id: targetCadenceId, switch_reason: reason, switch_note: note },
     });
   }
 

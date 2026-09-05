@@ -66,6 +66,8 @@ export interface CadenceRow {
   total_steps: number;
   auto_loss_after_days: number | null;
   auto_loss_reason_id: string | null;
+  /** SDR (não manager) pode mover leads para esta cadência via "Trocar cadência". */
+  sdr_switch_allowed: boolean;
   created_by: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -103,6 +105,8 @@ export interface CadenceEnrollmentRow {
   current_step: number;
   status: EnrollmentStatus;
   next_step_due: string | null;
+  /** Adiamentos ("Adiar p/ amanhã") no passo atual. Zerado ao avançar. */
+  snooze_count: number;
   enrolled_by: string | null;
   enrolled_at: string;
   completed_at: string | null;
@@ -154,6 +158,7 @@ export interface CadenceInsert {
   total_steps?: number;
   auto_loss_after_days?: number | null;
   auto_loss_reason_id?: string | null;
+  sdr_switch_allowed?: boolean;
   created_by?: string | null;
 }
 

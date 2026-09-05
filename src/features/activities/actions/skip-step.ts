@@ -11,29 +11,44 @@ import { from } from '@/lib/supabase/from';
 import { createNotification } from '@/features/notifications/services/notification.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
+import { SKIP_NOTE_MAX, SKIP_REASON_VALUES, reasonLabel } from '../constants/skip-reasons';
+
+import { reportWhatsAppInvalid } from './report-whatsapp-invalid';
+
 const skipStepSchema = z.object({
   enrollmentId: z.string().uuid('ID inválido'),
   stepId: z.string().uuid('ID inválido'),
+  // Motivo de 1 clique é OBRIGATÓRIO: sem ele o gestor não consegue agrupar
+  // por que os passos estão sendo pulados.
+  reason: z.enum(SKIP_REASON_VALUES, { message: 'Escolha um motivo' }),
+  note: z.string().trim().max(SKIP_NOTE_MAX).optional(),
 });
 
+export type SkipStepInput = z.infer<typeof skipStepSchema>;
+
 /**
- * "Pular esta atividade" — avança o enrollment para o PRÓXIMO step sem encerrar
- * a cadência. É o meio-termo que faltava entre "adiar o mesmo step"
- * (`skipActivity`, só empurra `next_step_due`) e "encerrar tudo" (o antigo botão
- * "Encerrar cadência" → `ignoreActivity`, que marcava o enrollment inteiro como
- * `completed` e jogava o lead no limbo de cadência: `contacted` sem cadência
- * ativa nem atividade pendente).
+ * "Pular este passo" — avança o enrollment para o PRÓXIMO step sem encerrar
+ * a cadência. É o meio-termo entre "adiar o mesmo step" (`skipActivity`, só
+ * empurra `next_step_due`) e "encerrar tudo" (o antigo "Encerrar cadência",
+ * que jogava o lead no limbo).
+ *
+ * Exige motivo. Se o motivo for "contato inválido" num passo de WhatsApp,
+ * desvia para o fluxo de WhatsApp inválido (marca o lead e pula TODOS os
+ * passos de WhatsApp restantes) — senão a mesma pergunta voltaria 3 passos
+ * depois.
  *
  * Reusa a RPC atômica `advance_enrollment_after_step` (a mesma do fluxo de
  * execução em `execute-activity.ts`), passando o step atual como executado —
  * row-locked e idempotente, então duplo clique / retry não regride nem duplica.
  */
 export async function skipStep(
-  input: z.infer<typeof skipStepSchema>,
+  input: SkipStepInput,
 ): Promise<ActionResult<void>> {
   const parsed = skipStepSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: 'Dados inválidos' };
-  const { enrollmentId, stepId } = parsed.data;
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' };
+  }
+  const { enrollmentId, stepId, reason, note } = parsed.data;
 
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
@@ -50,19 +65,42 @@ export async function skipStep(
 
   if (!enrollment) return { success: false, error: 'Inscrição não encontrada' };
 
+  const { data: step } = (await from(supabase, 'cadence_steps')
+    .select('channel')
+    .eq('id', stepId)
+    .maybeSingle()) as { data: { channel: string } | null };
+
+  const label = reasonLabel(reason);
+  const noteSuffix = note ? ` | Obs: ${note}` : '';
+
   await from(supabase, 'interactions').insert({
     org_id: enrollment.org_id,
     lead_id: enrollment.lead_id,
     cadence_id: enrollment.cadence_id,
     channel: 'system',
     type: 'sent',
-    message_content: 'Atividade pulada pelo SDR — cadência avançou para o próximo passo',
+    message_content: `Passo pulado pelo SDR — motivo: ${label}${noteSuffix}`,
     performed_by: userId,
     metadata: {
       system_event: 'step_skipped_manual',
       step_at_skip: enrollment.current_step,
+      skip_reason: reason,
+      skip_note: note ?? null,
     },
   } as Record<string, unknown>);
+
+  // Contato inválido em passo de WhatsApp → fluxo dedicado (marca
+  // whatsapp_invalid_at + pula os WhatsApp restantes). Reusa o input que o
+  // enrollment já nos deu, sem query extra.
+  if (reason === 'invalid_contact' && step?.channel === 'whatsapp') {
+    return reportWhatsAppInvalid({
+      enrollmentId,
+      cadenceId: enrollment.cadence_id,
+      stepId,
+      leadId: enrollment.lead_id,
+      orgId: enrollment.org_id,
+    });
+  }
 
   const { data, error } = await (supabase.rpc as unknown as (
     fn: string,

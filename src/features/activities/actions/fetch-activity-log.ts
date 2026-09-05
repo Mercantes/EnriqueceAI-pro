@@ -54,6 +54,7 @@ interface EnrollmentRow {
   current_step: number;
   status: string;
   next_step_due: string | null;
+  snooze_count: number | null;
   lead: RawLead;
   cadence: { id: string; name: string; total_steps: number; created_by: string | null };
 }
@@ -83,7 +84,7 @@ export async function fetchActivityLog(
 
   // Fetch active enrollments with pagination
   let query = from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads(*), cadence:cadences(id, name, total_steps, created_by)', { count: 'exact' })
+    .select('id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads(*), cadence:cadences(id, name, total_steps, created_by)', { count: 'exact' })
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .order('next_step_due', { ascending: true })
@@ -189,6 +190,7 @@ export async function fetchActivityLog(
       activityName: currentStep.activity_name ?? null,
       callScript: currentStep.instructions ?? null,
       callProvider: currentStep.call_provider ?? null,
+      snoozeCount: enrollment.snooze_count ?? 0,
     };
 
     // Search filter

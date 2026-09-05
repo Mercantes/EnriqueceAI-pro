@@ -49,6 +49,8 @@ export const createCadenceSchema = z
     origin: cadenceOriginSchema.default('outbound'),
     auto_loss_after_days: z.number().int().positive().nullable().optional(),
     auto_loss_reason_id: z.string().uuid().nullable().optional(),
+    // SDR pode mover leads PARA esta cadência via "Trocar cadência" (só manager altera).
+    sdr_switch_allowed: z.boolean().optional(),
   })
   .superRefine(autoLossPairCheck);
 
@@ -62,6 +64,7 @@ export const updateCadenceSchema = z
     origin: cadenceOriginSchema.optional(),
     auto_loss_after_days: z.number().int().positive().nullable().optional(),
     auto_loss_reason_id: z.string().uuid().nullable().optional(),
+    sdr_switch_allowed: z.boolean().optional(),
   })
   .superRefine(autoLossPairCheck);
 

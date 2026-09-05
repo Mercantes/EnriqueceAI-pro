@@ -39,6 +39,8 @@ interface ActivityWhatsAppComposeProps {
   /** SDR já enviou a mensagem pelo próprio WhatsApp — só registra e avança. */
   onManualSend?: () => void;
   onSkip: () => void;
+  /** Texto do botão de adiar (default "Adiar p/ amanhã"; o Sheet injeta o restante). */
+  skipLabel?: string;
   onReportInvalid: () => void;
 }
 
@@ -58,6 +60,7 @@ export function ActivityWhatsAppCompose({
   onSend,
   onManualSend,
   onSkip,
+  skipLabel = 'Adiar p/ amanhã',
   onReportInvalid,
 }: ActivityWhatsAppComposeProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -198,7 +201,7 @@ export function ActivityWhatsAppCompose({
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={onSkip} disabled={isSending}>
                 <Clock className="mr-2 h-4 w-4" />
-                Pular
+                {skipLabel}
               </Button>
               {onManualSend && (
                 <Button

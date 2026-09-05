@@ -13,9 +13,11 @@ interface ActivitySocialPointPanelProps {
   isSending: boolean;
   onMarkDone: (notes: string) => void;
   onSkip: () => void;
+  /** Texto do botão de adiar (default "Adiar p/ amanhã"; o Sheet injeta o restante). */
+  skipLabel?: string;
 }
 
-export function ActivitySocialPointPanel({ leadName, isSending, onMarkDone, onSkip }: ActivitySocialPointPanelProps) {
+export function ActivitySocialPointPanel({ leadName, isSending, onMarkDone, onSkip, skipLabel = 'Adiar p/ amanhã' }: ActivitySocialPointPanelProps) {
   const [notes, setNotes] = useState('');
 
   const linkedinSearchUrl = `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(leadName)}`;
@@ -70,7 +72,7 @@ export function ActivitySocialPointPanel({ leadName, isSending, onMarkDone, onSk
       {/* Actions */}
       <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
         <Button variant="outline" onClick={onSkip} disabled={isSending}>
-          Pular
+          {skipLabel}
         </Button>
         <Button onClick={() => onMarkDone(notes)} disabled={isSending}>
           {isSending ? (

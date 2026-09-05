@@ -43,6 +43,8 @@ interface ActivityPhonePanelProps {
   isSending: boolean;
   onMarkDone: (notes: string) => void;
   onSkip: () => void;
+  /** Texto do botão de adiar (default "Adiar p/ amanhã"; o Sheet injeta o restante). */
+  skipLabel?: string;
   onLeadLost?: () => void;
   /** When true, shows a "No-show" button (lead has a scheduled meeting). */
   canMarkNoShow?: boolean;
@@ -61,6 +63,7 @@ export function ActivityPhonePanel({
   isSending,
   onMarkDone,
   onSkip,
+  skipLabel = 'Adiar p/ amanhã',
   onLeadLost,
   canMarkNoShow,
   activityName,
@@ -477,7 +480,7 @@ export function ActivityPhonePanel({
       <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
         <Button variant="outline" onClick={onSkip} disabled={isSending || isInCall}>
           <Clock className="mr-2 h-4 w-4" />
-          Pular
+          {skipLabel}
         </Button>
       </div>
 

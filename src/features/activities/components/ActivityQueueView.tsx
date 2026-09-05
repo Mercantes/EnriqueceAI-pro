@@ -13,6 +13,7 @@ import type { DialerProvider } from '@/features/calls/types/dialer-provider';
 import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
 import { fetchDailyProgress, type DailyProgress } from '../actions/fetch-daily-progress';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
+import type { SkipReason } from '../constants/skip-reasons';
 import type { PendingActivity } from '../types';
 import { OVERDUE_THRESHOLD_HOURS, hoursOverdue } from '../utils/overdue';
 
@@ -32,6 +33,7 @@ import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
 import { PowerDialerTab } from './PowerDialerTab';
 import { ProgressCard } from './ProgressCard';
 import { ReturnsTab } from './ReturnsTab';
+import { SkipStepReasonDialog } from './SkipStepReasonDialog';
 import { StartNewLeadsModal } from './StartNewLeadsModal';
 
 interface ActivityQueueViewProps {
@@ -198,21 +200,29 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
     }
   }, [handleActivityDone]);
 
-  // "Pular esta atividade": avança a cadência para o próximo passo sem encerrá-la.
-  // Otimista (igual à conclusão): remove da fila já e devolve se o persist falhar.
+  // "Pular este passo": avança a cadência para o próximo passo sem encerrá-la.
+  // Exige motivo (diálogo). Otimista (igual à conclusão): remove da fila já e
+  // devolve se o persist falhar.
+  const [skipStepActivity, setSkipStepActivity] = useState<PendingActivity | null>(null);
   const handleSkipStep = useCallback((activity: PendingActivity) => {
+    setSkipStepActivity(activity);
+  }, []);
+  const handleSkipStepConfirm = useCallback((reason: SkipReason, note?: string) => {
+    const activity = skipStepActivity;
+    if (!activity) return;
+    setSkipStepActivity(null);
     handleActivityDone(activity.enrollmentId, activity.stepId);
     import('../actions/skip-step').then(({ skipStep }) =>
-      skipStep({ enrollmentId: activity.enrollmentId, stepId: activity.stepId }).then((r) => {
+      skipStep({ enrollmentId: activity.enrollmentId, stepId: activity.stepId, reason, note }).then((r) => {
         if (!r.success) {
           handleActivityRestore(activity);
           toast.error(r.error);
         } else {
-          toast.success('Atividade pulada — cadência avançou');
+          toast.success('Passo pulado — cadência avançou');
         }
       }),
     );
-  }, [handleActivityDone, handleActivityRestore]);
+  }, [skipStepActivity, handleActivityDone, handleActivityRestore]);
 
   // "Trocar cadência": destino explícito ao tirar o lead da cadência atual, no
   // lugar do antigo "Encerrar cadência" (que fechava sem destino → limbo).
@@ -450,6 +460,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
         completed={effectiveProgress.completed}
         total={effectiveProgress.total}
         target={effectiveProgress.target}
+        guardrails={effectiveProgress.guardrails}
         availableLeadIds={availableLeadIds}
       />
 
@@ -651,12 +662,21 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
             onActivityDone={handleActivityDone}
             onActivityRestore={handleActivityRestore}
             onLeadLost={handleLeadLost}
+            onSwitchCadence={handleSwitchCadence}
             dialerProvider={dialerProvider}
             quickMode={quickMode}
           />
         </>
       )}
       <StartNewLeadsModal open={startNewLeadsOpen} onOpenChange={setStartNewLeadsOpen} />
+      <SkipStepReasonDialog
+        open={skipStepActivity !== null}
+        onOpenChange={(open) => {
+          if (!open) setSkipStepActivity(null);
+        }}
+        leadName={skipStepActivity?.lead.nome_fantasia ?? skipStepActivity?.lead.razao_social ?? undefined}
+        onConfirm={handleSkipStepConfirm}
+      />
       <MarkLeadLostDialog
         leadId={lostDialogActivity?.lead.id ?? ''}
         open={lostDialogActivity !== null}

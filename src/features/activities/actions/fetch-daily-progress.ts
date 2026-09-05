@@ -6,11 +6,17 @@ import { isManager } from '@/lib/auth/require-manager';
 import { chunkedIn } from '@/lib/supabase/chunked-in';
 import { from } from '@/lib/supabase/from';
 
+import { GUARDRAIL_EVENTS, summarizeGuardrails, type DailyGuardrails } from '../utils/daily-guardrails';
+
+export type { DailyGuardrails } from '../utils/daily-guardrails';
+
 export interface DailyProgress {
   completed: number;
   pending: number;
   total: number;
   target: number;
+  /** Escapes do dia (adiou / pulou / trocou / perdeu) — story activity-skip-guardrails. */
+  guardrails: DailyGuardrails;
 }
 
 /**
@@ -85,6 +91,19 @@ export async function fetchDailyProgress(sdrUserId?: string): Promise<ActionResu
   const completed = (completedRows ?? []).filter(
     (r) => !r.cadence_id || !autoEmailCadenceIds.has(r.cadence_id),
   ).length;
+
+  // Escapes do dia (adiou / pulou / trocou / perdeu). Eventos `system` do
+  // próprio SDR — o gestor enxerga quem empurra tarefa em vez de executar.
+  const { data: guardrailRows } = (await from(supabase, 'interactions')
+    .select('metadata')
+    .eq('org_id', orgId)
+    .eq('performed_by', targetUserId)
+    .eq('channel', 'system')
+    .in('metadata->>system_event', [...GUARDRAIL_EVENTS])
+    .gte('created_at', todayStart.toISOString())
+    .limit(2000)) as { data: Array<{ metadata: Record<string, unknown> | null }> | null };
+
+  const guardrails = summarizeGuardrails(guardrailRows ?? []);
 
   // Count pending activities for THIS SDR only:
   // Step 1: Get lead IDs assigned to this user
@@ -197,6 +216,7 @@ export async function fetchDailyProgress(sdrUserId?: string): Promise<ActionResu
       pending: pend,
       total: comp + pend,
       target,
+      guardrails,
     },
   };
 }

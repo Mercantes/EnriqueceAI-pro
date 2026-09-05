@@ -16,6 +16,7 @@ import { fetchDialerPreferences } from '@/features/activities/actions/fetch-dial
 import { fetchDialerQueue } from '@/features/activities/actions/fetch-dialer-queue';
 import { fetchDialerStats } from '@/features/activities/actions/fetch-dialer-stats';
 import { fetchPendingActivities } from '@/features/activities/actions/fetch-pending-activities';
+import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 import { ActivityQueueView } from '@/features/activities';
 import { fetchActiveCadenceNames } from '@/features/cadences/actions/fetch-cadence-names';
 
@@ -53,7 +54,7 @@ export default async function AtividadesPage() {
 
   const progressRaw = progressResult.success
     ? progressResult.data
-    : { completed: 0, pending: 0, total: 0, target: 20 };
+    : { completed: 0, pending: 0, total: 0, target: 20, guardrails: EMPTY_GUARDRAILS };
 
   // Use actual activities count as source of truth to prevent mismatch
   // between progress counter and activity list

@@ -12,7 +12,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { Input } from '@/shared/components/ui/input';
+import { Label } from '@/shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 
+import { SKIP_NOTE_MAX, SWITCH_REASONS, type SwitchReason } from '@/features/activities/constants/skip-reasons';
 import { enrollLeads, switchLeadsCadence } from '@/features/cadences/actions/manage-cadences';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
 
@@ -22,6 +32,8 @@ interface EnrollInCadenceDialogProps {
   leadIds: string[];
   /** 'enroll' adds to cadence (default), 'switch' removes from current + adds to new */
   mode?: 'enroll' | 'switch';
+  /** Called after the server confirms the enroll/switch. */
+  onSuccess?: () => void;
 }
 
 interface ActiveCadence {
@@ -30,29 +42,34 @@ interface ActiveCadence {
   total_steps: number;
 }
 
-export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enroll' }: EnrollInCadenceDialogProps) {
+export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enroll', onSuccess }: EnrollInCadenceDialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [cadences, setCadences] = useState<ActiveCadence[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
+  // Trocar cadência exige motivo (1 clique). Sem ele a lista fica bloqueada.
+  const [reason, setReason] = useState<SwitchReason | null>(null);
+  const [note, setNote] = useState('');
 
   const count = leadIds.length;
   const isBulk = count > 1;
   const isSwitch = mode === 'switch';
+  const needsReason = isSwitch && !reason;
 
-  // Load cadences when dialog becomes visible
+  // Load cadences when dialog becomes visible. No modo switch o servidor já
+  // filtra pelas cadências que o SDR pode usar (sdr_switch_allowed).
   useEffect(() => {
     if (open && !loaded) {
       startTransition(async () => {
-        const result = await fetchActiveCadences();
+        const result = await fetchActiveCadences(isSwitch ? { forSwitch: true } : {});
         if (result.success) {
           setCadences(result.data);
         }
         setLoaded(true);
       });
     }
-  }, [open, loaded]);
+  }, [open, loaded, isSwitch]);
 
   function handleOpenChange(nextOpen: boolean) {
     if (enrollingId) return;
@@ -61,14 +78,18 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enr
       setLoaded(false);
       setCadences([]);
       setEnrollingId(null);
+      setReason(null);
+      setNote('');
     }
   }
 
   function handleEnroll(cadenceId: string) {
+    if (needsReason) return;
     setEnrollingId(cadenceId);
     startTransition(async () => {
-      const action = isSwitch ? switchLeadsCadence : enrollLeads;
-      const result = await action(cadenceId, leadIds);
+      const result = isSwitch
+        ? await switchLeadsCadence(cadenceId, leadIds, { reason: reason ?? undefined, note: note.trim() || undefined })
+        : await enrollLeads(cadenceId, leadIds);
       setEnrollingId(null);
       if (result.success) {
         if (result.data.enrolled > 0) {
@@ -82,10 +103,11 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enr
           if (result.data.errors.length > 0) {
             toast.warning(`${result.data.errors.length} erro(s)`);
           }
+          onSuccess?.();
         } else {
           toast.error(result.data.errors[0] ?? 'Erro ao processar');
         }
-        onOpenChange(false);
+        handleOpenChange(false);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -116,6 +138,32 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enr
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
+        {isSwitch && (
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Motivo da troca</Label>
+            <Select value={reason ?? undefined} onValueChange={(v) => setReason(v as SwitchReason)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione o motivo" />
+              </SelectTrigger>
+              <SelectContent>
+                {SWITCH_REASONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {reason === 'other' && (
+              <Input
+                value={note}
+                maxLength={SKIP_NOTE_MAX}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Descreva em poucas palavras (opcional)"
+              />
+            )}
+          </div>
+        )}
+
         <div className="max-h-64 overflow-y-auto">
           {isPending && !loaded ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
@@ -123,10 +171,15 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enr
             </p>
           ) : cadences.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma cadência ativa encontrada.
+              {isSwitch
+                ? 'Nenhuma cadência disponível para troca. Fale com o gestor.'
+                : 'Nenhuma cadência ativa encontrada.'}
             </p>
           ) : (
             <div className="space-y-2">
+              {needsReason && (
+                <p className="text-xs text-[var(--muted-foreground)]">Escolha o motivo para liberar a lista.</p>
+              )}
               {cadences.map((cadence) => {
                 const isEnrolling = enrollingId === cadence.id;
                 return (
@@ -134,7 +187,7 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enr
                     key={cadence.id}
                     type="button"
                     className="flex w-full items-center justify-between rounded-md border p-3 text-left hover:bg-[var(--muted)] transition-colors disabled:opacity-50"
-                    disabled={!!enrollingId}
+                    disabled={!!enrollingId || needsReason}
                     onClick={() => handleEnroll(cadence.id)}
                   >
                     <div>
