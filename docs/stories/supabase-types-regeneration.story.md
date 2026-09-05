@@ -1,11 +1,12 @@
 # Story: Regenerar os types do Supabase e destravar a geração automática
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-09-05 | @devops (Gage) | **Ready for Review → Done.** PR [#366](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/366) mergeado (squash `e22a791e`, 18:48 UTC) com CI verde; deploy confirmado (`/api/version` = `e22a791e`). Dois commits no PR: `661a2fa8` só o `types.ts` gerado; `165206c2` `from.ts` + casts + `gen:types` + docs. Regra em vigor: migration que muda schema → `pnpm gen:types` no mesmo PR; `TYPES_STALE` não é mais aceito. Follow-ups low do QA (gerar em temp + `mv`; ordem de imports em `api-key.service.ts`) ficam para o próximo PR que tocar esses arquivos. |
 | 2026-09-05 | @dev (Dex) | Ready → InProgress → **Ready for Review**. Fases 1 e 2 completas no worktree `supabase-types-regeneration` (branch `worktree-supabase-types-regeneration`, base 239fc2f8). `from()` solto + `types.ts` regenerado + 34 fixes + `pnpm gen:types` + docs. Opção (b) medida: 147 erros → descartada. CI drift adiado (sem secret). Nada commitado. |
 | 2026-09-05 | Vini + Claude | Story criada após a tentativa de regenerar `types.ts` pelo MCP quebrar o typecheck (63 erros / 30 arquivos). Diagnóstico e plano em 2 fases abaixo. |
 | 2026-09-05 | @po (Pax) | Validação 10 pontos: **GO 10/10** → Draft → Ready. Ajustes: as 6 chamadas `.from()` fora do wrapper são `storage.from()` (buckets), não tabelas — removidas do escopo; item 7 passa a cobrir também `deploy-verification-checklist.md` (2 menções a `TYPES_STALE`); item 8 anotado que `ci.yml` hoje não tem secret do Supabase; dependências: CLI 2.75.0 disponível via `npx`, 0 `@ts-ignore` em `src/` hoje. |
