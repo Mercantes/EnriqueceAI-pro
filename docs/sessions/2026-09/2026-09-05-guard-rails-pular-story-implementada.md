@@ -29,11 +29,16 @@ Print do menu `Executar ▾` da fila (Pular esta atividade / Trocar cadência / 
 ## ✅ Migrations aplicadas em prod (05/set 16:48 UTC)
 Ensaio `BEGIN … ROLLBACK` num enrollment ativo: adiar mantém `snooze_count`; `status` igual mantém; `current_step` muda → zera. Aplicadas como `20260905164819 skip_guardrails_columns` e `20260905164906 advance_enrollment_reset_snooze` (versões atribuídas pelo MCP; arquivos do repo são `150000`/`150100`). Pós-check: colunas presentes, 1160 ativos com contador 0, 0 cadências bloqueadas, trigger e RPC com o reset. A função de prod antes era idêntica à versão 9h BRT do repo.
 
-## Ordem para subir (restante)
-1. ~~Migrations~~ ✅
-2. Commitar / PR / merge quando o Vini decidir. O código pode ir para produção a qualquer momento: as colunas já existem.
+## Commit + PR (05/set, autorizado pelo Vini)
+- Outra sessão tinha deixado o checkout na `main` de novo; a branch `feat/activity-skip-guardrails` foi reapontada para a `main` atual (`cbcc4b36`, só #363 de docs) antes de commitar — nada da story tocou a `main`.
+- Commit `ebc3d3e4` (46 arquivos; WIP alheio `create-checkout.ts`/`next-env.d.ts` e handoffs de agosto ficaram de fora).
+- PR [#364](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/364) aberto para `main`. CI da `main` verde em `cbcc4b36`.
+
+## Restante
+1. ~~Migrations~~ ✅ · ~~Commit/PR~~ ✅
+2. Merge do #364 quando o CI passar (Vini). Deploy automático no Coolify; confirmar via `/api/version`.
 3. Regenerar `src/lib/supabase/types.ts` via MCP (foi editado à mão).
-4. Avisar Matheus e Giovanni (atualizar o rascunho de e-mail no Gmail do Vini com a regra nova).
+4. Avisar Matheus e Giovanni; reescrever o item 1 do rascunho "melhorias da semana" (a dica "Pular adia 2h" fica desatualizada).
 
 ## Incidente de sessão paralela
 Durante a implementação, outra sessão do Claude trocou a branch do repositório para `docs/handoff-05set-email-time-sdr` e commitou `11a08d51` (só o handoff dela). As alterações desta story ficaram no working tree e foram carregadas de volta para `feat/activity-skip-guardrails` no fim. Nada da story entrou no commit da outra sessão. ⭐ Duas sessões no mesmo checkout trocando de branch é risco; usar worktree para a próxima story paralela.
