@@ -61,11 +61,11 @@ export default async function FeedbackPage({
     from(supabase, 'closers')
       .select('name')
       .eq('id', request.closer_id)
-      .single() as Promise<{ data: CloserInfo | null }>,
+      .single() as unknown as Promise<{ data: CloserInfo | null }>,
     from(supabase, 'leads')
       .select('nome_fantasia, razao_social')
       .eq('id', request.lead_id)
-      .single() as Promise<{ data: LeadInfo | null }>,
+      .single() as unknown as Promise<{ data: LeadInfo | null }>,
   ]);
 
   const closerName = closerResult.data?.name ?? 'Closer';

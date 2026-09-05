@@ -36,11 +36,11 @@ async function expireTrials() {
         .select('user_id, org_id')
         .in('org_id', orgIds)
         .eq('role', 'manager')
-        .eq('status', 'active') as Promise<{ data: Array<{ user_id: string; org_id: string }> | null }>,
+        .eq('status', 'active') as unknown as Promise<{ data: Array<{ user_id: string; org_id: string }> | null }>,
       from(supabase, 'notifications')
         .select('user_id')
         .eq('type', 'trial_expiring')
-        .gte('created_at', today) as Promise<{ data: Array<{ user_id: string }> | null }>,
+        .gte('created_at', today) as unknown as Promise<{ data: Array<{ user_id: string }> | null }>,
     ]);
 
     const alreadyNotified = new Set((notifsResult.data ?? []).map((n) => n.user_id));

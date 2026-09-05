@@ -27,9 +27,9 @@ export async function getMissingMeetingFields(
   const { orgId, supabase } = auth.data;
 
   const [leadRes, cfRes, sfRes] = await Promise.all([
-    from(supabase, 'leads').select('*').eq('id', leadId).eq('org_id', orgId).single() as Promise<{ data: LeadRow | null }>,
-    from(supabase, 'custom_fields').select('*').eq('org_id', orgId) as Promise<{ data: CustomFieldRow[] | null }>,
-    from(supabase, 'standard_field_settings').select('*').eq('org_id', orgId) as Promise<{ data: StandardFieldSettingRow[] | null }>,
+    from(supabase, 'leads').select('*').eq('id', leadId).eq('org_id', orgId).single() as unknown as Promise<{ data: LeadRow | null }>,
+    from(supabase, 'custom_fields').select('*').eq('org_id', orgId) as unknown as Promise<{ data: CustomFieldRow[] | null }>,
+    from(supabase, 'standard_field_settings').select('*').eq('org_id', orgId) as unknown as Promise<{ data: StandardFieldSettingRow[] | null }>,
   ]);
 
   if (!leadRes.data) return { success: false, error: 'Lead não encontrado' };

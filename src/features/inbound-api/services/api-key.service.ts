@@ -1,6 +1,5 @@
-import crypto from 'crypto';
-
 import type { SupabaseClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 import { from } from '@/lib/supabase/from';
 
@@ -38,20 +37,25 @@ export async function resolveApiKey(
   keyHash: string,
   supabase: SupabaseClient,
 ): Promise<ApiKeyRow | null> {
-  const { data } = await from(supabase, 'api_keys')
+  const { data } = (await from(supabase, 'api_keys')
     .select('*')
     .eq('key_hash', keyHash)
-    .single() as { data: ApiKeyRow | null };
+    .single()) as { data: ApiKeyRow | null };
 
   if (!data) return null;
   if (!data.is_active) return null;
   if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
 
-  // Fire-and-forget: update last_used_at
-  from(supabase, 'api_keys')
-    .update({ last_used_at: new Date().toISOString() } as Record<string, unknown>)
-    .eq('id', data.id)
-    .then(({ error }: { error: unknown }) => { if (error) console.error('[api-key] Failed to update last_used_at:', error); })
+  // Fire-and-forget: update last_used_at. O builder do PostgREST é thenable mas
+  // não expõe `.catch` no tipo — `Promise.resolve` o converte numa Promise real.
+  Promise.resolve(
+    from(supabase, 'api_keys')
+      .update({ last_used_at: new Date().toISOString() } as Record<string, unknown>)
+      .eq('id', data.id),
+  )
+    .then(({ error }: { error: unknown }) => {
+      if (error) console.error('[api-key] Failed to update last_used_at:', error);
+    })
     .catch((err: unknown) => console.error('[api-key] last_used_at update error:', err));
 
   return data;

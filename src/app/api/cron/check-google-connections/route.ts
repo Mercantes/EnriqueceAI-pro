@@ -29,12 +29,12 @@ export async function POST(request: Request) {
   const [calendarResult, gmailResult] = await Promise.all([
     from(supabase, 'calendar_connections')
       .select('id, org_id, user_id, calendar_email, status, updated_at')
-      .eq('status', 'error') as Promise<{
+      .eq('status', 'error') as unknown as Promise<{
       data: Array<{ id: string; org_id: string; user_id: string; calendar_email: string; status: string; updated_at: string }> | null;
     }>,
     from(supabase, 'gmail_connections')
       .select('id, org_id, user_id, email_address, status, updated_at')
-      .eq('status', 'error') as Promise<{
+      .eq('status', 'error') as unknown as Promise<{
       data: Array<{ id: string; org_id: string; user_id: string; email_address: string; status: string; updated_at: string }> | null;
     }>,
   ]);

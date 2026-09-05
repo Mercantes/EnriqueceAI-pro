@@ -75,10 +75,10 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
     from(supabase, 'cadence_steps')
       .select('id, cadence_id, step_order, channel, activity_name, instructions')
       .in('cadence_id', cadenceIds)
-      .eq('channel', 'phone') as Promise<{ data: Array<{ id: string; cadence_id: string; step_order: number; channel: string; activity_name: string | null; instructions: string | null }> | null }>,
+      .eq('channel', 'phone') as unknown as Promise<{ data: Array<{ id: string; cadence_id: string; step_order: number; channel: string; activity_name: string | null; instructions: string | null }> | null }>,
     from(supabase, 'cadence_steps')
       .select('cadence_id, step_order')
-      .in('cadence_id', cadenceIds) as Promise<{ data: Array<{ cadence_id: string; step_order: number }> | null }>,
+      .in('cadence_id', cadenceIds) as unknown as Promise<{ data: Array<{ cadence_id: string; step_order: number }> | null }>,
   ]);
 
   // Build lookup: cadence_id -> set of phone step_orders and their data

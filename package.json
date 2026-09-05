@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "gen:types": "supabase gen types typescript --project-id dhkmonctyoaenejemkrt --schema public > src/lib/supabase/types.ts && prettier --write src/lib/supabase/types.ts",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",

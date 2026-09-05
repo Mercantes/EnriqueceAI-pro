@@ -94,7 +94,7 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON {plural_table_name}
 **What:** Execute `.aios-core/product/checklists/deploy-verification-checklist.md`
 **Key checks:**
 - Migrations committed, git state clean
-- Types regenerated or `TYPES_STALE` documented
+- Types regenerated with `pnpm gen:types` (mandatory when the schema changed; `TYPES_STALE` is no longer accepted)
 - `pnpm build` passes
 - File List and Change Log complete
 
