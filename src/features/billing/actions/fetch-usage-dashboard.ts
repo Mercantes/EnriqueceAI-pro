@@ -49,34 +49,34 @@ export async function fetchUsageDashboard(): Promise<ActionResult<UsageDashboard
       from(supabase, 'leads')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', orgId)
-        .is('deleted_at', null) as Promise<{ count: number | null }>,
+        .is('deleted_at', null) as unknown as Promise<{ count: number | null }>,
 
       // AI usage today
       from(supabase, 'ai_usage')
         .select('generation_count, daily_limit')
         .eq('org_id', orgId)
         .eq('usage_date', today)
-        .maybeSingle() as Promise<{ data: AiUsageRow | null }>,
+        .maybeSingle() as unknown as Promise<{ data: AiUsageRow | null }>,
 
       // WhatsApp credits
       from(supabase, 'whatsapp_credits')
         .select('used_credits, plan_credits, period')
         .eq('org_id', orgId)
         .eq('period', currentPeriod)
-        .maybeSingle() as Promise<{ data: WhatsAppCreditsRow | null }>,
+        .maybeSingle() as unknown as Promise<{ data: WhatsAppCreditsRow | null }>,
 
       // Member count
       from(supabase, 'organization_members')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', orgId)
-        .eq('status', 'active') as Promise<{ count: number | null }>,
+        .eq('status', 'active') as unknown as Promise<{ count: number | null }>,
 
       // AI history (last 30 days)
       from(supabase, 'ai_usage')
         .select('usage_date, generation_count')
         .eq('org_id', orgId)
         .gte('usage_date', getDateDaysAgo(30))
-        .order('usage_date', { ascending: true }) as Promise<{
+        .order('usage_date', { ascending: true }) as unknown as Promise<{
           data: Array<{ usage_date: string; generation_count: number }> | null;
         }>,
     ]);

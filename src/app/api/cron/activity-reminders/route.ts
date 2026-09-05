@@ -125,12 +125,12 @@ export async function POST(request: Request) {
       const [leadsResult, ...reminderChunks] = await Promise.all([
         from(supabase, 'leads')
           .select('id, nome_fantasia, razao_social')
-          .in('id', leadIds.slice(0, CHUNK)) as Promise<{ data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null }>,
+          .in('id', leadIds.slice(0, CHUNK)) as unknown as Promise<{ data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null }>,
         ...Array.from({ length: Math.ceil(meetingIds.length / CHUNK) }, (_, i) =>
           from(supabase, 'notifications')
             .select('metadata')
             .eq('type', 'meeting_reminder')
-            .in('metadata->>interaction_id', meetingIds.slice(i * CHUNK, (i + 1) * CHUNK)) as Promise<{ data: Array<{ metadata: Record<string, unknown> }> | null }>,
+            .in('metadata->>interaction_id', meetingIds.slice(i * CHUNK, (i + 1) * CHUNK)) as unknown as Promise<{ data: Array<{ metadata: Record<string, unknown> }> | null }>,
         ),
       ]);
 

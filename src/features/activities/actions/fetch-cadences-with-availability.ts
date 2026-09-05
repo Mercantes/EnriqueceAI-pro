@@ -152,9 +152,9 @@ export async function fetchCadencesWithAvailability(
     }
 
     const [{ count }, { data: sampleRows }, { data: canalRows }] = await Promise.all([
-      countQuery as Promise<{ count: number | null }>,
-      sampleQuery as Promise<{ data: Array<{ id: string }> | null }>,
-      canalRowsQuery as Promise<{ data: Array<{ canal: string | null }> | null }>,
+      countQuery as unknown as Promise<{ count: number | null }>,
+      sampleQuery as unknown as Promise<{ data: Array<{ id: string }> | null }>,
+      canalRowsQuery as unknown as Promise<{ data: Array<{ canal: string | null }> | null }>,
     ]);
 
     const totalAvailable = count ?? 0;

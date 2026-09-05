@@ -49,10 +49,10 @@ export async function POST(request: Request) {
   const leadIds = [...new Set(requests.map((r) => r.lead_id))];
 
   const [closersResult, leadsResult] = await Promise.all([
-    from(supabase, 'closers').select('id, name, email').in('id', closerIds) as Promise<{
+    from(supabase, 'closers').select('id, name, email').in('id', closerIds) as unknown as Promise<{
       data: Array<{ id: string; name: string; email: string }> | null;
     }>,
-    from(supabase, 'leads').select('id, nome_fantasia, razao_social').in('id', leadIds).is('deleted_at', null) as Promise<{
+    from(supabase, 'leads').select('id, nome_fantasia, razao_social').in('id', leadIds).is('deleted_at', null) as unknown as Promise<{
       data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null;
     }>,
   ]);

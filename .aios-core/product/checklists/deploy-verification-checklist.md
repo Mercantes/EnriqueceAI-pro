@@ -29,8 +29,8 @@ Ensures the implementation is deployment-ready: migrations committed, git state 
 ### 3. Type Generation
 
 - [ ] Supabase types are up to date with current schema
-  - If types were regenerated: verify `src/lib/supabase/types.ts` is committed
-  - If types are stale: `TYPES_STALE` marker exists in story Change Log with specific migration reference
+  - If the story changed the schema: `pnpm gen:types` was run and `src/lib/supabase/types.ts` is committed (ideally in its own `chore(types): regenerate` commit)
+  - `TYPES_STALE` is **no longer accepted** — regenerate before proceeding
 - [ ] No `@ts-ignore` or `@ts-expect-error` comments added as workarounds for stale types
 
 ### 4. Build Verification
@@ -62,9 +62,10 @@ If build fails:
 2. Fix build issues
 3. Re-run from Checkpoint 2
 
-If types are stale and no marker exists:
-1. Add `TYPES_STALE` marker to Change Log
-2. Proceed — type regeneration can happen in next session with local Supabase
+If types are stale:
+1. Run `pnpm gen:types` (needs Supabase CLI login or `SUPABASE_ACCESS_TOKEN`)
+2. Re-run `pnpm typecheck`; commit `src/lib/supabase/types.ts`
+3. Only then proceed
 
 ---
 

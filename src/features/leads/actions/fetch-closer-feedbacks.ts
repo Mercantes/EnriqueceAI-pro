@@ -89,10 +89,10 @@ export async function fetchCloserFeedbacks(
   const [leadsResult, closersResult] = await Promise.all([
     from(supabase, 'leads')
       .select('id, nome_fantasia, razao_social')
-      .in('id', leadIds) as Promise<{ data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null }>,
+      .in('id', leadIds) as unknown as Promise<{ data: Array<{ id: string; nome_fantasia: string | null; razao_social: string | null }> | null }>,
     from(supabase, 'closers')
       .select('id, name, email')
-      .in('id', closerIds) as Promise<{ data: Array<{ id: string; name: string; email: string }> | null }>,
+      .in('id', closerIds) as unknown as Promise<{ data: Array<{ id: string; name: string; email: string }> | null }>,
   ]);
 
   const leadMap = new Map((leadsResult.data ?? []).map((l) => [l.id, l.nome_fantasia ?? l.razao_social ?? 'Lead']));

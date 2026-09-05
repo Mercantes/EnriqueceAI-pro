@@ -167,6 +167,18 @@ Additional vars used via `process.env` (not in Zod schema):
 
 Migrations in `supabase/migrations/`. Edge functions in `supabase/functions/` (Deno runtime — excluded from TypeScript compilation). There is no rollback-script convention — forward-only migrations.
 
+### Supabase types (`src/lib/supabase/types.ts`)
+
+`types.ts` is a **generated file** — never edit it by hand. Any migration that creates or alters a column, table, view, function or enum must regenerate it **in the same PR**:
+
+```bash
+pnpm gen:types   # supabase gen types (project dhkmonctyoaenejemkrt, schema public) + prettier
+```
+
+Requires the Supabase CLI logged in (`npx supabase login`) or `SUPABASE_ACCESS_TOKEN` in the environment. The `TYPES_STALE` marker is no longer accepted as an alternative. Commit the regenerated file separately (`chore(types): regenerate`) so the feature diff stays readable.
+
+`lib/supabase/from.ts` deliberately returns a loosely typed builder (`SupabaseClient<any>['from']`): callers narrow results with `as { data: T }` casts. Do not "tighten" it in a feature PR — see story `supabase-types-regeneration`.
+
 Key tables: `organizations`, `organization_members`, `leads`, `cadences`, `cadence_steps`, `cadence_enrollments`, `interactions`, `message_templates`, `subscriptions`, `plans`, `ai_usage`, `whatsapp_credits`, `notifications`.
 
 ---

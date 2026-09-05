@@ -102,12 +102,12 @@ export async function fetchCadenceTabCounts(): Promise<ActionResult<CadenceTabCo
     .is('deleted_at', null);
 
   const [standardResult, autoEmailResult] = await Promise.all([
-    baseQuery.eq('type', 'standard') as Promise<{ count: number | null }>,
+    baseQuery.eq('type', 'standard') as unknown as Promise<{ count: number | null }>,
     from(supabase, 'cadences')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', orgId)
       .is('deleted_at', null)
-      .eq('type', 'auto_email') as Promise<{ count: number | null }>,
+      .eq('type', 'auto_email') as unknown as Promise<{ count: number | null }>,
   ]);
 
   return {

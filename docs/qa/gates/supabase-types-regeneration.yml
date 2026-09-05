@@ -1,0 +1,28 @@
+schema: 1
+story: 'supabase-types-regeneration'
+gate: PASS
+status_reason: 'Mudança só de tipos, sem efeito em runtime: from() solto, types.ts gerado e idempotente (pnpm gen:types reproduz o mesmo hash), 34 casts textuais verificados um a um. typecheck/lint/build/1870 testes verdes. Só observações low, nenhuma bloqueia.'
+reviewer: 'Quinn'
+updated: '2026-09-05T18:12:00Z'
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: 'Script gen:types usa redirecionamento `> src/lib/supabase/types.ts` antes do `&&`. Se a CLI falhar (sem login/token), o arquivo já foi truncado para vazio. Não passa despercebido (typecheck quebra em todo import de Database), mas deixa o working tree sujo.'
+    suggested_action: 'Gerar num temporário e mover: `supabase gen types … > /tmp/types.ts && mv /tmp/types.ts src/lib/supabase/types.ts && prettier --write …`. Uma linha, pode entrar no próprio PR ou no próximo.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'Prettier reordenou os imports de api-key.service.ts (`crypto` passou para depois de `@supabase/supabase-js`). Sem regra de import-order no ESLint, então não falha; só ruído no diff.'
+    suggested_action: 'Nenhuma ação obrigatória. Se quiser diff mínimo, restaurar a ordem original.'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'CodeRabbit não rodou (CLI exige `coderabbit auth login` interativo) — mesmo pendente das stories anteriores.'
+    suggested_action: 'Rodar após login; ou aceitar como padrão desta máquina e registrar.'
+verified:
+  - 'AC1: pnpm gen:types → hash 953d01eac6b2 antes e depois (idempotente); 161 tabelas/views; Views/Functions/Enums presentes; snooze_count e sdr_switch_allowed incluídos.'
+  - 'AC2: typecheck ✅ lint ✅ build ✅ (dev) · test:run ✅ 1870 (re-executado pelo QA); 0 @ts-ignore/@ts-expect-error.'
+  - 'AC3: from() retorna ReturnType<SupabaseClient<any>[from]>; updateOrgSettings/abm_enabled compila.'
+  - 'AC4: diff fora de types.ts é 100% textual (`as` → `as unknown as`) + Promise.resolve(builder) que adota o thenable — semântica idêntica; suíte sem alteração de asserção.'
+  - 'AC5: script gen:types no package.json; CLAUDE.md, dev-checkpoints.md e deploy-verification-checklist.md sem TYPES_STALE como alternativa.'
+  - 'AC6: check de CI adiado com motivo (sem secret Supabase no ci.yml); documentado na task 2.3.'
+  - 'Opção (b) medida e descartada com número (147 erros / 85 arquivos) — decisão rastreável.'
+waiver: { active: false }

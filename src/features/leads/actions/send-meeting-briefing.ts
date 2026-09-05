@@ -71,16 +71,16 @@ export async function sendMeetingBriefingEmail(
       from(supabase, 'leads')
         .select('nome_fantasia, razao_social, first_name, last_name, job_title, email, telefone, phones, cnpj, porte, cnae, faturamento_estimado, lead_source, website, instagram, linkedin, notes, fit_score, endereco, custom_field_values')
         .eq('id', leadId)
-        .single() as Promise<{ data: LeadData | null }>,
+        .single() as unknown as Promise<{ data: LeadData | null }>,
       from(supabase, 'closers')
         .select('name, email')
         .eq('id', closerId)
-        .single() as Promise<{ data: CloserData | null }>,
+        .single() as unknown as Promise<{ data: CloserData | null }>,
       supabase.auth.admin.getUserById(sdrUserId),
       from(supabase, 'custom_fields')
         .select('id, field_name, field_type')
         .eq('org_id', orgId)
-        .order('sort_order') as Promise<{ data: CustomFieldDef[] | null }>,
+        .order('sort_order') as unknown as Promise<{ data: CustomFieldDef[] | null }>,
       from(supabase, 'calls')
         .select('id, recording_url, duration_seconds, transcription')
         .eq('lead_id', leadId)
@@ -88,7 +88,7 @@ export async function sendMeetingBriefingEmail(
         .not('recording_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle() as Promise<{ data: { id: string; recording_url: string | null; duration_seconds: number; transcription: string | null } | null }>,
+        .maybeSingle() as unknown as Promise<{ data: { id: string; recording_url: string | null; duration_seconds: number; transcription: string | null } | null }>,
     ]);
 
     const lead = leadResult.data;
