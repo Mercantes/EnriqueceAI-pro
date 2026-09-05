@@ -49,6 +49,6 @@ Pergunta do Vini: "não seria ideal um botão de manhã pra preparar a lista do 
 
 ## Pendências
 - [x] PR #360 mergeado.
-- [ ] Conversar com Matheus e Giovanni sobre o "Pular" (45–60/dia).
+- [~] Conversar com Matheus e Giovanni sobre o "Pular" (45–60/dia) — e-mail **salvo como rascunho** no Gmail do Vini (assunto "Fila de atividades: mudança de segunda e o botão Pular"), a enviar após revisão. Conteúdo: lista pronta às 9h a partir de segunda; Pular só para retorno no mesmo dia; senão Pular 24h / retorno agendado / Perdido.
 - [ ] Ideia futura: tela "meu dia" (priorizar/reordenar), não botão de gerar lista.
 - [ ] Se "Pular" continuar inflando: "Pular" → amanhã 9h.
