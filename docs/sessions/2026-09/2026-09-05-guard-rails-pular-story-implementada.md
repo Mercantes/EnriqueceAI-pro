@@ -34,11 +34,17 @@ Ensaio `BEGIN … ROLLBACK` num enrollment ativo: adiar mantém `snooze_count`; 
 - Commit `ebc3d3e4` (46 arquivos; WIP alheio `create-checkout.ts`/`next-env.d.ts` e handoffs de agosto ficaram de fora).
 - PR [#364](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/364) aberto para `main`. CI da `main` verde em `cbcc4b36`.
 
+## Merge (05/set 17:06 UTC)
+- CI do #364 verde (Lint · Typecheck · Test · Build). Merge squash → `main` `8f7316af`; branch remota apagada.
+- Story marcada **Done** (este PR de docs).
+- Deploy Coolify **confirmado ~17:10 UTC**: `/api/version` = `8f7316af`. Guard-rails NO AR.
+
 ## Restante
-1. ~~Migrations~~ ✅ · ~~Commit/PR~~ ✅
-2. Merge do #364 quando o CI passar (Vini). Deploy automático no Coolify; confirmar via `/api/version`.
+1. ~~Migrations~~ ✅ · ~~Commit/PR~~ ✅ · ~~Merge~~ ✅ · ~~Deploy~~ ✅
+2. Rodar o roteiro de teste manual da story em prod (Adiar 3× → diálogo; Pular passo sem motivo bloqueado; troca como SDR; card com contadores).
 3. Regenerar `src/lib/supabase/types.ts` via MCP (foi editado à mão).
-4. Avisar Matheus e Giovanni; reescrever o item 1 do rascunho "melhorias da semana" (a dica "Pular adia 2h" fica desatualizada).
+4. E-mail do time: a versão antiga do "melhorias da semana" (item 1 = "Pular adia 2h") está **agendada para seg 07/set 08:00**. Cancelar o agendado e enviar o rascunho novo, que já descreve os guard-rails. Avisar Matheus e Giovanni em separado se quiser reforçar.
+5. Dívida MNT-001: mover `nextBusinessDayAt9hBRT` para `src/shared/utils/`.
 
 ## Incidente de sessão paralela
 Durante a implementação, outra sessão do Claude trocou a branch do repositório para `docs/handoff-05set-email-time-sdr` e commitou `11a08d51` (só o handoff dela). As alterações desta story ficaram no working tree e foram carregadas de volta para `feat/activity-skip-guardrails` no fim. Nada da story entrou no commit da outra sessão. ⭐ Duas sessões no mesmo checkout trocando de branch é risco; usar worktree para a próxima story paralela.
