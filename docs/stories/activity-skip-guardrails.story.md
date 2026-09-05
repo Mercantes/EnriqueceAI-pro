@@ -1,12 +1,13 @@
 # Story: Guard-rails do "Pular" na fila de Atividades
 
 ## Status
-Ready for Review
+Done
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-09-05 | Vini + Claude | Story criada a partir da revisão do menu de ações da fila (opção 2 escolhida: atrito + visibilidade + limite) |
+| 2026-09-05 | @devops (Gage) | **Ready for Review → Done.** PR [#364](https://github.com/v4amaraltech/EnriqueceAI-pro/pull/364) mergeado (squash `8f7316af`, 17:06 UTC) com CI verde (Lint · Typecheck · Test · Build). Migrations já estavam em prod desde 16:48 UTC. **Deploy confirmado ~17:10 UTC**: `/api/version` = `8f7316af`. Pendências fora de código: regenerar `src/lib/supabase/types.ts`, teste manual pós-deploy (roteiro acima), CodeRabbit após login, aviso aos SDRs. Dívida MNT-001 permanece registrada. |
 | 2026-09-05 | @dev (Dex) | Ready → InProgress → **Ready for Review**. Implementação completa na branch `feat/activity-skip-guardrails` (base `origin/main` ef352b99). typecheck/lint/1864 testes/build verdes. CodeRabbit NÃO rodou: CLI pede `coderabbit auth login` interativo. ⚠️ **Deploy só depois das 2 migrations em prod** — o código seleciona `snooze_count`/`sdr_switch_allowed`; sem as colunas a fila quebra. Nada commitado (regra git manual). |
 | 2026-09-05 | @dev (Dex) | **QA fixes aplicados** (gate FAIL → re-review): REL-001 `snooze_count` zera no trigger `calculate_next_step_due` quando `current_step` muda (migration `20260905150100` reescrita; RPC mantém o reset redundante); REL-002 `ActivityLogView` passa `onSwitchCadence` ao sheet; REL-003 `SkipStepReasonDialog` reseta estado no confirm; SEC-001 `switchLeadsCadence` valida `reason` (enum) e `note` (max 140) com zod; TEST-001 +6 testes RTL (SkipStepReasonDialog, SnoozeLimitDialog, ProgressCard) + 1 no switch. MNT-001 fica como dívida. typecheck/lint ✅, 1870 testes ✅, build ✅. Status permanece Ready for Review. |
 | 2026-09-05 | Claude (MCP Supabase) | **Migrations aplicadas em prod** (`dhkmonctyoaenejemkrt`). Ensaio em `BEGIN … ROLLBACK` num enrollment ativo: adiar mantém `snooze_count`; `status` igual mantém; `current_step` muda → zera. Depois: colunas criadas, 1160 enrollments ativos com `snooze_count = 0`, 0 cadências bloqueadas (default `true`), trigger e RPC com o reset. Função de prod antes da troca era idêntica à versão 9h BRT do repo (nada sobrescrito). Deploy do código agora está liberado. |
