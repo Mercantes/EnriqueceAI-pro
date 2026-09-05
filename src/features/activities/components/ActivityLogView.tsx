@@ -19,10 +19,12 @@ import {
 import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
 import { EnrollInCadenceDialog } from '@/features/leads/components/EnrollInCadenceDialog';
 
+import type { SkipReason } from '../constants/skip-reasons';
 import type { PendingActivity } from '../types';
 import { ActivityExecutionSheet } from './ActivityExecutionSheet';
 import { ActivityPagination } from './ActivityPagination';
 import { ActivityRow, ACTIVITY_GRID_COLS } from './ActivityRow';
+import { SkipStepReasonDialog } from './SkipStepReasonDialog';
 
 interface ActivityLogViewProps {
   activities: PendingActivity[];
@@ -165,21 +167,28 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
     );
   }, [handleActivityDone]);
 
-  // "Pular esta atividade": avança a cadência sem encerrá-la (otimista, com
-  // rollback se o persist falhar).
+  // "Pular este passo": avança a cadência sem encerrá-la. Exige motivo
+  // (diálogo); otimista, com rollback se o persist falhar.
+  const [skipStepActivity, setSkipStepActivity] = useState<PendingActivity | null>(null);
   const handleSkipStep = useCallback((activity: PendingActivity) => {
+    setSkipStepActivity(activity);
+  }, []);
+  const handleSkipStepConfirm = useCallback((reason: SkipReason, note?: string) => {
+    const activity = skipStepActivity;
+    if (!activity) return;
+    setSkipStepActivity(null);
     handleActivityDone(activity.enrollmentId, activity.stepId);
     import('../actions/skip-step').then(({ skipStep }) =>
-      skipStep({ enrollmentId: activity.enrollmentId, stepId: activity.stepId }).then((r) => {
+      skipStep({ enrollmentId: activity.enrollmentId, stepId: activity.stepId, reason, note }).then((r) => {
         if (!r.success) {
           handleActivityRestore(activity);
           toast.error(r.error);
         } else {
-          toast.success('Atividade pulada — cadência avançou');
+          toast.success('Passo pulado — cadência avançou');
         }
       }),
     );
-  }, [handleActivityDone, handleActivityRestore]);
+  }, [skipStepActivity, handleActivityDone, handleActivityRestore]);
 
   // "Trocar cadência": destino explícito no lugar do antigo "Encerrar cadência".
   const [switchActivity, setSwitchActivity] = useState<PendingActivity | null>(null);
@@ -412,6 +421,7 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
         onActivityDone={handleActivityDone}
         onActivityRestore={handleActivityRestore}
         onLeadLost={handleLeadLost}
+        onSwitchCadence={handleSwitchCadence}
       />
 
       <MarkLeadLostDialog
@@ -429,6 +439,14 @@ export function ActivityLogView({ activities: initialActivities, total, hasFilte
         }}
         leadIds={switchActivity ? [switchActivity.lead.id] : []}
         mode="switch"
+      />
+      <SkipStepReasonDialog
+        open={skipStepActivity !== null}
+        onOpenChange={(open) => {
+          if (!open) setSkipStepActivity(null);
+        }}
+        leadName={skipStepActivity?.lead.nome_fantasia ?? skipStepActivity?.lead.razao_social ?? undefined}
+        onConfirm={handleSkipStepConfirm}
       />
     </div>
   );

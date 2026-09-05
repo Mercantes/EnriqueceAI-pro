@@ -73,6 +73,7 @@ function createCadence(overrides: Partial<CadenceDetail> = {}): CadenceDetail {
     status: 'draft',
     priority: 'medium',
     origin: 'outbound',
+    sdr_switch_allowed: true,
     type: 'standard',
     total_steps: 0,
     auto_loss_after_days: null,

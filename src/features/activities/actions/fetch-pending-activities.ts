@@ -55,6 +55,7 @@ interface EnrollmentRow {
   current_step: number;
   status: string;
   next_step_due: string | null;
+  snooze_count: number | null;
   lead: RawLead;
   cadence: Pick<CadenceRow, 'id' | 'name' | 'total_steps' | 'created_by' | 'type'>;
 }
@@ -80,7 +81,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
   // manager; o warn abaixo denuncia se algum dia encostar.
   const QUEUE_ENROLLMENT_LIMIT = 1500;
   let enrollQuery = from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, status, next_step_due, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
+    .select('id, cadence_id, lead_id, current_step, status, next_step_due, snooze_count, lead:leads!inner(*), cadence:cadences(id, name, total_steps, created_by, type)')
     .eq('status', 'active')
     .not('next_step_due', 'is', null)
     .lte('next_step_due', new Date().toISOString());
@@ -226,6 +227,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
           activityName: step.activity_name ?? null,
           callScript: step.instructions ?? null,
           callProvider: step.call_provider ?? null,
+          snoozeCount: isCurrentStep ? (enrollment.snooze_count ?? 0) : 0,
         },
       });
     }
@@ -291,6 +293,7 @@ export async function fetchPendingActivities(): Promise<ActionResult<PendingActi
     aiPersonalization: false,
     nextStepDue: row.scheduled_at,
     isCurrentStep: true,
+    snoozeCount: 0,
     lead: {
       ...row.leads,
       municipio: (row.leads.endereco as Record<string, string> | null)?.municipio ?? null,

@@ -61,6 +61,11 @@ export interface PendingActivity {
   callScript: string | null;
   // 'whatsapp' = passo de Ligação via WhatsApp (channel='phone'); senão null (Epic 7).
   callProvider: CallProvider | null;
+  /**
+   * Adiamentos ("Adiar p/ amanhã") já usados no passo atual do enrollment.
+   * Só faz sentido para `isCurrentStep`; retornos agendados usam 0.
+   */
+  snoozeCount: number;
 }
 
 // Prepared email ready for review/send

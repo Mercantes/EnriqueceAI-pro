@@ -39,7 +39,7 @@ interface ActivityRowProps {
   onViewLead: () => void;
   onLeadWon: () => void;
   onLeadLost: () => void;
-  /** Pula esta atividade e avança a cadência (só linhas de cadência). */
+  /** Pula este passo e avança a cadência (só linhas de cadência). Abre diálogo de motivo. */
   onSkipStep?: () => void;
   /** Move o lead para outra cadência (só linhas de cadência). */
   onSwitchCadence?: () => void;
@@ -180,11 +180,13 @@ export function ActivityRow({ activity, onExecute, onIgnore, onViewLead, onLeadW
               </DropdownMenuItem>
             ) : (
               <>
-                {/* "Pular" avança o passo sem encerrar a cadência — substitui o
-                    antigo "Encerrar cadência", que empurrava o lead pro limbo. */}
+                {/* "Pular este passo" avança o passo sem encerrar a cadência —
+                    substitui o antigo "Encerrar cadência", que empurrava o lead
+                    pro limbo. Nome diferente do "Adiar p/ amanhã" do sheet de
+                    propósito: eram dois "Pular" com efeitos diferentes. */}
                 <DropdownMenuItem onClick={onSkipStep}>
                   <SkipForward className="mr-2 h-3.5 w-3.5" />
-                  Pular esta atividade
+                  Pular este passo
                 </DropdownMenuItem>
                 {/* Encerrar a cadência agora exige destino: trocar de cadência,
                     ou marcar ganho/perdido abaixo. Nunca "no vazio". */}

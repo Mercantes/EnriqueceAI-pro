@@ -10,17 +10,36 @@ export interface ActiveCadence {
   total_steps: number;
 }
 
-export async function fetchActiveCadences(): Promise<ActionResult<ActiveCadence[]>> {
+export interface FetchActiveCadencesOptions {
+  /**
+   * Lista para o "Trocar cadência". Para SDR (não manager) só entram cadências
+   * com `sdr_switch_allowed = true` — o gestor decide para onde o SDR pode
+   * mover leads. Manager vê todas. Inscrição normal (`enroll`) ignora a flag.
+   */
+  forSwitch?: boolean;
+}
+
+export async function fetchActiveCadences(
+  options: FetchActiveCadencesOptions = {},
+): Promise<ActionResult<ActiveCadence[]>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { orgId, supabase } = auth.data;
+  const { orgId, role, supabase } = auth.data;
 
-  const { data, error } = (await from(supabase, 'cadences')
+  let query = from(supabase, 'cadences')
     .select('id, name, total_steps')
     .eq('org_id', orgId)
     .eq('status', 'active')
-    .is('deleted_at', null)
-    .order('name')) as { data: ActiveCadence[] | null; error: { message: string } | null };
+    .is('deleted_at', null);
+
+  if (options.forSwitch && role !== 'manager') {
+    query = query.eq('sdr_switch_allowed', true);
+  }
+
+  const { data, error } = (await query.order('name')) as {
+    data: ActiveCadence[] | null;
+    error: { message: string } | null;
+  };
 
   if (error) {
     return { success: false, error: 'Erro ao buscar cadências' };

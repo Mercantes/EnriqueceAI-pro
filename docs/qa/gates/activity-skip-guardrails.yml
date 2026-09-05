@@ -1,0 +1,39 @@
+schema: 1
+story: 'activity-skip-guardrails'
+gate: CONCERNS
+status_reason: 'Todos os achados medium da 1ª rodada corrigidos e verificados no código (reset no trigger, prop no Registro, reset do diálogo). Aprovado para seguir; restam só itens não-bloqueantes que dependem de ambiente (migrations, CodeRabbit, teste manual).'
+reviewer: 'Quinn'
+updated: '2026-09-05T16:45:00Z'
+history:
+  - updated: '2026-09-05T16:30:00Z'
+    gate: FAIL
+    reason: 'REL-001/002/003 medium (AC 2 e AC 3 não valiam em todos os caminhos).'
+resolved_issues:
+  - id: 'REL-001'
+    resolution: 'Reset de snooze_count movido para o trigger calculate_next_step_due (IF TG_OP = UPDATE AND current_step IS DISTINCT FROM OLD). Cobre RPC, reportWhatsAppInvalid, ligação externa e remap do editor. RPC mantém reset redundante. Migration 20260905150100 reescrita; ordem 150000 → 150100 garante a coluna antes do trigger.'
+  - id: 'REL-002'
+    resolution: 'ActivityLogView passa onSwitchCadence={handleSwitchCadence} ao ActivityExecutionSheet (linha 424).'
+  - id: 'REL-003'
+    resolution: 'SkipStepReasonDialog reseta reason/note dentro de handleConfirm. Coberto por SkipStepReasonDialog.test.tsx (reabre desmarcado).'
+  - id: 'SEC-001'
+    resolution: 'switchLeadsCadence valida options com zod: reason em SWITCH_REASON_VALUES, note max 140. Teste: motivo inválido recusado antes do auth.'
+  - id: 'TEST-001'
+    resolution: '+6 testes RTL (SkipStepReasonDialog, SnoozeLimitDialog, ProgressCard) + 1 no switch. Suíte: 1870 verdes.'
+top_issues:
+  - id: 'MNT-001'
+    severity: low
+    finding: 'nextBusinessDayAt9hBRT continua importado de src/app/api/cron/meeting-outcome-check/route.ts (módulo de rota). Registrado como dívida na story.'
+    suggested_action: 'Mover para src/shared/utils/ em story de manutenção; 2 consumidores (lead-crm.ts, skip-activity.ts).'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'CodeRabbit não rodou (CLI exige login interativo). src/lib/supabase/types.ts editado à mão.'
+    suggested_action: 'Rodar `coderabbit auth login` e depois `coderabbit --prompt-only -t uncommitted`; regenerar types via MCP após aplicar as migrations.'
+  - id: 'REQ-001'
+    severity: low
+    finding: 'Verificação manual no browser (AC 5 e AC 7 ponta a ponta) ainda não feita: as migrations não estão aplicadas em nenhum ambiente e a fila já seleciona snooze_count.'
+    suggested_action: 'Aplicar migrations em prod (BEGIN … ROLLBACK na RPC/trigger primeiro) e seguir o roteiro de teste manual da story antes do merge.'
+waiver: { active: false }
+deploy_order:
+  - 'Aplicar 20260905150000 e depois 20260905150100 em prod via MCP.'
+  - 'Roteiro de teste manual (story → Dev Agent Record).'
+  - 'Só então commitar / PR / merge.'

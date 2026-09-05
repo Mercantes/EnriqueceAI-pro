@@ -64,6 +64,8 @@ interface ActivityEmailComposeProps {
   /** SDR já enviou o e-mail por fora (Gmail direto) — só registra e avança. */
   onManualSend?: () => void;
   onSkip: () => void;
+  /** Texto do botão de adiar (default "Adiar p/ amanhã"; o Sheet injeta o restante). */
+  skipLabel?: string;
 }
 
 export function ActivityEmailCompose({
@@ -83,6 +85,7 @@ export function ActivityEmailCompose({
   onSend,
   onManualSend,
   onSkip,
+  skipLabel = 'Adiar p/ amanhã',
 }: ActivityEmailComposeProps) {
   // Track last body value set from parent to avoid editor ↔ state loops
   const lastExternalBody = useRef(body);
@@ -323,7 +326,7 @@ export function ActivityEmailCompose({
           <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
             <Button variant="outline" onClick={onSkip} disabled={isSending}>
               <Clock className="mr-2 h-4 w-4" />
-              Pular
+              {skipLabel}
             </Button>
             {manualSendButton}
             <Button onClick={handleSendAndClearDraft} disabled={!canSend}>
@@ -525,7 +528,7 @@ export function ActivityEmailCompose({
           <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--border)] pt-4">
             <Button variant="outline" onClick={onSkip} disabled={isSending}>
               <Clock className="mr-2 h-4 w-4" />
-              Pular
+              {skipLabel}
             </Button>
             {manualSendButton}
             <Button onClick={handleSendAndClearDraft} disabled={!canSend}>

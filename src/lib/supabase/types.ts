@@ -77,6 +77,7 @@ export type Database = {
           lead_id: string
           loss_reason_id: string | null
           next_step_due: string | null
+          snooze_count: number
           status: Database["public"]["Enums"]["enrollment_status"]
           updated_at: string
         }
@@ -90,6 +91,7 @@ export type Database = {
           lead_id: string
           loss_reason_id?: string | null
           next_step_due?: string | null
+          snooze_count?: number
           status?: Database["public"]["Enums"]["enrollment_status"]
           updated_at?: string
         }
@@ -103,6 +105,7 @@ export type Database = {
           lead_id?: string
           loss_reason_id?: string | null
           next_step_due?: string | null
+          snooze_count?: number
           status?: Database["public"]["Enums"]["enrollment_status"]
           updated_at?: string
         }
@@ -192,6 +195,7 @@ export type Database = {
           org_id: string
           origin: string
           priority: string
+          sdr_switch_allowed: boolean
           status: Database["public"]["Enums"]["cadence_status"]
           total_steps: number
           type: string
@@ -207,6 +211,7 @@ export type Database = {
           org_id: string
           origin?: string
           priority?: string
+          sdr_switch_allowed?: boolean
           status?: Database["public"]["Enums"]["cadence_status"]
           total_steps?: number
           type?: string
@@ -222,6 +227,7 @@ export type Database = {
           org_id?: string
           origin?: string
           priority?: string
+          sdr_switch_allowed?: boolean
           status?: Database["public"]["Enums"]["cadence_status"]
           total_steps?: number
           type?: string

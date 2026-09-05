@@ -4,16 +4,20 @@ import { useState } from 'react';
 
 import { CheckCircle2, Info, Trophy } from 'lucide-react';
 
+import type { DailyGuardrails } from '../utils/daily-guardrails';
+
 import { StartProspectingDialog } from './StartProspectingDialog';
 
 interface ProgressCardProps {
   completed: number;
   total: number;
   target: number;
+  /** Escapes do dia (adiou / pulou / trocou / perdeu). Omitido → linha some. */
+  guardrails?: DailyGuardrails;
   availableLeadIds?: string[];
 }
 
-export function ProgressCard({ completed, total: _total, target, availableLeadIds = [] }: ProgressCardProps) {
+export function ProgressCard({ completed, total: _total, target, guardrails, availableLeadIds = [] }: ProgressCardProps) {
   // Denominador é a meta diária — não a fila expandida (steps em janela 24h).
   // O `total` antigo (completed + activitiesCount) flutuava de jeito não-óbvio:
   // ao executar 1 step, o enrollment podia sair da janela e levar 4-5 candidates
@@ -24,6 +28,12 @@ export function ProgressCard({ completed, total: _total, target, availableLeadId
   const isAchieved = target > 0 && completed >= target;
   const remaining = Math.max(0, target - completed);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Tooltip nativo (title): motivos mais usados hoje. Sem Radix aqui para não
+  // exigir TooltipProvider em cada tela que renderiza o card.
+  const reasonsTitle = guardrails && guardrails.topReasons.length > 0
+    ? `Motivos de hoje:\n${guardrails.topReasons.map((r) => `${r.label}: ${r.count}`).join('\n')}`
+    : 'Tarefas que saíram da fila hoje sem execução: adiadas para amanhã, passos pulados, leads movidos de cadência e leads perdidos.';
 
   return (
     <div className="rounded-lg border bg-[var(--card)] p-6">
@@ -63,6 +73,17 @@ export function ProgressCard({ completed, total: _total, target, availableLeadId
               <span>Meta diária</span>
             </div>
           </div>
+
+          {/* Escapes do dia — o gestor (e o próprio SDR) vê quem empurra em vez de executar */}
+          {guardrails && (
+            <p
+              data-testid="guardrails-summary"
+              className="mt-3 cursor-help text-xs tabular-nums text-[var(--muted-foreground)]"
+              title={reasonsTitle}
+            >
+              Adiadas {guardrails.snoozed} · Puladas {guardrails.skipped} · Trocadas {guardrails.switched} · Perdidos {guardrails.lost}
+            </p>
+          )}
         </div>
 
         {/* Right: Daily Goal */}
